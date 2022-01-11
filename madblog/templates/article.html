@@ -1,0 +1,43 @@
+{% with title=title or 'Platypush blog', skip_header=skip_header, styles=['/css/blog.css', '/css/code.css'] %}
+    {% include 'common-head.html' %}
+{% endwith %}
+
+<main>
+    <div class="container">
+        {% if not skip_header %}
+            <div class="title">
+                <h1>{{ title }}</h1>
+            </div>
+
+            {% if description %}
+            <div class="description">
+                <h3>{{ description }}</h3>
+            </div>
+            {% endif %}
+
+            {% if published %}
+            <div class="published-date">
+                Published
+                {% if author %} by
+                    {% if author_email %}
+                        <a href="mailto:{{ author_email }}">
+                    {% endif %}
+
+                    {{ author }}
+
+                    {% if author_email %}
+                        </a>
+                    {% endif %}
+                {% endif %}
+                on {{ published }}
+            </div>
+            {% endif %}
+        {% endif %}
+
+        <div class="content">
+            {{ content | safe }}
+        </div>
+    </div>
+</main>
+
+{% include 'common-tail.html' %}

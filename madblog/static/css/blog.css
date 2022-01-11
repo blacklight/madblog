@@ -1,0 +1,50 @@
+main .content {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.5em;
+}
+
+main .content p,
+main .content ul {
+  font-family: Avenir, Palatino, charter, Georgia, Cambria, "Times New Roman", Times, serif;
+  text-align: justify;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+main .content code, .codehilite {
+  font-size: .85em;
+}
+
+a:hover {
+  opacity: 0.7;
+}
+
+.description h3 {
+  font-weight: normal;
+  opacity: 0.6;
+  margin: -.5em auto .5em auto;
+}
+
+.published-date {
+  font-size: 0.75em;
+  opacity: .75;
+  margin-bottom: 2em;
+}
+
+@media screen and (max-width: 1024px) {
+  main .container {
+    width: 100%;
+  }
+}
+
+@media screen and (min-width: 1024px) {
+  main .container {
+    max-width: 768px;
+  }
+}
+
+.codehilite {
+  padding: 0 .5em;
+  overflow: auto;
+}

@@ -1,0 +1,37 @@
+{% with title=title or 'Platypush blog', skip_header=False, styles=['/css/home.css'] %}
+    {% include 'common-head.html' %}
+{% endwith %}
+
+<main>
+    <div class="articles">
+        {% for page in pages %}
+        <a class="article" href="{{ page['uri'] }}">
+            <div class="container">
+                {% if page['image'] %}
+                <div class="image">
+                    <img src="{{ page['image'] }}" alt="">
+                </div>
+                {% endif %}
+
+                <div class="title">
+                    {{ page['title'] }}
+                </div>
+
+                {% if page['published'] %}
+                <div class="published-date">
+                    {{ page['published'].strftime('%b %d, %Y') }}
+                </div>
+                {% endif %}
+
+                {% if page['description'] %}
+                <div class="description">
+                    {{ page['description'] }}
+                </div>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</main>
+
+{% include 'common-tail.html' %}

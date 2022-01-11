@@ -1,0 +1,4 @@
+recursive-include madblog/static/css *
+recursive-include madblog/static/fonts *
+recursive-include madblog/static/img *
+recursive-include madblog/templates *

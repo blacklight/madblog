@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <link rel="alternate" type="application/rss+xml" title="{{ config.title }}" href="/rss" />
+    <link rel="stylesheet" href="/fonts/poppins.css">
+    <link rel="stylesheet" href="/fonts/fira-sans.css">
+    <link rel="stylesheet" href="/css/common.css">
+
+    {% if styles %}
+        {% for style in styles %}
+            <link rel="stylesheet" type="text/css" href="{{ style }}">
+        {% endfor %}
+    {% endif %}
+    <title>{{ title }}</title>
+</head>
+<body>
+    {% if not skip_header %}
+    <header>
+        <div class="left">
+            <a href="{{ config.home_link }}" title="Home">
+                <img src="{{ config.logo }}" class="icon" alt=".">
+            </a>
+
+            <a href="{{ config.link }}" title="{{ config.title }}">
+                <span class="title">{{ config.title }}</span>
+            </a>
+        </div>
+
+        <div class="right">
+            <a href="/rss" target="_blank" title="RSS feeds">
+                <div class="icon"></div>
+            </a>
+        </div>
+    </header>
+    {% endif %}
