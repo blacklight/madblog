@@ -6,6 +6,7 @@ from typing import Optional
 from flask import Flask, abort
 from markdown import markdown
 
+from .config import config
 from .latex import MarkdownLatex
 
 
