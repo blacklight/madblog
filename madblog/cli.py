@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 
+
 def get_args():
     parser = argparse.ArgumentParser(description='''Serve a Markdown folder as a web blog.
 
@@ -19,17 +20,6 @@ The folder should have the following structure:
     -> image-1.png
     -> image-2.png
     -> ...
-  -> css [optional]
-    -> custom-1.css
-    -> custom-2.css
-    -> ...
-  -> fonts [optional]
-    -> custom-1.ttf
-    -> custom-1.css
-    -> ...
-  -> templates [optional]
-    -> index.html [for a custom index template]
-    -> article.html [for a custom article template]
 
 ''', formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('dir', nargs='?', default='.', help='Base path for the blog (default: current directory)')

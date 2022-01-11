@@ -1,4 +1,4 @@
-# mdblog
+# madblog
 
 This project provides a minimal blogging platform based on Markdown files.
 
@@ -17,13 +17,14 @@ $ madness
 ```
 
 ```
-usage: madblog [-h] [--host HOST] [--port PORT] [--debug] [path]
+usage: madblog [-h] [--config CONFIG] [--host HOST] [--port PORT] [--debug] [dir]
 
 Serve a Markdown folder as a web blog.
 
 The folder should have the following structure:
 
 .
+  -> config.yaml [recommended]
   -> markdown
     -> article-1.md
     -> article-2.md
@@ -34,26 +35,39 @@ The folder should have the following structure:
     -> image-1.png
     -> image-2.png
     -> ...
-  -> css [optional]
-    -> custom-1.css
-    -> custom-2.css
-    -> ...
-  -> fonts [optional]
-    -> custom-1.ttf
-    -> custom-1.css
-    -> ...
-  -> templates [optional]
-    -> index.html [for a custom index template]
-    -> article.html [for a custom article template]
 
 positional arguments:
-  path         Base path for the blog
+  dir              Base path for the blog (default: current directory)
 
 options:
-  -h, --help   show this help message and exit
-  --host HOST  Bind host/address
-  --port PORT  Bind port (default: 8000)
-  --debug      Enable debug mode (default: False)
+  -h, --help       show this help message and exit
+  --config CONFIG  Path to a configuration file (default: config.yaml in the blog root directory)
+  --host HOST      Bind host/address
+  --port PORT      Bind port (default: 8000)
+  --debug          Enable debug mode (default: False)
+```
+
+## Configuration
+
+The application will look for a `config.yaml` file in the current directory if none was
+specified through the `-c` command-line option. The structure is the following:
+
+```yaml
+title: Blog title
+description: Blog description
+link: https://link.to.your.blog
+# Use home_link if you have a different home/portal address
+# than your blog, otherwise it's the same as `link`
+home_link: https://link.to.home
+# Path/URL to the logo (default: /img/icon.png)
+logo: /path/or/url/here
+# Blog language (for the RSS feed)
+language: en-US
+
+categories:
+  - category1
+  - category2
+  - category3
 ```
 
 ## Markdown files
@@ -100,4 +114,3 @@ $$
 ## RSS syndacation
 
 RSS feeds for the blog are provided under the `/rss` URL.
-

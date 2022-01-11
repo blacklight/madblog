@@ -1,13 +1,11 @@
 import datetime
-import os
 import re
 from glob import glob
 from typing import Optional
 
-from flask import Flask, abort, render_template
+from flask import Flask, abort
 from markdown import markdown
 
-from .config import config
 from .latex import MarkdownLatex
 
 
@@ -78,7 +76,7 @@ class BlogApp(Flask):
                     author=re.match(r'(.+?)\s+<([^>]+>)', metadata['author'])[1] if 'author' in metadata else None,
                     author_email=re.match(r'(.+?)\s+<([^>]+)>', metadata['author'])[2] if 'author' in metadata else None,
                     published=(metadata['published'].strftime('%b %d, %Y')
-                        if metadata.get('published') else None),
+                               if metadata.get('published') else None),
                     content=markdown(f.read(), extensions=['fenced_code', 'codehilite', MarkdownLatex()]),
                     skip_header=skip_header
             )

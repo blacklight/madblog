@@ -53,7 +53,7 @@ def rss_route():
         <title>{title}</title>
         <link>{link}</link>
         <description>{description}</description>
-        <category>{",".join(categories)}</category>
+        <category>{categories}</category>
         <image>
             <url>{link}/img/icon.png</url>
             <title>{title}</title>
@@ -68,7 +68,7 @@ def rss_route():
         title=config.title,
         description=config.description,
         link=config.link,
-        categories=config.categories,
+        categories=','.join(config.categories),
         language=config.language,
         last_pub_date=pages[0]['published'].strftime('%a, %d %b %Y %H:%M:%S GMT'),
         items='\n\n'.join([
