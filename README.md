@@ -2,6 +2,13 @@
 
 This project provides a minimal blogging platform based on Markdown files.
 
+## Demos
+
+This project powers the following blogs:
+
+- [Platypush](https://blog.platypush.tech)
+- [My personal blog](https://fabiomanganiello.com)
+
 ## Installation
 
 ```shell
