@@ -1,4 +1,5 @@
 import datetime
+import os
 import re
 from glob import glob
 from typing import Optional
@@ -23,19 +24,19 @@ class BlogApp(Flask):
 
         img_dir = os.path.join(config.content_dir, 'img')
         if os.path.isdir(img_dir):
-            self.img_dir = img_dir
+            self.img_dir = os.path.abspath(img_dir)
 
         css_dir = os.path.join(config.content_dir, 'css')
         if os.path.isdir(css_dir):
-            self.css_dir = css_dir
+            self.css_dir = os.path.abspath(css_dir)
 
         fonts_dir = os.path.join(config.content_dir, 'fonts')
         if os.path.isdir(fonts_dir):
-            self.fonts_dir = fonts_dir
+            self.fonts_dir = os.path.abspath(fonts_dir)
 
         templates_dir = os.path.join(config.content_dir, 'templates')
         if os.path.isdir(templates_dir):
-            self.template_folder = templates_dir
+            self.template_folder = os.path.abspath(templates_dir)
 
     def get_page_metadata(self, page: str) -> dict:
         if not page.endswith('.md'):
