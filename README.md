@@ -13,7 +13,7 @@ $ python setup.py install
 ```shell
 # The application will listen on port 8000 and it will
 # serve the current folder
-$ madness
+$ madblog
 ```
 
 ```
