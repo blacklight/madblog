@@ -12,6 +12,7 @@ class Config:
     home_link = '/'
     language = 'en-US'
     logo = '/img/icon.png'
+    header = True
     content_dir = None
     categories = None
 
@@ -46,6 +47,8 @@ def init_config(content_dir='.', config_file='config.yaml'):
         config.logo = cfg['logo']
     if cfg.get('language'):
         config.language = cfg['language']
+    if cfg.get('header') is False:
+        config.header = False
 
     config.categories = cfg.get('categories', [])
 

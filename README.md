@@ -70,6 +70,8 @@ home_link: https://link.to.home
 logo: /path/or/url/here
 # Blog language (for the RSS feed)
 language: en-US
+# Show/hide the header (default: true)
+header: true
 
 categories:
   - category1

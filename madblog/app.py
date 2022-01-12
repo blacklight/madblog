@@ -86,8 +86,8 @@ class BlogApp(Flask):
     def get_pages(self, with_content: bool = False, skip_header: bool = False) -> list:
         return sorted([
             {
-                'path': path,
-                'content': self.get_page(path, skip_header=skip_header) if with_content else '',
+                'path': path[len(app.pages_dir)+1:],
+                'content': self.get_page(path[len(app.pages_dir)+1:], skip_header=skip_header) if with_content else '',
                 **self.get_page_metadata(os.path.basename(path)),
             }
             for path in glob(os.path.join(app.pages_dir, '*.md'))

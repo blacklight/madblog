@@ -16,12 +16,14 @@
     <title>{{ title }}</title>
 </head>
 <body>
-    {% if not skip_header %}
+    {% if not skip_header and config.header %}
     <header>
         <div class="left">
+            {% if config.logo %}
             <a href="{{ config.home_link }}" title="Home">
-                <img src="{{ config.logo }}" class="icon" alt=".">
+                <img src="{{ config.logo }}" class="icon" alt="">
             </a>
+            {% endif %}
 
             <a href="{{ config.link }}" title="{{ config.title }}">
                 <span class="title">{{ config.title }}</span>
