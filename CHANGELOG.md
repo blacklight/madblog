@@ -1,6 +1,10 @@
+# 0.1.5
+
+- Support for config.logo = false.
+
 # 0.1.4
 
-- Titles of HTML pages now match the configured blog title
+- Titles of HTML pages now match the configured blog title.
 
 # 0.1.2
 
