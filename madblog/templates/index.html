@@ -1,4 +1,4 @@
-{% with title=title or 'Platypush blog', skip_header=False, styles=['/css/home.css'] %}
+{% with title=title or config.title or 'Blog', skip_header=not config.header, styles=['/css/home.css'] %}
     {% include 'common-head.html' %}
 {% endwith %}
 
