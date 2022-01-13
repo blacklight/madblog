@@ -1,3 +1,7 @@
+# 0.1.6
+
+- Support for `/rss?short` URL for short articles description on the RSS feed.
+
 # 0.1.5
 
 - Support for config.logo = false.

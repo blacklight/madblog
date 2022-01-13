@@ -1,7 +1,7 @@
 import os
 from typing import Optional
 
-from flask import Response, send_from_directory as send_from_directory_, render_template
+from flask import request, Response, send_from_directory as send_from_directory_, render_template
 
 from .app import app
 from .config import config
@@ -46,6 +46,7 @@ def article_route(article: str):
 @app.route('/rss', methods=['GET'])
 def rss_route():
     pages = app.get_pages(with_content=True, skip_header=True)
+    short_description = 'short' in request.args
 
     return Response('''<?xml version="1.0" encoding="UTF-8" ?>
 <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
@@ -85,7 +86,7 @@ def rss_route():
                 title=page.get('title', '[No Title]'),
                 link=page.get('uri', ''),
                 published=page['published'].strftime('%a, %d %b %Y %H:%M:%S GMT') if 'published' in page else '',
-                content=page.get('content', ''),
+                content=page.get('description', '') if short_description else page.get('content', ''),
                 image=page.get('image', ''),
             )
             for page in pages

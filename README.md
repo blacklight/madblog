@@ -123,3 +123,6 @@ $$
 ## RSS syndacation
 
 RSS feeds for the blog are provided under the `/rss` URL.
+
+By default, the whole HTML-rendered content of an article is returned under `rss.channel.item.description`.
+If you only want to include the short description of an article in the feed, use `/rss?short` instead.
