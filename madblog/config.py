@@ -43,7 +43,7 @@ def init_config(content_dir='.', config_file='config.yaml'):
         config.link = cfg['link']
     if cfg.get('home_link'):
         config.home_link = cfg['home_link']
-    if cfg.get('logo'):
+    if cfg.get('logo') is not None:
         config.logo = cfg['logo']
     if cfg.get('language'):
         config.language = cfg['language']

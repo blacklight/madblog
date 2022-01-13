@@ -20,7 +20,7 @@
     <header>
         <div class="left">
             {% if config.logo %}
-            <a href="{{ config.home_link }}" title="Home">
+            <a href="{{ config.home_link or config.link }}" title="Home">
                 <img src="{{ config.logo }}" class="icon" alt="">
             </a>
             {% endif %}
