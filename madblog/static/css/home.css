@@ -2,6 +2,15 @@ main {
   padding: 0;
 }
 
+.index {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+}
+
 .articles {
   width: 100%;
   height: 100%;

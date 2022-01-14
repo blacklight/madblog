@@ -1,3 +1,7 @@
+# 0.1.7
+
+- Added footer to pages.
+
 # 0.1.6
 
 - Support for `/rss?short` URL for short articles description on the RSS feed.
