@@ -1,3 +1,7 @@
+# 0.1.8
+
+- Added rendering of the main article image on the article header.
+
 # 0.1.7
 
 - Added footer to pages.
