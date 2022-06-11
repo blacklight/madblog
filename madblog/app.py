@@ -12,6 +12,8 @@ from .latex import MarkdownLatex
 
 
 class BlogApp(Flask):
+    _title_header_regex = re.compile(r'^#\s*((\[(.*)\])|(.*))')
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, template_folder=config.templates_dir, **kwargs)
         self.pages_dir = os.path.join(config.content_dir, 'markdown')
@@ -62,10 +64,27 @@ class BlogApp(Flask):
                 else:
                     metadata[m.group(1)] = m.group(2)
 
+        if not metadata.get('title'):
+            # If the `title` header isn't available in the file,
+            # infer it from the first line of the file
+            with open(md_file, 'r') as f:
+                header = ''
+                for line in f.readlines():
+                    header = line
+                    break
+
+            metadata['title_inferred'] = True
+            m = self._title_header_regex.search(header)
+            if m:
+                metadata['title'] = m.group(3) or m.group(1)
+            else:
+                metadata['title'] = os.path.basename(md_file)
+
         if not metadata.get('published'):
             # If the `published` header isn't available in the file,
             # infer it from the file's creation date
             metadata['published'] = datetime.date.fromtimestamp(os.stat(md_file).st_ctime)
+            metadata['published_inferred'] = True
 
         return metadata
 
@@ -74,19 +93,32 @@ class BlogApp(Flask):
             page = page + '.md'
 
         metadata = self.get_page_metadata(page)
+        # Don't duplicate the page title if it's been inferred
+        if not (title or metadata.get('title_inferred')):
+            title = metadata.get('title', config.title)
+
         with open(os.path.join(self.pages_dir, page), 'r') as f:
             return render_template(
-                    'article.html',
-                    config=config,
-                    title=title if title else metadata.get('title', config.title),
-                    image=metadata.get('image'),
-                    description=metadata.get('description'),
-                    author=re.match(r'(.+?)\s+<([^>]+>)', metadata['author'])[1] if 'author' in metadata else None,
-                    author_email=re.match(r'(.+?)\s+<([^>]+)>', metadata['author'])[2] if 'author' in metadata else None,
-                    published=(metadata['published'].strftime('%b %d, %Y')
-                               if metadata.get('published') else None),
-                    content=markdown(f.read(), extensions=['fenced_code', 'codehilite', MarkdownLatex()]),
-                    skip_header=skip_header
+                'article.html',
+                config=config,
+                title=title,
+                image=metadata.get('image'),
+                description=metadata.get('description'),
+                author=(
+                    re.match(r'(.+?)\s+<([^>]+>)', metadata['author'])[1]
+                    if 'author' in metadata else None
+                ),
+                author_email=(
+                    re.match(r'(.+?)\s+<([^>]+)>', metadata['author'])[2]
+                    if 'author' in metadata else None
+                ),
+                published=(
+                    metadata['published'].strftime('%b %d, %Y')
+                    if metadata.get('published') and not metadata.get('published_inferred')
+                    else None
+                ),
+                content=markdown(f.read(), extensions=['fenced_code', 'codehilite', MarkdownLatex()]),
+                skip_header=skip_header
             )
 
     def get_pages(self, with_content: bool = False, skip_header: bool = False) -> list:

@@ -1,13 +1,15 @@
-{% with title=title or config.title or 'Blog', skip_header=skip_header or not config.header, styles=['/css/blog.css', '/css/code.css'] %}
+{% with title=title, skip_header=skip_header or not config.header, styles=['/css/blog.css', '/css/code.css'] %}
     {% include 'common-head.html' %}
 {% endwith %}
 
 <main>
     <div class="container">
         {% if not skip_header %}
-            <div class="title">
-                <h1>{{ title }}</h1>
-            </div>
+            {% if title %}
+              <div class="title">
+                  <h1>{{ title }}</h1>
+              </div>
+            {% endif %}
 
             {% if description %}
             <div class="description">
