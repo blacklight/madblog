@@ -22,7 +22,9 @@ class BlogApp(Flask):
         self.fonts_dir = config.default_fonts_dir
 
         if not os.path.isdir(self.pages_dir):
-            raise FileNotFoundError(self.pages_dir)
+            # If the `markdown` subfolder does not exist, then the whole
+            # `config.content_dir` is treated as the root for markdown files.
+            self.pages_dir = os.path.join(config.content_dir)
 
         img_dir = os.path.join(config.content_dir, 'img')
         if os.path.isdir(img_dir):
