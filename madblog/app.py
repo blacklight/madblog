@@ -46,7 +46,8 @@ class BlogApp(Flask):
             abort(404)
 
         metadata = {}
-        with open(os.path.join(self.pages_dir, page), 'r') as f:
+        md_file = os.path.join(self.pages_dir, page)
+        with open(md_file, 'r') as f:
             metadata['uri'] = '/article/' + page[:-3]
 
             for line in f.readlines():
@@ -60,6 +61,11 @@ class BlogApp(Flask):
                     metadata[m.group(1)] = datetime.date.fromisoformat(m.group(2))
                 else:
                     metadata[m.group(1)] = m.group(2)
+
+        if not metadata.get('published'):
+            # If the `published` header isn't available in the file,
+            # infer it from the file's creation date
+            metadata['published'] = datetime.date.fromtimestamp(os.stat(md_file).st_ctime)
 
         return metadata
 
@@ -84,14 +90,18 @@ class BlogApp(Flask):
             )
 
     def get_pages(self, with_content: bool = False, skip_header: bool = False) -> list:
-        return sorted([
-            {
-                'path': path[len(app.pages_dir)+1:],
-                'content': self.get_page(path[len(app.pages_dir)+1:], skip_header=skip_header) if with_content else '',
-                **self.get_page_metadata(os.path.basename(path)),
-            }
-            for path in glob(os.path.join(app.pages_dir, '*.md'))
-        ], key=lambda page: page.get('published'), reverse=True)
+        return sorted(
+            [
+                {
+                    'path': path[len(app.pages_dir)+1:],
+                    'content': self.get_page(path[len(app.pages_dir)+1:], skip_header=skip_header) if with_content else '',
+                    **self.get_page_metadata(os.path.basename(path)),
+                }
+                for path in glob(os.path.join(app.pages_dir, '*.md'))
+            ],
+            key=lambda page: page.get('published', datetime.date.fromtimestamp(0)),
+            reverse=True
+        )
 
 
 app = BlogApp(__name__)
