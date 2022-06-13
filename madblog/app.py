@@ -24,11 +24,13 @@ class BlogApp(Flask):
         if not os.path.isdir(self.pages_dir):
             # If the `markdown` subfolder does not exist, then the whole
             # `config.content_dir` is treated as the root for markdown files.
-            self.pages_dir = os.path.join(config.content_dir)
+            self.pages_dir = config.content_dir
 
         img_dir = os.path.join(config.content_dir, 'img')
         if os.path.isdir(img_dir):
             self.img_dir = os.path.abspath(img_dir)
+        else:
+            self.img_dir = config.content_dir
 
         css_dir = os.path.join(config.content_dir, 'css')
         if os.path.isdir(css_dir):
