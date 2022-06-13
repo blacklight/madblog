@@ -16,6 +16,12 @@ main .content code, .codehilite {
   font-size: .85em;
 }
 
+@media screen and (max-width: 767px) {
+  main {
+    font-size: 0.9em;
+  }
+}
+
 a:hover {
   opacity: 0.7;
 }
