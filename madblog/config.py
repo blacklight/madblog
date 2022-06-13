@@ -13,7 +13,7 @@ class Config:
     language = 'en-US'
     logo = '/img/icon.png'
     header = True
-    content_dir = None
+    content_dir = '.'
     categories = None
 
     basedir = os.path.abspath(os.path.dirname(__file__))

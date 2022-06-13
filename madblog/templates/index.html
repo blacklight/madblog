@@ -1,41 +1,59 @@
 {% with title=title or config.title or 'Blog', skip_header=not config.header, styles=['/css/home.css'] %}
-    {% include 'common-head.html' %}
+  {% include 'common-head.html' %}
 {% endwith %}
 
 <main>
-    <div class="index">
+  <div class="index">
+    {% set state = {} %}
+    {% for i, page in pages %}
+      {% if 'cur_folder' not in state or page.get('folder') != state.get('cur_folder') %}
+        <div class="folder">
+          {% set folder = page.get('folder') %}
+          {% if folder %}
+            <div id="{{ folder.replace('/', '-') }}" class="folder-title">
+              <a href="#{{ folder.replace('/', '-') }}">
+                {{ folder }}
+              </a>
+            </div>
+          {% endif %}
         <div class="articles">
-            {% for page in pages %}
-                <a class="article" href="{{ page['uri'] }}">
-                    <div class="container">
-                        {% if page['image'] %}
-                            <div class="image">
-                                <img src="{{ page['image'] }}" alt="">
-                            </div>
-                        {% endif %}
+      {% endif %}
+      {% if state.update({'cur_folder': page.get('folder')}) %}{% endif %}
 
-                        <div class="title">
-                            {{ page['title'] }}
-                        </div>
+          <a class="article" href="{{ page['uri'] }}">
+            <div class="container">
+              {% if page['image'] %}
+                <div class="image">
+                  <img src="{{ page['image'] }}" alt="">
+                </div>
+              {% endif %}
 
-                        {% if page['published'] %}
-                            <div class="published-date">
-                                {{ page['published'].strftime('%b %d, %Y') }}
-                            </div>
-                        {% endif %}
+              <div class="title">
+                {{ page['title'] }}
+              </div>
 
-                        {% if page['description'] %}
-                            <div class="description">
-                                {{ page['description'] }}
-                            </div>
-                        {% endif %}
-                    </div>
-                </a>
-            {% endfor %}
+              {% if page['published'] %}
+                <div class="published-date">
+                  {{ page['published'].strftime('%b %d, %Y') }}
+                </div>
+              {% endif %}
+
+              {% if page['description'] %}
+                <div class="description">
+                  {{ page['description'] }}
+                </div>
+              {% endif %}
+            </div>
+          </a>
+
+      {% if i == pages|length - 1 or pages[i+1][1].get('folder') != page.get('folder') %}
         </div>
-    </div>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
 
-    {% include 'footer.html' %}
+  {% include 'footer.html' %}
 </main>
 
 {% include 'common-tail.html' %}

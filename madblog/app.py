@@ -1,14 +1,14 @@
 import datetime
 import os
 import re
-from glob import glob
-from typing import Optional
+from typing import Optional, List, Tuple, Type
 
 from flask import Flask, abort
 from markdown import markdown
 
 from .config import config
 from .latex import MarkdownLatex
+from ._sorters import PagesSorter, PagesSortByTime
 
 
 class BlogApp(Flask):
@@ -46,11 +46,11 @@ class BlogApp(Flask):
         if not page.endswith('.md'):
             page = page + '.md'
 
-        if not os.path.isfile(os.path.join(self.pages_dir, page)):
+        md_file = os.path.join(self.pages_dir, page)
+        if not os.path.isfile(md_file):
             abort(404)
 
         metadata = {}
-        md_file = os.path.join(self.pages_dir, page)
         with open(md_file, 'r') as f:
             metadata['uri'] = '/article/' + page[:-3]
 
@@ -123,19 +123,37 @@ class BlogApp(Flask):
                 skip_header=skip_header
             )
 
-    def get_pages(self, with_content: bool = False, skip_header: bool = False) -> list:
-        return sorted(
-            [
-                {
-                    'path': path[len(app.pages_dir)+1:],
-                    'content': self.get_page(path[len(app.pages_dir)+1:], skip_header=skip_header) if with_content else '',
-                    **self.get_page_metadata(os.path.basename(path)),
-                }
-                for path in glob(os.path.join(app.pages_dir, '*.md'))
-            ],
-            key=lambda page: page.get('published', datetime.date.fromtimestamp(0)),
-            reverse=True
-        )
+    def get_pages(
+        self,
+        with_content: bool = False,
+        skip_header: bool = False,
+        sorter: Type[PagesSorter] = PagesSortByTime,
+        reverse: bool = True,
+    ) -> List[Tuple[int, dict]]:
+        pages_dir = app.pages_dir.rstrip('/')
+        pages = [
+            {
+                'path': os.path.join(root[len(pages_dir)+1:], f),
+                'folder': root[len(pages_dir)+1:],
+                'content': (
+                    self.get_page(
+                        os.path.join(root, f),
+                        skip_header=skip_header
+                    )
+                    if with_content else ''
+                ),
+                **self.get_page_metadata(
+                    os.path.join(root[len(pages_dir)+1:], f)
+                ),
+            }
+            for root, _, files in os.walk(pages_dir, followlinks=True)
+            for f in files
+            if f.endswith('.md')
+        ]
+
+        sorter_func = sorter(pages)
+        pages.sort(key=sorter_func, reverse=reverse)
+        return [(i, page) for i, page in enumerate(pages)]
 
 
 app = BlogApp(__name__)

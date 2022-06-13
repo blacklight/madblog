@@ -81,7 +81,7 @@ categories:
 
 ## Markdown files
 
-Articles are Markdown files stored under `pages`. For an article to be correctly rendered,
+Articles are Markdown files stored under `markdown`. For an article to be correctly rendered,
 you need to start the Markdown file with the following metadata header:
 
 ```markdown
@@ -91,6 +91,14 @@ you need to start the Markdown file with the following metadata header:
 [//]: # (author: Author Name <email@author.me>)
 [//]: # (published: 2022-01-01)
 ```
+
+If no `markdown` folder exists in the base directory, then the base directory itself will be treated as a root for
+Markdown files.
+
+### Folders
+
+You can organize Markdown files in folders. If multiple folders are present, pages on the home will be grouped by
+folders.
 
 ## Images
 

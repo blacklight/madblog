@@ -5,6 +5,7 @@ from flask import request, Response, send_from_directory as send_from_directory_
 
 from .app import app
 from .config import config
+from ._sorters import PagesSortByTimeGroupedByFolder
 
 
 def send_from_directory(path: str, file: str, alternative_path: Optional[str] = None, *args, **kwargs):
@@ -15,7 +16,11 @@ def send_from_directory(path: str, file: str, alternative_path: Optional[str] = 
 
 @app.route('/', methods=['GET'])
 def home_route():
-    return render_template('index.html', pages=app.get_pages(), config=config)
+    return render_template(
+        'index.html',
+        pages=app.get_pages(sorter=PagesSortByTimeGroupedByFolder),
+        config=config
+    )
 
 
 @app.route('/img/<img>', methods=['GET'])
@@ -38,9 +43,14 @@ def fonts_route(file: str):
     return send_from_directory(app.fonts_dir, file, config.default_fonts_dir)
 
 
+@app.route('/article/<path:path>/<article>', methods=['GET'])
+def article_with_path_route(path: str, article: str):
+    return app.get_page(os.path.join(path, article))
+
+
 @app.route('/article/<article>', methods=['GET'])
 def article_route(article: str):
-    return app.get_page(article)
+    return article_with_path_route('', article)
 
 
 @app.route('/rss', methods=['GET'])
@@ -71,7 +81,7 @@ def rss_route():
         link=config.link,
         categories=','.join(config.categories),
         language=config.language,
-        last_pub_date=pages[0]['published'].strftime('%a, %d %b %Y %H:%M:%S GMT'),
+        last_pub_date=pages[0][1]['published'].strftime('%a, %d %b %Y %H:%M:%S GMT'),
         items='\n\n'.join([
             '''
             <item>
@@ -89,7 +99,7 @@ def rss_route():
                 content=page.get('description', '') if short_description else page.get('content', ''),
                 image=page.get('image', ''),
             )
-            for page in pages
+            for _, page in pages
         ]),
     ), mimetype='application/rss+xml')
 
