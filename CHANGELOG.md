@@ -1,32 +1,62 @@
-# 0.1.8
+# Changelog
+
+## 0.2.0
+
+- If `img` and `markdown` aren't present under `content_dir` then treat
+  `content_dir` itself as a root folder for images and pages.
+
+- Improved rendering of articles on smaller screens.
+
+- Support for articles/pages organized in folders.
+
+- Infer the title from the Markdown header or from the file name if it's
+  not provided in the Markdown metadata.
+
+- Infer published date from the file's creation date if it's not provided
+  in the Markdown metadata.
+
+## 0.1.12
+
+- Infer the published date from the file creation date if it's not available in
+  the Markdown metadata.
+
+## 0.1.11
+
+- Fixed `max-width` for article body on large screens.
+
+## 0.1.9
+
+- Fixed `overflow-x` on articles template.
+
+## 0.1.8
 
 - Added rendering of the main article image on the article header.
 
-# 0.1.7
+## 0.1.7
 
 - Added footer to pages.
 
-# 0.1.6
+## 0.1.6
 
 - Support for `/rss?short` URL for short articles description on the RSS feed.
 
-# 0.1.5
+## 0.1.5
 
 - Support for config.logo = false.
 
-# 0.1.4
+## 0.1.4
 
 - Titles of HTML pages now match the configured blog title.
 
-# 0.1.2
+## 0.1.2
 
 - Fixed RSS feed support.
 - Added `header` configuration option (the blog header can now be removed).
 
-# 0.1.1
+## 0.1.1
 
 First usable version, with several bug fixes and better documentation.
 
-# 0.1.0 
+## 0.1.0
 
 First draft.
