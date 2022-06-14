@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Support for serving a `manifest.json`.
+
 ## 0.2.0
 
 - If `img` and `markdown` aren't present under `content_dir` then treat

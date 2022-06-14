@@ -43,6 +43,11 @@ def fonts_route(file: str):
     return send_from_directory(app.fonts_dir, file, config.default_fonts_dir)
 
 
+@app.route('/manifest.json', methods=['GET'])
+def manifest_route():
+    return send_from_directory(config.content_dir, 'manifest.json')
+
+
 @app.route('/article/<path:path>/<article>', methods=['GET'])
 def article_with_path_route(path: str, article: str):
     return app.get_page(os.path.join(path, article))
