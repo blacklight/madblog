@@ -101,7 +101,10 @@ def rss_route():
         link=config.link,
         categories=','.join(config.categories),
         language=config.language,
-        last_pub_date=pages[0][1]['published'].strftime('%a, %d %b %Y %H:%M:%S GMT'),
+        last_pub_date=(
+            pages[0][1]['published'].strftime('%a, %d %b %Y %H:%M:%S GMT')
+            if pages else ''
+        ),
         items='\n\n'.join([
             '''
             <item>
