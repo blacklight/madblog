@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+
+- Fix for broken RSS feed URLs when a blog has no pages.
+- Propagate the command-line arguments even when the app is launched through uWSGI.
+
 ## 0.2.2
 
 - Proper support for PWA (progressive web app) optional logic.
