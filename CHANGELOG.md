@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- Proper support for PWA (progressive web app) optional logic.
+
 ## 0.2.1
 
 - Support for serving a `manifest.json`.
