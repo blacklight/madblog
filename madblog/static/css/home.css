@@ -41,7 +41,6 @@ main {
 .article {
   display: block;
   width: 100%;
-  max-height: 80%;
   box-shadow: 0 1px 3px 1px #ccc;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -53,12 +52,6 @@ main {
    opacity: 1;
    border-radius: .5em;
 }
-
-/* @media screen and (min-width: 767px) { */
-/*   .article { */
-/*     max-height: 55%; */
-/*   } */
-/* } */
 
 @media screen and (min-width: 640px) and (max-width: 767px) {
   .article {
