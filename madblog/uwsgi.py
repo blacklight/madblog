@@ -1,9 +1,14 @@
 import os
+import sys
 
 from .cli import get_args
 from .config import init_config
 
-opts, _ = get_args()
+arg_delim_idx = [
+    i for i, arg in enumerate(sys.argv) if arg == 'madblog.uwsgi'
+][0]
+
+opts, _ = get_args(sys.argv[arg_delim_idx+1:])
 config_file = os.path.join(opts.dir, 'config.yaml')
 init_config(config_file=config_file, content_dir=opts.dir)
 
