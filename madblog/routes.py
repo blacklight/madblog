@@ -33,6 +33,21 @@ def favicon_route():
     return img_route('favicon.ico')
 
 
+@app.route('/js/<file>', methods=['GET'])
+def js_route(file: str):
+    return send_from_directory(app.js_dir, file, config.default_js_dir)
+
+
+@app.route('/pwabuilder-sw.js', methods=['GET'])
+def pwa_builder_route():
+    return send_from_directory(app.js_dir, 'pwabuilder-sw.js', config.default_js_dir)
+
+
+@app.route('/pwabuilder-sw-register.js', methods=['GET'])
+def pwa_builder_register_route():
+    return send_from_directory(app.js_dir, 'pwabuilder-sw-register.js', config.default_js_dir)
+
+
 @app.route('/css/<style>', methods=['GET'])
 def css_route(style: str):
     return send_from_directory(app.css_dir, style, config.default_css_dir)

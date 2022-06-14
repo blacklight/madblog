@@ -20,6 +20,7 @@ class Config:
     templates_dir = os.path.join(basedir, 'templates')
     static_dir = os.path.join(basedir, 'static')
     default_css_dir = os.path.join(static_dir, 'css')
+    default_js_dir = os.path.join(static_dir, 'js')
     default_fonts_dir = os.path.join(static_dir, 'fonts')
     default_img_dir = os.path.join(static_dir, 'img')
 

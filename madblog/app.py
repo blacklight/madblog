@@ -19,6 +19,7 @@ class BlogApp(Flask):
         self.pages_dir = os.path.join(config.content_dir, 'markdown')
         self.img_dir = config.default_img_dir
         self.css_dir = config.default_css_dir
+        self.js_dir = config.default_js_dir
         self.fonts_dir = config.default_fonts_dir
 
         if not os.path.isdir(self.pages_dir):
@@ -35,6 +36,10 @@ class BlogApp(Flask):
         css_dir = os.path.join(config.content_dir, 'css')
         if os.path.isdir(css_dir):
             self.css_dir = os.path.abspath(css_dir)
+
+        js_dir = os.path.join(config.content_dir, 'js')
+        if os.path.isdir(js_dir):
+            self.js_dir = os.path.abspath(js_dir)
 
         fonts_dir = os.path.join(config.content_dir, 'fonts')
         if os.path.isdir(fonts_dir):
