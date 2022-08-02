@@ -3,7 +3,7 @@ import os
 import sys
 
 
-def get_args():
+def get_args(args):
     parser = argparse.ArgumentParser(description='''Serve a Markdown folder as a web blog.
 
 The folder should have the following structure:
@@ -29,12 +29,12 @@ The folder should have the following structure:
     parser.add_argument('--debug', dest='debug', required=False, action='store_true', default=False,
                         help='Enable debug mode (default: False)')
 
-    return parser.parse_known_args(sys.argv[1:])
+    return parser.parse_known_args(args)
 
 
 def run():
     from .config import init_config
-    opts, _ = get_args()
+    opts, _ = get_args(sys.argv[1:])
     config_file = os.path.join(opts.dir, 'config.yaml')
     init_config(config_file=config_file, content_dir=opts.dir)
 
