@@ -229,11 +229,9 @@ class LaTeXPostprocessor(markdown.postprocessors.Postprocessor):
     """This post processor extension just allows us to further
         refine, if necessary, the document after it has been parsed."""
 
-    # noinspection PyMethodMayBeStatic
-    def run(self, text):
+    def run(self, lines):
         # Inline a style for default behavior
-        text = img_css + text
-        return text
+        return [img_css] + lines
 
 
 class MarkdownLatex(markdown.Extension):
@@ -241,8 +239,14 @@ class MarkdownLatex(markdown.Extension):
 
     def extendMarkdown(self, md):
         # Our base LaTeX extension
-        md.preprocessors.add('latex',
-                             LaTeXPreprocessor(self), ">html_block")
-        # Our cleanup postprocessing extension
-        md.postprocessors.add('latex',
-                              LaTeXPostprocessor(self), ">amp_substitute")
+        md.preprocessors.register(
+             LaTeXPreprocessor(self),
+            'latex',
+            0,
+        )
+
+        md.preprocessors.register(
+             LaTeXPostprocessor(self),
+            'latex',
+            1,
+        )
