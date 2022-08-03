@@ -225,28 +225,12 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
         return hashlib.sha1(tex.encode()).hexdigest()
 
 
-class LaTeXPostprocessor(markdown.postprocessors.Postprocessor):
-    """This post processor extension just allows us to further
-        refine, if necessary, the document after it has been parsed."""
-
-    def run(self, lines):
-        # Inline a style for default behavior
-        return [img_css] + lines
-
-
 class MarkdownLatex(markdown.Extension):
     """Wrapper for LaTeXPreprocessor"""
 
     def extendMarkdown(self, md):
-        # Our base LaTeX extension
         md.preprocessors.register(
              LaTeXPreprocessor(self),
-            'latex',
-            0,
-        )
-
-        md.preprocessors.register(
-             LaTeXPostprocessor(self),
             'latex',
             1,
         )
