@@ -6,7 +6,6 @@ main .content {
 
 main .content p,
 main .content ul {
-  font-family: Avenir, Palatino, charter, Georgia, Cambria, "Times New Roman", Times, serif;
   text-align: justify;
   overflow-wrap: break-word;
   word-break: break-word;
