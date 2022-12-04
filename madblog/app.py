@@ -97,7 +97,13 @@ class BlogApp(Flask):
 
         return metadata
 
-    def get_page(self, page: str, title: Optional[str] = None, skip_header: bool = False):
+    def get_page(
+        self,
+        page: str,
+        title: Optional[str] = None,
+        skip_header: bool = False,
+        skip_html_head: bool = False
+    ):
         if not page.endswith('.md'):
             page = page + '.md'
 
@@ -127,13 +133,15 @@ class BlogApp(Flask):
                     else None
                 ),
                 content=markdown(f.read(), extensions=['fenced_code', 'codehilite', MarkdownLatex()]),
-                skip_header=skip_header
+                skip_header=skip_header,
+                skip_html_head=skip_html_head,
             )
 
     def get_pages(
         self,
         with_content: bool = False,
         skip_header: bool = False,
+        skip_html_head: bool = False,
         sorter: Type[PagesSorter] = PagesSortByTime,
         reverse: bool = True,
     ) -> List[Tuple[int, dict]]:
@@ -145,7 +153,8 @@ class BlogApp(Flask):
                 'content': (
                     self.get_page(
                         os.path.join(root, f),
-                        skip_header=skip_header
+                        skip_header=skip_header,
+                        skip_html_head=skip_html_head,
                     )
                     if with_content else ''
                 ),

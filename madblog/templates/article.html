@@ -1,8 +1,11 @@
-{% with title=title, skip_header=skip_header or not config.header, styles=['/css/blog.css', '/css/code.css'] %}
-    {% include 'common-head.html' %}
-{% endwith %}
+{% if not skip_html_head %}
+  {% with title=title, skip_header=skip_header or not config.header, styles=['/css/blog.css', '/css/code.css'] %}
+      {% include 'common-head.html' %}
+  {% endwith %}
 
 <main>
+{% endif %}
+
     <div class="container">
         {% if not skip_header %}
             {% if title %}
@@ -48,6 +51,8 @@
     </div>
 
     {% include 'footer.html' %}
-</main>
 
-{% include 'common-tail.html' %}
+{% if not skip_html_head %}
+</main>
+  {% include 'common-tail.html' %}
+{% endif %}

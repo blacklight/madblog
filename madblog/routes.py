@@ -75,7 +75,7 @@ def article_route(article: str):
 
 @app.route('/rss', methods=['GET'])
 def rss_route():
-    pages = app.get_pages(with_content=True, skip_header=True)
+    pages = app.get_pages(with_content=True, skip_header=True, skip_html_head=True)
     short_description = 'short' in request.args
 
     return Response('''<?xml version="1.0" encoding="UTF-8" ?>
