@@ -4,8 +4,6 @@
   {% endwith %}
 
 <main>
-{% endif %}
-
     <div class="container">
         {% if not skip_header %}
             {% if title %}
@@ -46,13 +44,16 @@
         {% endif %}
 
         <div class="content">
+{% endif %}
+
             {{ content | safe }}
+
+{% if not skip_html_head %}
         </div>
     </div>
 
     {% include 'footer.html' %}
 
-{% if not skip_html_head %}
 </main>
   {% include 'common-tail.html' %}
 {% endif %}
