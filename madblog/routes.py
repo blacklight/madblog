@@ -124,7 +124,7 @@ def rss_route():
             )
             for _, page in pages
         ]),
-    ), mimetype='application/rss+xml')
+    ), mimetype='application/xml')
 
 
 # vim:sw=4:ts=4:et:
