@@ -97,8 +97,8 @@ def manifest_route():
             "scope": "",
             "orientation": "portrait",
             "display": "standalone",
-            "theme_color": "#ffffff",
-            "background_color": "#000000",
+            "theme_color": "#000000",
+            "background_color": "#ffffff",
         }
     )
 
