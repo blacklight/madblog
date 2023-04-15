@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.14
+
+- Better support for PWA tags and added a default config-generated `/manifest.json`.
+
 ## 0.2.3
 
 - Fix for broken RSS feed URLs when a blog has no pages.
