@@ -2,12 +2,32 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <!-- PWA & Viewport -->
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="viewport" content="uc-fitscreen=yes"/>
+    <meta name="description" content="{{ config.description }}">
+    <link rel="manifest" href="/manifest.json">
+    <!-- Android PWA -->
+    <meta name="theme-color" content="white">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="{{ config.title }}">
+    <!-- iOS PWA -->
+    <meta name="apple-mobile-web-app-title" content="{{ config.title }}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <!-- Layout mode -->
+    <meta name="layoutmode" content="fitscreen/standard">
+    <!-- Orientation  -->
+    <meta name="screen-orientation" content="portrait">
+    <!-- RSS feed -->
     <link rel="alternate" type="application/rss+xml" title="{{ config.title }}" href="/rss" />
+    <!-- Fonts & Styles -->
     <link rel="stylesheet" href="/fonts/poppins.css">
     <link rel="stylesheet" href="/fonts/fira-sans.css">
     <link rel="stylesheet" href="/css/common.css">
-    <link rel="manifest" href="/manifest.json">
+    <!-- PWA builder -->
     <script type="module" src="/pwabuilder-sw-register.js"></script>
 
     {% if styles %}
