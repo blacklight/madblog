@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.16
+
+- Removed `alt` attribute from LaTeX rendered `<img>` tags. It may generate
+  non-standard Unicode characters that break the RSS feed.
+
 ## 0.2.14
 
 - Better support for PWA tags and added a default config-generated `/manifest.json`.
