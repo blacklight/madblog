@@ -31,11 +31,11 @@ def call(*args, **kwargs):
 
 
 # Defines our basic inline image
-img_expr = '<img class="latex inline math-%s" alt="%s" id="%s" src="data:image/png;base64,%s">'
+img_expr = '<img class="latex inline math-%s" id="%s" src="data:image/png;base64,%s">'
 
 # Defines multiline expression image
-multiline_img_expr = '''<div class="multiline-wrapper">
-<img class="latex multiline math-%s" alt="%s" id="%s" src="data:image/png;base64,%s"></div>'''
+multiline_img_expr = """<div class="multiline-wrapper">
+<img class="latex multiline math-%s" id="%s" src="data:image/png;base64,%s"></div>"""
 
 # Base CSS template
 img_css = """<style scoped>
@@ -55,8 +55,8 @@ img.latex.inline {
 </style>"""
 
 # Cache and temp file paths
-tmpdir = tempfile.gettempdir() + '/markdown-latex'
-cache_file = tmpdir + '/latex.cache'
+tmpdir = tempfile.gettempdir() + "/markdown-latex"
+cache_file = tmpdir + "/latex.cache"
 
 
 class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
@@ -75,16 +75,20 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
 """
 
     # Math TeX extraction regex
-    math_extract_regex = re.compile(r'(.+?)((\\\(.+?\\\))|(\$\$\n.+?\n\$\$\n))(.*)', re.MULTILINE | re.DOTALL)
+    math_extract_regex = re.compile(
+        r"(.+?)((\\\(.+?\\\))|(\$\$\n.+?\n\$\$\n))(.*)", re.MULTILINE | re.DOTALL
+    )
 
     # Math TeX matching regex
-    math_match_regex = re.compile(r'\s*(\\\(.+?\\\))|(\$\$\n.+?\n\$\$\n)\s*', re.MULTILINE | re.DOTALL)
+    math_match_regex = re.compile(
+        r"\s*(\\\(.+?\\\))|(\$\$\n.+?\n\$\$\n)\s*", re.MULTILINE | re.DOTALL
+    )
 
     def __init__(self, *_, **__):
         if not os.path.isdir(tmpdir):
             os.makedirs(tmpdir)
         try:
-            with open(cache_file, 'r') as f:
+            with open(cache_file, "r") as f:
                 self.cached = json.load(f)
         except (IOError, json.JSONDecodeError):
             self.cached = {}
@@ -94,7 +98,8 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
             ("dvipng", "args"): "-q -T tight -bg Transparent -z 9 -D 200",
             ("delimiters", "text"): "%",
             ("delimiters", "math"): "$",
-            ("delimiters", "preamble"): "%%"}
+            ("delimiters", "preamble"): "%%",
+        }
 
     def _latex_to_base64(self, tex):
         """Generates a base64 representation of TeX string"""
@@ -104,18 +109,24 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
         with os.fdopen(tmp_file_fd, "w") as tmp_file:
             tmp_file.write(self.tex_preamble)
             tmp_file.write(tex)
-            tmp_file.write('\n\\end{document}')
+            tmp_file.write("\n\\end{document}")
 
         # compile LaTeX document. A DVI file is created
-        status = call(('latex -halt-on-error -output-directory={:s} {:s}'
-                       .format(tmpdir, path)).split(),
-                      stdout=PIPE, timeout=10)
+        status = call(
+            (
+                "latex -halt-on-error -output-directory={:s} {:s}".format(tmpdir, path)
+            ).split(),
+            stdout=PIPE,
+            timeout=10,
+        )
 
         # clean up if the above failed
         if status:
             self._cleanup(path, err=True)
-            raise Exception("Couldn't compile LaTeX document." +
-                            "Please read '%s.log' for more detail." % path)
+            raise Exception(
+                "Couldn't compile LaTeX document."
+                + "Please read '%s.log' for more detail." % path
+            )
 
         # Run dvipng on the generated DVI file. Use tight bounding box.
         # Magnification is set to 1200
@@ -129,8 +140,10 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
         # clean up if we couldn't make the above work
         if status:
             self._cleanup(path, err=True)
-            raise Exception("Couldn't convert LaTeX to image." +
-                            "Please read '%s.log' for more detail." % path)
+            raise Exception(
+                "Couldn't convert LaTeX to image."
+                + "Please read '%s.log' for more detail." % path
+            )
 
         # Read the png and encode the data
         try:
@@ -157,7 +170,7 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
     def run(self, lines):
         """Parses the actual page"""
         # Checks for the LaTeX header
-        use_latex = any(line == '[//]: # (latex: 1)' for line in lines)
+        use_latex = any(line == "[//]: # (latex: 1)" for line in lines)
         if not use_latex:
             return lines
 
@@ -165,7 +178,9 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
         page = "\n".join(lines)
 
         # Adds a preamble mode
-        self.tex_preamble += self.config[("general", "preamble")] + "\n\\begin{document}\n"
+        self.tex_preamble += (
+            self.config[("general", "preamble")] + "\n\\begin{document}\n"
+        )
 
         # Figure out our text strings and math-mode strings
         tex_expr = self.math_extract_regex.findall(page)
@@ -176,7 +191,7 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
 
         # Parse the expressions
         new_cache = {}
-        new_page = ''
+        new_page = ""
         n_multiline_expressions = 0
 
         while page:
@@ -200,21 +215,25 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
                     new_cache[tex_hash] = data
 
                 if is_multiline and n_multiline_expressions > 0:
-                    new_page += '</p>'
-                new_page += (multiline_img_expr if is_multiline else img_expr) % ('true', expr, tex_hash, data)
+                    new_page += "</p>"
+                new_page += (multiline_img_expr if is_multiline else img_expr) % (
+                    "true",
+                    tex_hash,
+                    data,
+                )
 
                 if is_multiline:
-                    new_page += '<p>'
+                    new_page += "<p>"
                     n_multiline_expressions += 1
 
             page = m.group(5)
 
         if n_multiline_expressions > 0:
-            new_page += '</p>'
+            new_page += "</p>"
 
         # Cache our data
         self.cached.update(new_cache)
-        with open(cache_file, 'w') as f:
+        with open(cache_file, "w") as f:
             json.dump(self.cached, f)
 
         # Make sure to re-split the lines
@@ -230,7 +249,7 @@ class MarkdownLatex(markdown.Extension):
 
     def extendMarkdown(self, md):
         md.preprocessors.register(
-             LaTeXPreprocessor(self),
-            'latex',
+            LaTeXPreprocessor(self),
+            "latex",
             1,
         )
