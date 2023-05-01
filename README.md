@@ -72,6 +72,8 @@ logo: /path/or/url/here
 language: en-US
 # Show/hide the header (default: true)
 header: true
+# Enable/disable the short RSS feed (default: false)
+short_feed: false
 
 categories:
   - category1
@@ -133,4 +135,9 @@ $$
 RSS feeds for the blog are provided under the `/rss` URL.
 
 By default, the whole HTML-rendered content of an article is returned under `rss.channel.item.description`.
+
 If you only want to include the short description of an article in the feed, use `/rss?short` instead.
+
+If you want the short feed (i.e. without the fully rendered article as a
+description) to be always returned, then you can specify `short_feed=true` in
+your configuration.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.18
+
+- Added `short_feed` configuration flag to permanently disable returning the
+  full content of the articles in the RSS feed.
+
 ## 0.2.16
 
 - Removed `alt` attribute from LaTeX rendered `<img>` tags. It may generate
