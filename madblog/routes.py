@@ -153,8 +153,13 @@ def rss_route():
             <item>
                 <title>{title}</title>
                 <link>{base_link}{link}</link>
-                <pubDate>{published}</pubDate>
-                <description><![CDATA[{content}]]></description>
+                <pubDate>{published}</pubDate>"""
+                    + (
+                        "<description><![CDATA[{content}]]></description>"
+                        if not config.short_feed
+                        else ""
+                    )
+                    + """
                 <media:content medium="image" url="{base_link}{image}" width="200" height="150" />
             </item>
             """.format(

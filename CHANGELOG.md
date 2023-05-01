@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.18
+## 0.2.19
 
 - Added `short_feed` configuration flag to permanently disable returning the
   full content of the articles in the RSS feed.
