@@ -115,8 +115,12 @@ def article_route(article: str):
 
 @app.route("/rss", methods=["GET"])
 def rss_route():
-    pages = app.get_pages(with_content=True, skip_header=True, skip_html_head=True)
-    short_description = "short" in request.args
+    short_description = "short" in request.args or config.short_feed
+    pages = app.get_pages(
+        with_content=not short_description,
+        skip_header=True,
+        skip_html_head=True,
+    )
 
     return Response(
         """<?xml version="1.0" encoding="UTF-8" ?>
@@ -149,20 +153,17 @@ def rss_route():
             ),
             items="\n\n".join(
                 [
-                    """
+                    (
+                        """
             <item>
                 <title>{title}</title>
                 <link>{base_link}{link}</link>
-                <pubDate>{published}</pubDate>"""
-                    + (
-                        "<description><![CDATA[{content}]]></description>"
-                        if not config.short_feed
-                        else ""
-                    )
-                    + """
+                <pubDate>{published}</pubDate>
+                <description><![CDATA[{content}]]></description>
                 <media:content medium="image" url="{base_link}{image}" width="200" height="150" />
             </item>
-            """.format(
+                    """
+                    ).format(
                         base_link=config.link,
                         title=page.get("title", "[No Title]"),
                         link=page.get("uri", ""),
