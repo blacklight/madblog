@@ -69,12 +69,9 @@ class BlogApp(Flask):
                     break
 
                 if m.group(1) == "published":
-                    try:
-                        metadata[m.group(1)] = datetime.date.fromisoformat(m.group(2))
-                    except ValueError:
-                        metadata[m.group(1)] = datetime.datetime.fromisoformat(
-                            m.group(2)
-                        )
+                    metadata[m.group(1)] = datetime.datetime.fromisoformat(
+                        m.group(2)
+                    ).date()
                 else:
                     metadata[m.group(1)] = m.group(2)
 
