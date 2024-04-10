@@ -61,11 +61,11 @@ class BlogApp(Flask):
         with open(md_file, "r") as f:
             metadata["uri"] = "/article/" + page[:-3]
 
-            for line in f.readlines():
+            for line in f:
                 if not line:
                     continue
 
-                if not (m := re.match(r"^\[//]: # \(([^:]+):\s*([^)]+)\)\s*$", line)):
+                if not (m := re.match(r"^\[//]: # \(([^:]+):\s*(.*)\)\s*$", line)):
                     break
 
                 if m.group(1) == "published":
