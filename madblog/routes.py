@@ -162,7 +162,7 @@ def rss_route():
                 <link>{base_link}{link}</link>
                 <pubDate>{published}</pubDate>
                 <description><![CDATA[{content}]]></description>
-                <media:content medium="image" url="{base_link}{image}" width="200" height="150" />
+                <media:content medium="image" url="{image}" width="200" height="150" />
             </item>
                     """
                     ).format(
