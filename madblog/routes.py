@@ -1,5 +1,7 @@
 import os
+import re
 from typing import Optional
+from urllib.parse import urljoin
 
 from flask import (
     jsonify,
@@ -167,15 +169,22 @@ def rss_route():
                         base_link=config.link,
                         title=page.get("title", "[No Title]"),
                         link=page.get("uri", ""),
-                        published=page["published"].strftime(
-                            "%a, %d %b %Y %H:%M:%S GMT"
-                        )
-                        if "published" in page
-                        else "",
-                        content=page.get("description", "")
-                        if short_description
-                        else page.get("content", ""),
-                        image=page.get("image", ""),
+                        published=(
+                            page["published"].strftime("%a, %d %b %Y %H:%M:%S GMT")
+                            if "published" in page
+                            else ""
+                        ),
+                        content=(
+                            page.get("description", "")
+                            if short_description
+                            else page.get("content", "")
+                        ),
+                        image=(
+                            urljoin(config.link, page["image"])
+                            if page.get("image")
+                            and not re.search(r"^https?://", page["image"])
+                            else page.get("image", "")
+                        ),
                     )
                     for _, page in pages
                 ]
