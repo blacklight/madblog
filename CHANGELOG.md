@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.24
+
+- Better default fonts - `sans-serif` style for the index and the titles,
+  `serif` for the articles' body.
+
 ## 0.2.19
 
 - Added `short_feed` configuration flag to permanently disable returning the
