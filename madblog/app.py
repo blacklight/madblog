@@ -140,7 +140,7 @@ class BlogApp(Flask):
                     else None
                 ),
                 content=markdown(
-                    f.read(), extensions=["fenced_code", "codehilite", MarkdownLatex()]
+                    f.read(), extensions=["fenced_code", "codehilite", "tables", MarkdownLatex()]
                 ),
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
