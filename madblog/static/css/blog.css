@@ -12,6 +12,10 @@ main .content ul {
   font-size: 0.95em;
 }
 
+main .content p {
+  font-size: 0.9em;
+}
+
 main .content code, .codehilite {
   font-size: 0.9em;
 }
