@@ -9,6 +9,7 @@ main .content ul {
   text-align: justify;
   overflow-wrap: break-word;
   word-break: break-word;
+  font-size: 0.85em;
 }
 
 main .content code, .codehilite {
