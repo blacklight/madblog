@@ -13,10 +13,6 @@ main .content ul {
   font-size: 0.95em;
 }
 
-main .content p {
-  font-size: 0.9em;
-}
-
 main .content code, .codehilite {
   font-size: 0.9em;
 }
@@ -26,8 +22,9 @@ main .content code, .codehilite {
     font-size: 0.9em;
   }
 
-  main .content {
-    padding: 2em 0;
+  main p {
+    font-size: 0.9em;
+    padding: 0 1em;
   }
 }
 
