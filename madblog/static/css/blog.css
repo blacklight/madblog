@@ -6,6 +6,7 @@ main .content {
 
 main .content p,
 main .content ul {
+  font-family: Lora,'Palatino Linotype','Book Antiqua','New York','DejaVu serif',serif;
   text-align: justify;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -23,6 +24,10 @@ main .content code, .codehilite {
 @media screen and (max-width: 767px) {
   main {
     font-size: 0.9em;
+  }
+
+  main .content {
+    padding: 2em 0;
   }
 }
 
