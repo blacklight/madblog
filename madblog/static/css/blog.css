@@ -52,7 +52,7 @@ a:hover {
 
 @media screen and (min-width: 1024px) {
   main .container {
-    max-width: 35em;
+    max-width: 45em;
   }
 }
 
