@@ -6,7 +6,7 @@ main .content {
 
 main .content p,
 main .content ul {
-  font-family: Lora,'Palatino Linotype','Book Antiqua','New York','DejaVu serif',serif;
+  font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', 'Tahoma', 'Helvetica', 'Verdana', sans-serif;
   text-align: justify;
   overflow-wrap: break-word;
   word-break: break-word;
