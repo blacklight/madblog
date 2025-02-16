@@ -1,0 +1,35 @@
+[project]
+name = "madblog"
+description = "A general-purpose framework for automation"
+dynamic = ["version", "dependencies", "optional-dependencies", "entry-points", "license"]
+authors = [
+  {name = "Fabio Manganiello", email = "fabio@manganiello.tech"},
+]
+
+classifiers=[
+    "Topic :: Utilities",
+    "License :: OSI Approved :: MIT License",
+    "Development Status :: 4 - Beta",
+]
+
+readme = "README.md"
+requires-python = '>= 3.8'
+keywords = ["blog", "markdown"]
+
+[tool.setuptools.dynamic]
+version = {attr = "madblog.__version__"}
+dependencies = {file = "requirements.txt"}
+
+[project.scripts]
+madblog = 'madblog:__main__'
+
+[tool.bumpversion]
+current_version = "0.2.33"
+commit = true
+tag = true
+
+[[tool.bumpversion.files]]
+filename = "madblog/__init__.py"
+
+[[tool.bumpversion.files]]
+filename = "setup.py"
