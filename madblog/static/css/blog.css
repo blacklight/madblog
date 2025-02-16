@@ -6,7 +6,7 @@ main .content {
 
 main .content p,
 main .content ul {
-  font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', 'Tahoma', 'Helvetica', 'Verdana', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, Aptos, Roboto, "Gill Sans", "Gill Sans MT", "Segoe UI", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Tahoma", "Trebuchet MS", Calibri, Verdana, Helvetica, Arial, sans-serif;
   text-align: justify;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -19,12 +19,12 @@ main .content code, .codehilite {
 
 @media screen and (max-width: 767px) {
   main {
-    font-size: 0.9em;
+    font-size: 0.95em;
+    padding: 0.25em 0.5em;
   }
 
   main p {
-    font-size: 0.9em;
-    padding: 0 1em;
+    padding: 0.25em;
   }
 }
 
@@ -52,7 +52,7 @@ a:hover {
 
 @media screen and (min-width: 1024px) {
   main .container {
-    max-width: 45em;
+    max-width: 40em;
   }
 }
 
