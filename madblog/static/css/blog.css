@@ -2,15 +2,17 @@ main .content {
   display: flex;
   flex-direction: column;
   line-height: 1.5em;
+  font-size: 0.95em;
 }
 
 main .content p,
-main .content ul {
-  font-family: -apple-system, BlinkMacSystemFont, Aptos, Roboto, "Gill Sans", "Gill Sans MT", "Segoe UI", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Tahoma", "Trebuchet MS", Calibri, Verdana, Helvetica, Arial, sans-serif;
+main .content ul,
+main .content ol {
+  font-family: Lora, "Palatino Linotype", "Book Antiqua", "New York", "DejaVu serif", serif;
   text-align: justify;
   overflow-wrap: break-word;
   word-break: break-word;
-  font-size: 0.95em;
+  line-height: 1.5;
 }
 
 main .content code, .codehilite {
@@ -59,6 +61,7 @@ a:hover {
 .codehilite {
   padding: 0 .5em;
   overflow: auto;
+  border: 1px solid #ccc;
 }
 
 .main-image-container {
