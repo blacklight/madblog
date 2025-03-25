@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.35
+
+- Use _Lora_ font for the article body.
+
 ## 0.2.24
 
 - Better default fonts - `sans-serif` style for the index and the titles,
