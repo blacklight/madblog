@@ -28,6 +28,14 @@
     <!-- PWA builder -->
     <script type="module" src="/pwabuilder-sw-register.js"></script>
 
+    <!--Preview card metadata -->
+    <meta property="og:title" content="{{ title }}">
+    <meta property="og:description" content="{{ description or config.description }}">
+    <meta property="og:image" content="{{ image or config.logo or '/icon-192.png' }}">
+    <meta property="og:url" content="{{ config.link }}">
+    <meta property="og:type" content="{{ type }}">
+    <meta property="og:site_name" content="{{ config.title or 'Blog' }}">
+
     {% if styles %}
         {% for style in styles %}
             <link rel="stylesheet" type="text/css" href="{{ style }}">
