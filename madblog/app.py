@@ -121,7 +121,8 @@ class BlogApp(Flask):
                 "article.html",
                 config=config,
                 title=title,
-                url=metadata.get("uri"),
+                uri=metadata.get("uri"),
+                url=config.link + metadata.get("uri", ""),
                 image=metadata.get("image"),
                 description=metadata.get("description"),
                 author=(
