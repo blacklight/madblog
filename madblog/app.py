@@ -121,6 +121,7 @@ class BlogApp(Flask):
                 "article.html",
                 config=config,
                 title=title,
+                url=metadata.get("uri"),
                 image=metadata.get("image"),
                 description=metadata.get("description"),
                 author=(
@@ -140,7 +141,8 @@ class BlogApp(Flask):
                     else None
                 ),
                 content=markdown(
-                    f.read(), extensions=["fenced_code", "codehilite", "tables", MarkdownLatex()]
+                    f.read(),
+                    extensions=["fenced_code", "codehilite", "tables", MarkdownLatex()],
                 ),
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,

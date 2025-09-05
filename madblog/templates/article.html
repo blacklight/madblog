@@ -1,5 +1,5 @@
 {% if not skip_html_head %}
-  {% with title=title, description=description, image=image, type='article', skip_header=skip_header or not config.header, styles=['/css/blog.css', '/css/code.css'] %}
+  {% with title=title, description=description, image=image, url=url, type='article', skip_header=skip_header or not config.header, styles=['/css/blog.css', '/css/code.css'] %}
       {% include 'common-head.html' %}
   {% endwith %}
 

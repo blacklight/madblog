@@ -32,7 +32,7 @@
     <meta property="og:title" content="{{ title }}">
     <meta property="og:description" content="{{ description or config.description }}">
     <meta property="og:image" content="{{ image or config.logo or '/icon-192.png' }}">
-    <meta property="og:url" content="{{ config.link }}">
+    <meta property="og:url" content="{{ url or config.link }}">
     <meta property="og:type" content="{{ type }}">
     <meta property="og:site_name" content="{{ config.title or 'Blog' }}">
 
