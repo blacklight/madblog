@@ -1,5 +1,17 @@
 # Changelog
 
+**[Unreleased]**
+
+**Added**
+- Support for passing article URL to `article.html` and `common-head.html` for improved Open Graph meta tags.
+- Updated `index.html` to include URL, ensuring consistent metadata structure across templates.
+
+**Changed**
+- Adjusted Markdown processing to apply proper extensions in rendering.
+
+**Commits:**
+- [9adbb7b] Add URL support to metadata in templates and improve Open Graph handling
+
 ## 0.2.35
 
 - Use _Lora_ font for the article body.
