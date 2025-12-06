@@ -21,7 +21,7 @@ version = {attr = "madblog.__version__"}
 dependencies = {file = "requirements.txt"}
 
 [project.scripts]
-madblog = 'madblog:__main__'
+madblog = 'madblog.cli:run'
 
 [tool.bumpversion]
 current_version = "0.2.38"
