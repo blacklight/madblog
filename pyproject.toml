@@ -24,7 +24,7 @@ dependencies = {file = "requirements.txt"}
 madblog = 'madblog.cli:run'
 
 [tool.bumpversion]
-current_version = "0.2.38"
+current_version = "0.2.39"
 commit = true
 tag = true
 
