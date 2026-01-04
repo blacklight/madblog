@@ -1,0 +1,51 @@
+# Example configuration file for Madblog
+# All the fields can also be specified via environment variables (prefixed with
+# MADBLOG_, all uppercase, and with underscores, e.g. MADBLOG_TITLE for the
+# "title" field)
+
+# The title of the blog (*strongly* recommended)
+title: My Blog
+
+# The description of the blog (recommended)
+description: A blog about various topics.
+
+# The base external link to the blog (*strongly* recommended, required for
+# Webmentions)
+link: https://myblog.example.com
+
+# The home link that will be rendered in the header, if different from the main
+# link (optional, but useful for blogs hosted on a different domain)
+# home_link: https://myblog.example.com/home
+
+# Listening address for the built-in web server (optional, default: "0.0.0.0")
+# host: 0.0.0.0
+
+# Listening port for the built-in web server (optional, default: 8000)
+# port: 8000
+
+# The path to the directory that contains the blog posts (optional, default:
+# ".", the current directory)
+# content_dir: .
+
+# A link to a logo image (optional)
+# logo: https://myblog.example.com/logo.png
+
+# The language of the blog (optional, default: "en-US")
+# language: en-US
+
+# Whether to show the blog header in the generated pages (optional, default: true)
+# header: true
+
+# If set to true then the RSS/Atom feed will contain only short summaries
+# of each post (optional, default: false)
+# short_feed: false
+
+# Whether to enable Webmentions support (optional, default: true)
+# enable_webmentions: true
+
+# A list of categories for the blog (optional)
+# categories:
+#   - Technology
+#   - Lifestyle
+#   - Travel
+#   - Food

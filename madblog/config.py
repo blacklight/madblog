@@ -1,5 +1,8 @@
 import os
-from typing import List
+import re
+from argparse import Namespace
+from typing import List, Optional
+
 import yaml
 
 from dataclasses import dataclass, field
@@ -7,37 +10,73 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Config:
-    title = "Blog"
-    description = ""
-    link = "/"
-    home_link = "/"
-    language = "en-US"
-    logo = "/img/icon.png"
-    header = True
-    content_dir = "."
+    title: str = "Blog"
+    description: str = ""
+    link: str = "/"
+    home_link: str = "/"
+    host: str = "0.0.0.0"
+    port: int = 8000
+    language: str = "en-US"
+    logo: str = "/img/icon.png"
+    header: bool = True
+    content_dir: str = "."
     categories: List[str] = field(default_factory=list)
-    short_feed = False
-
+    short_feed: bool = False
+    enable_webmentions: bool = True
+    debug: bool = False
     basedir = os.path.abspath(os.path.dirname(__file__))
-    templates_dir = os.path.join(basedir, "templates")
-    static_dir = os.path.join(basedir, "static")
-    default_css_dir = os.path.join(static_dir, "css")
-    default_js_dir = os.path.join(static_dir, "js")
-    default_fonts_dir = os.path.join(static_dir, "fonts")
-    default_img_dir = os.path.join(static_dir, "img")
+
+    @property
+    def templates_dir(self) -> str:
+        return os.path.join(self.basedir, "templates")
+
+    @property
+    def static_dir(self) -> str:
+        return os.path.join(self.basedir, "static")
+
+    @property
+    def default_css_dir(self) -> str:
+        return os.path.join(self.static_dir, "css")
+
+    @property
+    def default_js_dir(self) -> str:
+        return os.path.join(self.static_dir, "js")
+
+    @property
+    def default_fonts_dir(self) -> str:
+        return os.path.join(self.static_dir, "fonts")
+
+    @property
+    def default_img_dir(self) -> str:
+        return os.path.join(self.static_dir, "img")
+
+    @property
+    def webmention_url(self) -> Optional[str]:
+        from flask import url_for
+
+        webmention_url = None
+        if config.enable_webmentions:
+            webmention_url = (
+                f'{config.link.rstrip("/")}/webmention'
+                if re.match(r"^https?://", config.link)
+                else url_for("webmention_listener_route", _external=True)
+            )
+
+        return webmention_url
 
 
 config = Config()
 
 
-def init_config(content_dir=".", config_file="config.yaml"):
+def _init_config_from_file(config_file: str):
     cfg = {}
-    config.content_dir = content_dir
 
     if os.path.isfile(config_file):
         with open(config_file, "r") as f:
-            cfg = yaml.safe_load(f)
+            cfg = yaml.safe_load(f) or {}
 
+    if cfg.get("content_dir"):
+        config.content_dir = cfg["content_dir"]
     if cfg.get("title"):
         config.title = cfg["title"]
     if cfg.get("description"):
@@ -46,16 +85,80 @@ def init_config(content_dir=".", config_file="config.yaml"):
         config.link = cfg["link"]
     if cfg.get("home_link"):
         config.home_link = cfg["home_link"]
+    if cfg.get("host"):
+        config.host = cfg["host"]
+    if cfg.get("port"):
+        config.port = int(cfg["port"])
     if cfg.get("logo") is not None:
         config.logo = cfg["logo"]
     if cfg.get("language"):
         config.language = cfg["language"]
-    if cfg.get("header") is False:
-        config.header = False
+    if cfg.get("header"):
+        config.header = bool(cfg["header"])
     if cfg.get("short_feed"):
-        config.short_feed = True
+        config.short_feed = bool(cfg["short_feed"])
+    if cfg.get("enable_webmentions") is not None:
+        config.enable_webmentions = bool(cfg["enable_webmentions"])
+    if cfg.get("debug") is not None:
+        config.debug = bool(cfg["debug"])
 
     config.categories = cfg.get("categories", [])
+
+
+def _init_config_from_env():
+    if os.getenv("MADBLOG_TITLE"):
+        config.title = os.environ["MADBLOG_TITLE"]
+    if os.getenv("MADBLOG_DESCRIPTION"):
+        config.description = os.environ["MADBLOG_DESCRIPTION"]
+    if os.getenv("MADBLOG_LINK"):
+        config.link = os.environ["MADBLOG_LINK"]
+    if os.getenv("MADBLOG_HOME_LINK"):
+        config.home_link = os.environ["MADBLOG_HOME_LINK"]
+    if os.getenv("MADBLOG_HOST"):
+        config.host = os.environ["MADBLOG_HOST"]
+    if os.getenv("MADBLOG_PORT"):
+        config.port = int(os.environ["MADBLOG_PORT"])
+    if os.getenv("MADBLOG_CONTENT_DIR"):
+        config.content_dir = os.environ["MADBLOG_CONTENT_DIR"]
+    if os.getenv("MADBLOG_LOGO"):
+        config.logo = os.environ["MADBLOG_LOGO"]
+    if os.getenv("MADBLOG_LANGUAGE"):
+        config.language = os.environ["MADBLOG_LANGUAGE"]
+    if os.getenv("MADBLOG_HEADER"):
+        config.header = os.environ["MADBLOG_HEADER"] == "1"
+    if os.getenv("MADBLOG_SHORT_FEED"):
+        config.short_feed = os.environ["MADBLOG_SHORT_FEED"] == "1"
+    if os.getenv("MADBLOG_ENABLE_WEBMENTIONS"):
+        config.enable_webmentions = os.environ["MADBLOG_ENABLE_WEBMENTIONS"] == "1"
+    if os.getenv("MADBLOG_DEBUG"):
+        config.debug = os.environ["MADBLOG_DEBUG"] == "1"
+
+
+def _init_config_from_cli(args: Optional[Namespace]):
+    if not args:
+        return
+
+    if args.dir:
+        config.content_dir = args.dir
+    if args.host:
+        config.host = args.host
+    if args.port:
+        config.port = args.port
+    if args.debug is not None:
+        config.debug = args.debug
+
+
+def init_config(
+    config_file: str = "config.yaml", args: Optional[Namespace] = None
+) -> Config:
+    _init_config_from_file(config_file)
+    _init_config_from_env()
+    _init_config_from_cli(args)
+
+    # Normalize/expand paths
+    config.content_dir = os.path.expanduser(os.path.abspath(config.content_dir))
+
+    return config
 
 
 # vim:sw=4:ts=4:et:

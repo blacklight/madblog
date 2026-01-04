@@ -3,7 +3,7 @@ import os
 import re
 from typing import Optional, List, Tuple, Type
 
-from flask import Flask, abort
+from flask import Flask, abort, render_template
 from markdown import markdown
 
 from .config import config
@@ -112,9 +112,22 @@ class BlogApp(Flask):
             page = page + ".md"
 
         metadata = self.get_page_metadata(page)
+
         # Don't duplicate the page title if it's been inferred
         if not (title or metadata.get("title_inferred")):
             title = metadata.get("title", config.title)
+
+        author_regex = re.compile(r"^(.+?)\s+<([^>]+)>$")
+        author = None
+        author_email = None
+
+        if metadata.get("author"):
+            match = author_regex.match(metadata["author"])
+            if match:
+                author = match[1]
+                author_email = match[2]
+            else:
+                author = metadata["author"]
 
         with open(os.path.join(self.pages_dir, page), "r") as f:
             return render_template(
@@ -125,16 +138,8 @@ class BlogApp(Flask):
                 url=config.link + metadata.get("uri", ""),
                 image=metadata.get("image"),
                 description=metadata.get("description"),
-                author=(
-                    re.match(r"(.+?)\s+<([^>]+>)", metadata["author"])[1]
-                    if "author" in metadata
-                    else None
-                ),
-                author_email=(
-                    re.match(r"(.+?)\s+<([^>]+)>", metadata["author"])[2]
-                    if "author" in metadata
-                    else None
-                ),
+                author=author,
+                author_email=author_email,
                 published=(
                     metadata["published"].strftime("%b %d, %Y")
                     if metadata.get("published")

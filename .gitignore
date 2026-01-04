@@ -3,3 +3,4 @@ build/
 dist/
 .vscode/
 *.egg-info
+config.yaml

@@ -56,30 +56,15 @@ options:
 
 ## Configuration
 
-The application will look for a `config.yaml` file in the current directory if none was
-specified through the `-c` command-line option. The structure is the following:
+See [config.example.yaml](./config.example.yaml) for an example configuration
+file, and copy it to `config.yaml` in your blog root directory to customize
+your blog.
 
-```yaml
-title: Blog title
-description: Blog description
-link: https://link.to.your.blog
-# Use home_link if you have a different home/portal address
-# than your blog, otherwise it's the same as `link`
-home_link: https://link.to.home
-# Path/URL to the logo (default: /img/icon.png)
-logo: /path/or/url/here
-# Blog language (for the RSS feed)
-language: en-US
-# Show/hide the header (default: true)
-header: true
-# Enable/disable the short RSS feed (default: false)
-short_feed: false
+All the configuration options are also available as environment variables, with
+the prefix `MADBLOG_`.
 
-categories:
-  - category1
-  - category2
-  - category3
-```
+For example, the `title` configuration option can be set through the `MADBLOG_TITLE`
+environment variable.
 
 ## Markdown files
 
