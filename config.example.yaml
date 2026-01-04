@@ -17,6 +17,14 @@ link: https://myblog.example.com
 # link (optional, but useful for blogs hosted on a different domain)
 # home_link: https://myblog.example.com/home
 
+# External links to social media profiles (optional)
+# These will be rendered on each page as <link rel="me" href="...">
+# These can also be specified via the MADBLOG_EXTERNAL_LINKS environment
+# variable as a comma-separated list of URLs
+# external_links:
+#   - https://x.com/myprofile
+#   - https://mastodon.social/@myprofile
+
 # Listening address for the built-in web server (optional, default: "0.0.0.0")
 # host: 0.0.0.0
 

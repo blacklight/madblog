@@ -25,6 +25,12 @@
     <link rel="stylesheet" href="/fonts/poppins.css">
     <link rel="stylesheet" href="/fonts/fira-sans.css">
     <link rel="stylesheet" href="/css/common.css">
+    {% if config.external_links %}
+    <!-- Rel="me" links for identity verification -->
+    {% for external_link in config.external_links %}
+    <link rel="me" href="{{ external_link }}">
+    {% endfor %}
+    {% endif %}
     <!-- PWA builder -->
     <script type="module" src="/pwabuilder-sw-register.js"></script>
 

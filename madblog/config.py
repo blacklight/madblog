@@ -14,6 +14,7 @@ class Config:
     description: str = ""
     link: str = "/"
     home_link: str = "/"
+    external_links: List[str] = field(default_factory=list)
     host: str = "0.0.0.0"
     port: int = 8000
     language: str = "en-US"
@@ -85,6 +86,8 @@ def _init_config_from_file(config_file: str):
         config.link = cfg["link"]
     if cfg.get("home_link"):
         config.home_link = cfg["home_link"]
+    if cfg.get("external_links"):
+        config.external_links = cfg["external_links"]
     if cfg.get("host"):
         config.host = cfg["host"]
     if cfg.get("port"):
@@ -114,6 +117,10 @@ def _init_config_from_env():
         config.link = os.environ["MADBLOG_LINK"]
     if os.getenv("MADBLOG_HOME_LINK"):
         config.home_link = os.environ["MADBLOG_HOME_LINK"]
+    if os.getenv("MADBLOG_EXTERNAL_LINKS"):
+        config.external_links = re.split(
+            r"[,\s]+", os.environ["MADBLOG_EXTERNAL_LINKS"].strip()
+        )
     if os.getenv("MADBLOG_HOST"):
         config.host = os.environ["MADBLOG_HOST"]
     if os.getenv("MADBLOG_PORT"):
