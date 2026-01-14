@@ -212,7 +212,7 @@ def webmention_listener_route():
     hndl = app.webmentions_handler
 
     try:
-        hndl.process_webmention(source, target)
+        hndl.process_webmention_request(source, target)
     except WebmentionException as e:
         logger.info(str(e))
         return jsonify({"status": "error", "message": e.message}), 400

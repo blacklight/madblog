@@ -21,7 +21,7 @@ class WebmentionsHandler:
     def __init__(self):
         self.storage = WebmentionsStorage.build()
 
-    def process_webmention(
+    def process_webmention_request(
         self, source: str | None, target: str | None, data: dict | None = None
     ) -> Any:
         """
