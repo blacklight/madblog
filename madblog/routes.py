@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 from typing import Optional
@@ -13,15 +14,18 @@ from flask import (
 
 from .app import app
 from .config import config
+from .exceptions import WebmentionException
 from ._sorters import PagesSortByTimeGroupedByFolder
+
+logger = logging.getLogger(__name__)
 
 
 def send_from_directory(
-    path: str, file: str, alternative_path: Optional[str] = None, *args, **kwargs
+    path: str, file: str, alternative_path: Optional[str] = None, **kwargs
 ):
     if not os.path.exists(os.path.join(path, file)) and alternative_path:
         path = alternative_path
-    return send_from_directory_(path, file, *args, **kwargs)
+    return send_from_directory_(path, file, **kwargs)
 
 
 @app.route("/", methods=["GET"])
@@ -192,6 +196,31 @@ def rss_route():
         ),
         mimetype="application/xml",
     )
+
+
+@app.route("/webmention", methods=["POST"])
+def webmention_listener_route():
+    """
+    Webmention endpoint to receive and process webmentions.
+    """
+
+    if not config.enable_webmentions:
+        return jsonify({"status": "error", "message": "Webmentions are disabled"}), 403
+
+    source = request.form.get("source")
+    target = request.form.get("target")
+    hndl = app.webmentions_handler
+
+    try:
+        hndl.process_webmention(source, target)
+    except WebmentionException as e:
+        logger.info(str(e))
+        return jsonify({"status": "error", "message": e.message}), 400
+    except Exception as e:
+        logger.info("Error while processing Webmention: %s", str(e))
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    return jsonify({"status": "success", "message": "Webmention verified"}), 202
 
 
 # vim:sw=4:ts=4:et:

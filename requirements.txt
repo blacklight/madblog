@@ -2,3 +2,4 @@ flask
 markdown
 pygments
 pyyaml
+requests

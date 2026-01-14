@@ -3,11 +3,12 @@ import os
 import re
 from typing import Optional, List, Tuple, Type
 
-from flask import Flask, abort, render_template
+from flask import Flask, abort, make_response, render_template
 from markdown import markdown
 
 from .config import config
 from .latex import MarkdownLatex
+from .webmentions import WebmentionsHandler
 from ._sorters import PagesSorter, PagesSortByTime
 
 
@@ -21,6 +22,7 @@ class BlogApp(Flask):
         self.css_dir = config.default_css_dir
         self.js_dir = config.default_js_dir
         self.fonts_dir = config.default_fonts_dir
+        self.webmentions_handler = WebmentionsHandler()
 
         if not os.path.isdir(self.pages_dir):
             # If the `markdown` subfolder does not exist, then the whole
@@ -130,7 +132,7 @@ class BlogApp(Flask):
                 author = metadata["author"]
 
         with open(os.path.join(self.pages_dir, page), "r") as f:
-            return render_template(
+            html = render_template(
                 "article.html",
                 config=config,
                 title=title,
@@ -153,6 +155,12 @@ class BlogApp(Flask):
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
             )
+
+        response = make_response(html)
+        if config.webmention_url:
+            response.headers["Link"] = f'<{config.webmention_url}>; rel="webmention"'
+
+        return response
 
     def get_pages(
         self,

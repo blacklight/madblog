@@ -158,12 +158,13 @@ def _init_config_from_cli(args: Optional[Namespace]):
 def init_config(
     config_file: str = "config.yaml", args: Optional[Namespace] = None
 ) -> Config:
+    config_file = os.path.abspath(os.path.expanduser(config_file))
     _init_config_from_file(config_file)
     _init_config_from_env()
     _init_config_from_cli(args)
 
     # Normalize/expand paths
-    config.content_dir = os.path.expanduser(os.path.abspath(config.content_dir))
+    config.content_dir = os.path.abspath(os.path.expanduser(config.content_dir))
 
     return config
 
