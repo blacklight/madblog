@@ -27,6 +27,15 @@ class WebmentionsStorage(ABC):
         :param data: Optional dictionary with verified data from the source
         """
 
+    @abstractmethod
+    def retrieve_webmentions(self, target: str) -> list[dict]:
+        """
+        Retrieve webmentions for a given target URL.
+
+        :param target: The target URL to retrieve webmentions for
+        :return: A list of webmention data dictionaries
+        """
+
     @staticmethod
     def parse_metadata(content: str) -> dict:
         """
@@ -59,11 +68,11 @@ class FileWebmentionsStorage(WebmentionsStorage):
     Stores each Webmention as a Markdown file with metadata in comments
     """
 
-    def __init__(self, reactions_dir: str = "reactions"):
+    def __init__(self, mentions_dir: str = "mentions"):
         from ..config import config
 
-        self.reactions_dir = Path(config.content_dir) / reactions_dir
-        self.reactions_dir.mkdir(exist_ok=True, parents=True)
+        self.mentions_dir = Path(config.content_dir) / mentions_dir
+        self.mentions_dir.mkdir(exist_ok=True, parents=True)
         self._resource_locks = defaultdict(RLock)
 
     def store_webmention(self, source: str, target: str, data: dict | None = None):
@@ -74,13 +83,13 @@ class FileWebmentionsStorage(WebmentionsStorage):
         # Extract post slug from target URL
         post_slug = self._extract_post_slug(target)
 
-        # Create post reaction directory
-        post_reactions_dir = self.reactions_dir / post_slug
-        post_reactions_dir.mkdir(exist_ok=True)
+        # Create post mention directory
+        post_mentions_dir = self.mentions_dir / post_slug
+        post_mentions_dir.mkdir(exist_ok=True)
 
         # Generate safe filename
-        filename = self._generate_reaction_filename(source, "webmention")
-        filepath = post_reactions_dir / filename
+        filename = self._generate_mention_filename(source, "webmention")
+        filepath = post_mentions_dir / filename
 
         # Prepare metadata
         metadata = {
@@ -127,6 +136,27 @@ class FileWebmentionsStorage(WebmentionsStorage):
 
         return filepath
 
+    def retrieve_webmentions(self, target: str) -> list[dict]:
+        """
+        Retrieve Webmentions for a given target URL
+        """
+
+        post_slug = self._extract_post_slug(target)
+        post_mentions_dir = self.mentions_dir / post_slug
+        webmentions = []
+
+        if not post_mentions_dir.exists():
+            return webmentions
+
+        for md_file in post_mentions_dir.glob("webmention-*.md"):
+            with open(md_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            metadata = self.parse_metadata(content)
+            webmentions.append(metadata)
+
+        return sorted(webmentions, key=lambda x: x.get("created_at", ""), reverse=True)
+
     @staticmethod
     def _format_webmention_markdown(metadata: dict, verified_data: dict | None = None):
         """
@@ -168,11 +198,11 @@ class FileWebmentionsStorage(WebmentionsStorage):
         return cls._safe_filename(parts[-1])
 
     @classmethod
-    def _generate_reaction_filename(
-        cls, source_url: str, reaction_type: str = "webmention"
+    def _generate_mention_filename(
+        cls, source_url: str, mention_type: str = "webmention"
     ):
         """
-        Generate unique, safe filename for reactions.
+        Generate unique, safe filename for mentions.
         """
         url_hash = hashlib.md5(source_url.encode()).hexdigest()[:8]
 
@@ -180,7 +210,7 @@ class FileWebmentionsStorage(WebmentionsStorage):
         domain = urlparse(source_url).netloc.replace(".", "-")
         domain = cls._safe_filename(domain)
 
-        return f"{reaction_type}-{domain}-{url_hash}.md"
+        return f"{mention_type}-{domain}-{url_hash}.md"
 
     @staticmethod
     def _safe_filename(text: str, max_length: int = 50) -> str:
