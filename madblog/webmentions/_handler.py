@@ -92,3 +92,12 @@ class WebmentionsHandler:
 
         if not os.path.isfile(filename):
             raise ValueError("Target URL does not correspond to any known content")
+
+    def retrieve_webmentions(self, target: str) -> list[dict]:
+        """
+        Retrieve webmentions for a given target URL.
+
+        :param target: The target URL to retrieve webmentions for
+        :return: A list of webmention data dictionaries
+        """
+        return self.storage.retrieve_webmentions(target)
