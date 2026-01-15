@@ -99,7 +99,7 @@ class FileWebmentionsStorage(WebmentionsStorage):
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "verified": bool(data),
-            "status": "pending",  # pending, approved, spam
+            "status": "approved",  # pending, approved, spam
         }
 
         # Add parsed data if available
