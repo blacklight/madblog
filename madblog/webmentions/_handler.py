@@ -8,6 +8,7 @@ import requests
 
 from ..config import config
 from ..exceptions import WebmentionException
+from ._model import WebmentionDirection
 from ._storage import WebmentionsStorage
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,10 @@ class WebmentionsHandler:
         except ValueError as e:
             raise WebmentionException(source, target, str(e)) from e
 
-        ret = self.storage.store_webmention(source, target, data)
+        ret = self.storage.store_webmention(
+            source, target, direction=WebmentionDirection.IN, data=data
+        )
+
         logger.info("Processed Webmention from '%s' to '%s'", source, target)
         return ret
 

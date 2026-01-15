@@ -9,6 +9,8 @@ from threading import RLock
 from typing import Any
 from urllib.parse import urlparse
 
+from ._model import WebmentionDirection
+
 
 class WebmentionsStorage(ABC):
     """
@@ -17,7 +19,11 @@ class WebmentionsStorage(ABC):
 
     @abstractmethod
     def store_webmention(
-        self, source: str, target: str, data: dict | None = None
+        self,
+        source: str,
+        target: str,
+        direction: WebmentionDirection,
+        data: dict | None = None,
     ) -> Any:
         """
         Store a webmention.
@@ -75,16 +81,30 @@ class FileWebmentionsStorage(WebmentionsStorage):
         self.mentions_dir.mkdir(exist_ok=True, parents=True)
         self._resource_locks = defaultdict(RLock)
 
-    def store_webmention(self, source: str, target: str, data: dict | None = None):
+    def store_webmention(
+        self,
+        source: str,
+        target: str,
+        direction: WebmentionDirection,
+        data: dict | None = None,
+    ):
         """
         Store Webmention as Markdown file
         """
 
-        # Extract post slug from target URL
-        post_slug = self._extract_post_slug(target)
+        if direction == WebmentionDirection.IN:
+            # Extract post slug from target URL
+            post_slug = self._extract_post_slug(target)
+            post_mentions_dir = (
+                self.mentions_dir / WebmentionDirection.IN.value / post_slug
+            )
+        else:
+            # Extract post slug from source URL
+            post_slug = self._extract_post_slug(source)
+            post_mentions_dir = (
+                self.mentions_dir / WebmentionDirection.OUT.value / post_slug
+            )
 
-        # Create post mention directory
-        post_mentions_dir = self.mentions_dir / post_slug
         post_mentions_dir.mkdir(exist_ok=True)
 
         # Generate safe filename

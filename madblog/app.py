@@ -13,7 +13,7 @@ from ._sorters import PagesSorter, PagesSortByTime
 
 
 class BlogApp(Flask):
-    _title_header_regex = re.compile(r"^#\s*((\[(.*)\])|(.*))")
+    _title_header_regex = re.compile(r"^#\s*((\[(.*)])|(.*))")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, template_folder=config.templates_dir, **kwargs)
@@ -26,7 +26,7 @@ class BlogApp(Flask):
 
         if not os.path.isdir(self.pages_dir):
             # If the `markdown` subfolder does not exist, then the whole
-            # `config.content_dir` is treated as the root for markdown files.
+            # `config.content_dir` is treated as the root for Markdown files.
             self.pages_dir = config.content_dir
 
         img_dir = os.path.join(config.content_dir, "img")
@@ -152,6 +152,9 @@ class BlogApp(Flask):
                     f.read(),
                     extensions=["fenced_code", "codehilite", "tables", MarkdownLatex()],
                 ),
+                mentions=self.webmentions_handler.retrieve_webmentions(
+                    config.link + metadata.get("uri", "")
+                ),
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
             )
@@ -198,8 +201,6 @@ class BlogApp(Flask):
 
 app = BlogApp(__name__)
 
-
 from .routes import *
-
 
 # vim:sw=4:ts=4:et:
