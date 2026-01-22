@@ -1,4 +1,8 @@
 from ._handler import WebmentionsHandler
+from ._model import WebmentionDirection
 
 
-__all__ = ["WebmentionsHandler"]
+__all__ = [
+    "WebmentionDirection",
+    "WebmentionsHandler",
+]

@@ -30,6 +30,7 @@ class WebmentionsStorage(ABC):
 
         :param source: The source URL of the webmention
         :param target: The target URL of the webmention
+        :param direction: The direction of the webmention (inbound or outbound)
         :param data: Optional dictionary with verified data from the source
         """
 
@@ -162,7 +163,7 @@ class FileWebmentionsStorage(WebmentionsStorage):
         """
 
         post_slug = self._extract_post_slug(target)
-        post_mentions_dir = self.mentions_dir / post_slug
+        post_mentions_dir = self.mentions_dir / WebmentionDirection.IN.value / post_slug
         webmentions = []
 
         if not post_mentions_dir.exists():
