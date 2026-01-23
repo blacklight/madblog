@@ -74,3 +74,39 @@ a:hover {
 .main-image-container img {
   width: 80%;
 }
+
+/* Webmentions */
+
+#mentions {
+  margin-top: 1.5em;
+  border-top: 3px solid #ccc;
+}
+
+#mentions .mention {
+  margin-bottom: 1.5em;
+  padding-bottom: 1em;
+  border-bottom: 1px solid #eee;
+}
+
+#mentions h2 {
+  margin-top: 0.5em;
+  margin-bottom: 1em;
+  padding-top: 0.5em;
+  font-weight: normal;
+  opacity: 0.8;
+}
+
+#mentions .dates {
+  line-height: 0.75em;
+  margin-top: -0.5em;
+}
+
+#mentions .mention-date {
+  font-size: 0.75em;
+  opacity: 0.6;
+}
+
+#mentions .mention-date.updated {
+  margin-top: -0.4em;
+  font-size: 0.6em;
+}

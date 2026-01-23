@@ -50,6 +50,13 @@
 
 {% if not skip_html_head %}
         </div>
+
+{% if mentions %}
+  {% with mentions=mentions %}
+      {% include 'mentions.html' %}
+  {% endwith %}
+{% endif %}
+
     </div>
 
     {% include 'footer.html' %}

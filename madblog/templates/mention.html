@@ -1,0 +1,16 @@
+<div class="mention">
+  <a href="{{ mention.source }}">
+    <h3>{{ mention.title or hostname(mention.source) }}</h3>
+
+    <div class="dates">
+      <p class="mention-date created">
+        &#128338;&nbsp;
+        <span class="date">{{ format_datetime(mention.created_at) }}</span>
+      </p>
+      <p class="mention-date updated" v-if="mention.update_date">
+        &#9998;&nbsp;
+        <span class="date">{{ format_datetime(mention.updated_at) }}</span>
+      </p>
+    </div>
+  </a>
+</div>
