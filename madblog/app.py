@@ -157,6 +157,10 @@ class BlogApp(Flask):
                 ),
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
+                format_date=lambda d: d.strftime("%b %d, %Y"),
+                format_datetime=lambda dt: datetime.datetime.fromisoformat(dt).strftime(
+                    "%b %d, %Y at %I:%M %p"
+                ),
             )
 
         response = make_response(html)
