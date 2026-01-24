@@ -48,14 +48,7 @@ class WebmentionsHandler:
         return ret
 
     @staticmethod
-    def parse_metadata(content: str) -> dict:
-        """
-        Parse metadata from Markdown comments.
-        """
-        return WebmentionsStorage.parse_metadata(content)
-
-    @staticmethod
-    def verify_webmention(source: str | None, target: str | None):
+    def verify_webmention(source: str | None, target: str | None) -> str:
         """
         Verify that the source URL is reachable and that it actually includes the
         target URL.
@@ -92,6 +85,8 @@ class WebmentionsHandler:
 
         if not os.path.isfile(filename):
             raise ValueError("Target URL does not correspond to any known content")
+
+        return resp.text
 
     def retrieve_webmentions(self, target: str) -> list[dict]:
         """
