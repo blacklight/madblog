@@ -2,6 +2,7 @@ import datetime
 import os
 import re
 from typing import Optional, List, Tuple, Type
+from urllib.parse import urlparse
 
 from flask import Flask, abort, make_response, render_template
 from markdown import markdown
@@ -10,6 +11,14 @@ from .config import config
 from .latex import MarkdownLatex
 from .webmentions import WebmentionsHandler
 from ._sorters import PagesSorter, PagesSortByTime
+
+template_utils = {
+    "format_date": lambda d: d.strftime("%b %d, %Y"),
+    "format_datetime": lambda dt: datetime.datetime.fromisoformat(dt).strftime(
+        "%b %d, %Y at %H:%M"
+    ),
+    "hostname": lambda url: urlparse(url).hostname if url else "",
+}
 
 
 class BlogApp(Flask):
@@ -157,10 +166,7 @@ class BlogApp(Flask):
                 ),
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
-                format_date=lambda d: d.strftime("%b %d, %Y"),
-                format_datetime=lambda dt: datetime.datetime.fromisoformat(dt).strftime(
-                    "%b %d, %Y at %I:%M %p"
-                ),
+                **template_utils,
             )
 
         response = make_response(html)
