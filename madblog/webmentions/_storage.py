@@ -9,7 +9,7 @@ from threading import RLock
 from typing import Any
 from urllib.parse import urlparse
 
-from ._model import WebmentionDirection
+from ._model import Webmention, WebmentionDirection, WebmentionType
 
 
 class WebmentionsStorage(ABC):
@@ -35,7 +35,7 @@ class WebmentionsStorage(ABC):
         """
 
     @abstractmethod
-    def retrieve_webmentions(self, target: str) -> list[dict]:
+    def retrieve_webmentions(self, target: str) -> list[Webmention]:
         """
         Retrieve webmentions for a given target URL.
 
@@ -44,7 +44,7 @@ class WebmentionsStorage(ABC):
         """
 
     @staticmethod
-    def parse_metadata(content: str) -> dict:
+    def _parse_metadata(content: str) -> dict:
         """
         Parse metadata from Markdown comments.
         """
@@ -119,7 +119,7 @@ class FileWebmentionsStorage(WebmentionsStorage):
             "target": target,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
-            "verified": bool(data),
+            "verified": data is not None,
             "status": "approved",  # pending, approved, spam
         }
 
@@ -127,12 +127,16 @@ class FileWebmentionsStorage(WebmentionsStorage):
         if data:
             metadata.update(
                 {
+                    "title": data.get("title", ""),
+                    "excerpt": data.get("excerpt", ""),
                     "author_name": data.get("author_name", ""),
                     "author_url": data.get("author_url", ""),
+                    "author_photo": data.get("author_photo", ""),
                     "content": data.get("content", ""),
                     "mention_type": data.get(
                         "mention_type", "mention"
                     ),  # mention, reply, like, repost
+                    "mention_type_raw": data.get("mention_type", ""),
                     "published": data.get("published", ""),
                 }
             )
@@ -143,7 +147,7 @@ class FileWebmentionsStorage(WebmentionsStorage):
                 with open(filepath, "r", encoding="utf-8") as f:
                     existing_content = f.read()
 
-                existing_metadata = self.parse_metadata(existing_content)
+                existing_metadata = self._parse_metadata(existing_content)
                 if existing_metadata:
                     metadata["created_at"] = existing_metadata.get(
                         "created_at", metadata["created_at"]
@@ -157,7 +161,7 @@ class FileWebmentionsStorage(WebmentionsStorage):
 
         return filepath
 
-    def retrieve_webmentions(self, target: str) -> list[dict]:
+    def retrieve_webmentions(self, target: str) -> list[Webmention]:
         """
         Retrieve Webmentions for a given target URL
         """
@@ -173,10 +177,29 @@ class FileWebmentionsStorage(WebmentionsStorage):
             with open(md_file, "r", encoding="utf-8") as f:
                 content = f.read()
 
-            metadata = self.parse_metadata(content)
-            webmentions.append(metadata)
+            metadata = self._parse_metadata(content)
+            webmention = Webmention(
+                source=metadata["source"],
+                target=metadata["target"],
+                direction=WebmentionDirection.IN,
+                title=metadata.get("title"),
+                author_name=metadata.get("author_name"),
+                author_url=metadata.get("author_url"),
+                author_photo=metadata.get("author_photo"),
+                content=metadata.get("content"),
+                published=metadata.get("published"),
+                excerpt=metadata.get("excerpt"),
+                mention_type=WebmentionType.from_raw(metadata.get("mention_type")),
+                mention_type_raw=metadata.get("mention_type_raw"),
+                created_at=metadata["created_at"],
+                updated_at=metadata["updated_at"],
+            )
 
-        return sorted(webmentions, key=lambda x: x.get("created_at", ""), reverse=True)
+            webmentions.append(webmention)
+
+        return sorted(
+            webmentions, key=lambda x: x.published or x.created_at, reverse=True
+        )
 
     @staticmethod
     def _format_webmention_markdown(metadata: dict, verified_data: dict | None = None):
