@@ -1,16 +1,74 @@
 <div class="mention">
-  <a href="{{ mention.source }}">
-    <h3>{{ mention.title or hostname(mention.source) }}</h3>
+  <div class="mention-header">
+    <div class="mention-type" title="{{ mention.mention_type_raw or mention.mention_type }}">
+      {% if mention.mention_type == 'reply' %}
+        &#128172;
+        <span class="mention-type-label">Reply</span>
+      {% elif mention.mention_type == 'like' %}
+        &#10084;&#65039;
+        <span class="mention-type-label">Like</span>
+      {% elif mention.mention_type == 'repost' %}
+        &#128257;
+        <span class="mention-type-label">Repost</span>
+      {% elif mention.mention_type == 'bookmark' %}
+        &#128278;
+        <span class="mention-type-label">Bookmark</span>
+      {% elif mention.mention_type == 'rsvp' %}
+        &#128197;
+        <span class="mention-type-label">RSVP</span>
+      {% elif mention.mention_type == 'follow' %}
+        &#10133;
+        <span class="mention-type-label">Follow</span>
+      {% elif mention.mention_type == 'mention' %}
+        &#128279;
+        <span class="mention-type-label">Mention</span>
+      {% else %}
+        &#127760;
+        <span class="mention-type-label">Webmention</span>
+      {% endif %}
+    </div>
 
-    <div class="dates">
-      <p class="mention-date created">
-        &#128338;&nbsp;
-        <span class="date">{{ format_datetime(mention.created_at) }}</span>
-      </p>
-      <p class="mention-date updated" v-if="mention.update_date">
+    <h3 class="mention-title">
+      <a class="mention-source" href="{{ mention.source }}">
+        {{ mention.title or hostname(mention.source) }}
+      </a>
+    </h3>
+  </div>
+
+  <div class="mention-meta">
+    <div class="mention-author">
+      {% if mention.author_photo %}
+        <img class="mention-author-photo" src="{{ mention.author_photo }}" alt="" loading="lazy" />
+      {% endif %}
+
+      {% if mention.author_name or mention.author_url %}
+        {% if mention.author_url %}
+          <a class="mention-author-name" href="{{ mention.author_url }}">{{ mention.author_name or hostname(mention.author_url) }}</a>
+        {% else %}
+          <span class="mention-author-name">{{ mention.author_name }}</span>
+        {% endif %}
+      {% else %}
+        <span class="mention-author-name">{{ hostname(mention.source) }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if mention.excerpt or mention.content %}
+    <div class="mention-body">
+      <p class="mention-excerpt">{{ mention.excerpt or mention.content }}</p>
+    </div>
+  {% endif %}
+
+  <div class="dates">
+    <p class="mention-date created">
+      &#128338;&nbsp;
+      <span class="date">{{ format_datetime(mention.published or mention.created_at) }}</span>
+    </p>
+    {% if mention.updated_at and mention.updated_at != mention.created_at %}
+      <p class="mention-date updated">
         &#9998;&nbsp;
         <span class="date">{{ format_datetime(mention.updated_at) }}</span>
       </p>
-    </div>
-  </a>
+    {% endif %}
+  </div>
 </div>
