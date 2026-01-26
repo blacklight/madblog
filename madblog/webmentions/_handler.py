@@ -1,9 +1,10 @@
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from ..exceptions import WebmentionException
 from ._model import Webmention, WebmentionDirection
-from ._parser import WebmentionsParser
+from ._parser import WebmentionsParser, WebmentionGone
 from ._storage import WebmentionsStorage
 
 logger = logging.getLogger(__name__)
@@ -33,24 +34,21 @@ class WebmentionsHandler:
         try:
             mention = self.parser.parse(source, target)
             assert source and target  # for mypy
+        except WebmentionGone:
+            assert source and target  # for mypy
+            self.storage.delete_webmention(
+                source, target, direction=WebmentionDirection.IN
+            )
+
+            logger.info("Deleted Webmention from '%s' to '%s'", source, target)
+            return None
         except ValueError as e:
             raise WebmentionException(source, target, str(e)) from e
 
-        parsed_data = data.copy() if data else {}
-        parsed_data.setdefault("title", mention.title)
-        parsed_data.setdefault("excerpt", mention.excerpt)
-        parsed_data.setdefault("content", mention.content)
-        parsed_data.setdefault("author_name", mention.author_name)
-        parsed_data.setdefault("author_url", mention.author_url)
-        parsed_data.setdefault("author_photo", mention.author_photo)
-        parsed_data.setdefault("published", mention.published)
-        parsed_data.setdefault("mention_type", mention.mention_type.value)
-        parsed_data.setdefault("mention_type_raw", mention.mention_type_raw)
-
-        ret = self.storage.store_webmention(
-            source, target, direction=WebmentionDirection.IN, data=parsed_data
-        )
-
+        now = datetime.now(timezone.utc)
+        mention.created_at = mention.created_at or mention.published or now
+        mention.updated_at = mention.updated_at or now
+        ret = self.storage.store_webmention(mention)
         logger.info("Processed Webmention from '%s' to '%s'", source, target)
         return ret
 

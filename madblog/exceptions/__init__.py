@@ -1,3 +1,3 @@
-from ._webmentions import WebmentionException
+from ._webmentions import WebmentionException, WebmentionGone
 
-__all__ = ["WebmentionException"]
+__all__ = ["WebmentionException", "WebmentionGone"]

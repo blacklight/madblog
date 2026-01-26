@@ -14,9 +14,11 @@ from ._sorters import PagesSorter, PagesSortByTime
 
 template_utils = {
     "format_date": lambda d: d.strftime("%b %d, %Y"),
-    "format_datetime": lambda dt: datetime.datetime.fromisoformat(dt).strftime(
-        "%b %d, %Y at %H:%M"
-    ),
+    "format_datetime": lambda dt: (
+        dt
+        if isinstance(dt, datetime.datetime)
+        else datetime.datetime.fromisoformat(dt)
+    ).strftime("%b %d, %Y at %H:%M"),
     "hostname": lambda url: urlparse(url).hostname if url else "",
 }
 

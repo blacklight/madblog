@@ -3,12 +3,14 @@ import os
 import re
 from urllib.parse import urlparse
 from typing import Any
+from datetime import datetime
 
 from bs4 import BeautifulSoup
 import mf2py
 import requests
 
 from ..config import config
+from ..exceptions import WebmentionGone
 from ._model import Webmention, WebmentionDirection, WebmentionType
 
 logger = logging.getLogger(__name__)
@@ -31,19 +33,6 @@ class WebmentionsParser:  # pylint: disable=too-few-public-methods
         if not (source and target):
             raise ValueError(source, target, "Missing source or target URL")
 
-        # Check that the source URL is reachable
-        resp = requests.get(
-            source,
-            timeout=10,
-            headers={"User-Agent": "Madblog Webmention Listener"},
-        )
-
-        resp.raise_for_status()
-
-        # Check that the target URL is included in the source content
-        if target not in resp.text:
-            raise ValueError("Target URL not found in source content")
-
         # Check that the target domain is the same as this server's domain
         target_domain = urlparse(target).netloc
         server_domain = urlparse(config.link).netloc
@@ -59,6 +48,24 @@ class WebmentionsParser:  # pylint: disable=too-few-public-methods
 
         if not os.path.isfile(filename):
             raise ValueError("Target URL does not correspond to any known content")
+
+        # Check that the source URL is reachable
+        resp = requests.get(
+            source,
+            timeout=10,  # TODO Make this a configurable parameter
+            headers={"User-Agent": "Madblog Webmention Listener"},
+        )
+
+        if resp.status_code in (404, 410):
+            raise WebmentionGone(source, target, "Source URL not found")
+
+        resp.raise_for_status()
+
+        # Check that the target URL is included in the source content
+        if target not in resp.text:
+            raise WebmentionGone(
+                source, target, "Target URL not found in source content"
+            )
 
         mention = Webmention(
             source=source,
@@ -103,7 +110,9 @@ class WebmentionsParser:  # pylint: disable=too-few-public-methods
         return None
 
     @staticmethod
-    def _first_str(value: Any) -> str | None:
+    def _first_str(  # pylint: disable=too-many-return-statements
+        value: Any,
+    ) -> str | None:
         if value is None:
             return None
         if isinstance(value, str):
@@ -172,7 +181,10 @@ class WebmentionsParser:  # pylint: disable=too-few-public-methods
         """
         props = entry.get("properties") or {}
         mention.title = mention.title or cls._first_str(props.get("name"))
-        mention.published = mention.published or cls._first_str(props.get("published"))
+        if not mention.published:
+            published = cls._first_str(props.get("published"))
+            if published:
+                mention.published = datetime.fromisoformat(published)
         summary = cls._first_str(props.get("summary"))
 
         if summary and not mention.excerpt:
@@ -244,7 +256,7 @@ class WebmentionsParser:  # pylint: disable=too-few-public-methods
         if not mention.published:
             meta_pub: dict = soup.find("meta", attrs={"property": "article:published_time"})  # type: ignore
             if meta_pub and meta_pub.get("content"):
-                mention.published = meta_pub.get("content")
+                mention.published = datetime.fromisoformat(meta_pub["content"])
 
         if not mention.content:
             desc: dict = soup.find("meta", attrs={"property": "og:description"})  # type: ignore

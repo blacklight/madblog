@@ -66,6 +66,42 @@ the prefix `MADBLOG_`.
 For example, the `title` configuration option can be set through the `MADBLOG_TITLE`
 environment variable.
 
+### Webmentions
+
+Webmentions allow other sites to notify your blog when they link to one of your
+articles. Madblog exposes a Webmention endpoint and stores inbound mentions under
+your `content_dir`.
+
+Webmentions configuration options:
+
+- **Enable/disable**
+  - Config file: `enable_webmentions: true|false`
+  - Environment variable: `MADBLOG_ENABLE_WEBMENTIONS=1` (enable) or `0` (disable)
+
+- **Site link requirement**
+  - Set `link` (or `MADBLOG_LINK`) to the public base URL of your blog.
+  - Incoming Webmentions are only accepted if the `target` URL domain matches the
+    configured `link` domain.
+
+- **Endpoint**
+  - The Webmention endpoint is available at: `/webmention`.
+
+- **Storage**
+  - Inbound Webmentions are stored as Markdown files under:
+    `content_dir/mentions/incoming/<post-slug>/`.
+
+Removed Webmentions are handled as follows (for example when the source URL returns
+404/410 or it no longer links to the target).
+
+- **Default**: soft-delete (the stored mention file is kept, but marked as deleted and
+  excluded from rendering).
+- **Hard delete**: the stored mention file is removed.
+
+You can enable hard-deletes with either:
+
+- **Config file**: `webmentions_hard_delete: true`
+- **Environment variable**: `MADBLOG_WEBMENTIONS_HARD_DELETE=1`
+
 ## Markdown files
 
 Articles are Markdown files stored under `markdown`. For an article to be correctly rendered,

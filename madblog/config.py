@@ -1,15 +1,18 @@
 import os
 import re
 from argparse import Namespace
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 import yaml
 
-from dataclasses import dataclass, field
-
 
 @dataclass
 class Config:
+    """
+    Configuration for the blog
+    """
+
     title: str = "Blog"
     description: str = ""
     link: str = "/"
@@ -24,6 +27,7 @@ class Config:
     categories: List[str] = field(default_factory=list)
     short_feed: bool = False
     enable_webmentions: bool = True
+    webmentions_hard_delete: bool = False
     debug: bool = False
     basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -102,6 +106,8 @@ def _init_config_from_file(config_file: str):
         config.short_feed = bool(cfg["short_feed"])
     if cfg.get("enable_webmentions") is not None:
         config.enable_webmentions = bool(cfg["enable_webmentions"])
+    if cfg.get("webmentions_hard_delete") is not None:
+        config.webmentions_hard_delete = bool(cfg["webmentions_hard_delete"])
     if cfg.get("debug") is not None:
         config.debug = bool(cfg["debug"])
 
@@ -137,6 +143,10 @@ def _init_config_from_env():
         config.short_feed = os.environ["MADBLOG_SHORT_FEED"] == "1"
     if os.getenv("MADBLOG_ENABLE_WEBMENTIONS"):
         config.enable_webmentions = os.environ["MADBLOG_ENABLE_WEBMENTIONS"] == "1"
+    if os.getenv("MADBLOG_WEBMENTIONS_HARD_DELETE"):
+        config.webmentions_hard_delete = (
+            os.environ["MADBLOG_WEBMENTIONS_HARD_DELETE"] == "1"
+        )
     if os.getenv("MADBLOG_DEBUG"):
         config.debug = os.environ["MADBLOG_DEBUG"] == "1"
 

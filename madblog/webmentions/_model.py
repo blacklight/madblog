@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -12,9 +13,20 @@ class WebmentionDirection(str, Enum):
     OUT = "outgoing"
 
 
+class WebmentionStatus(str, Enum):
+    """
+    Enum representing the status of a Webmention
+    (pending, verified, or deleted).
+    """
+
+    PENDING = "pending"
+    VERIFIED = "verified"
+    DELETED = "deleted"
+
+
 class WebmentionType(str, Enum):
     """
-    Enum representing the type of a Webmention.
+    Enum representing the type of Webmention.
 
     Note that this list is not exhaustive, and the
     Webmention recommendation itself does not provide
@@ -72,14 +84,62 @@ class Webmention:
     author_name: str | None = None
     author_url: str | None = None
     author_photo: str | None = None
-    published: str | None = None
+    published: datetime | None = None
+    status: WebmentionStatus = WebmentionStatus.PENDING
     mention_type: WebmentionType = WebmentionType.UNKNOWN
     mention_type_raw: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     def __hash__(self):
         """
         :return: A hash value based on the source, target, and direction.
         """
         return hash((self.source, self.target, self.direction))
+
+    @classmethod
+    def build(
+        cls, data: dict, direction: WebmentionDirection = WebmentionDirection.IN
+    ) -> "Webmention":
+        assert data.get("source"), "source is required"
+        assert data.get("target"), "target is required"
+        mention_type: WebmentionType = (
+            data.get("mention_type") or WebmentionType.MENTION
+        )
+
+        if isinstance(mention_type, str):
+            mention_type = WebmentionType.from_raw(mention_type)
+
+        def _parse_dt(value: object) -> datetime | None:
+            dt = None
+            if value is None:
+                return None
+            if isinstance(value, datetime):
+                return value
+
+            if isinstance(value, str) and value.strip():
+                dt = datetime.fromisoformat(value)
+            if isinstance(value, (int, float)):
+                dt = datetime.fromtimestamp(value, tz=timezone.utc)
+
+            if dt and dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+
+            return dt
+
+        published = _parse_dt(data.get("published"))
+        created_at = _parse_dt(data.get("created_at"))
+        updated_at = _parse_dt(data.get("updated_at"))
+
+        return cls(
+            **{
+                **{k: v for k, v in data.items() if k in cls.__dataclass_fields__},
+                "direction": direction,
+                "status": data.get("status") or WebmentionStatus.PENDING,
+                "mention_type": mention_type,
+                "mention_type_raw": mention_type.value,
+                "published": published,
+                "created_at": created_at,
+                "updated_at": updated_at,
+            }
+        )

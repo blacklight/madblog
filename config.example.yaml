@@ -51,6 +51,10 @@ link: https://myblog.example.com
 # Whether to enable Webmentions support (optional, default: true)
 # enable_webmentions: true
 
+# If set to true, then deleted Webmentions will be hard-deleted (their stored files
+# will be removed) instead of being marked as deleted (optional, default: false)
+# webmentions_hard_delete: false
+
 # A list of categories for the blog (optional)
 # categories:
 #   - Technology

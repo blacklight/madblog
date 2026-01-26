@@ -3,13 +3,16 @@ import re
 
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from dataclasses import asdict
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from threading import RLock
 from typing import Any
 from urllib.parse import urlparse
 
-from ._model import Webmention, WebmentionDirection, WebmentionType
+from ..config import config
+from ._model import Webmention, WebmentionDirection
 
 
 class WebmentionsStorage(ABC):
@@ -18,20 +21,26 @@ class WebmentionsStorage(ABC):
     """
 
     @abstractmethod
-    def store_webmention(
+    def store_webmention(self, mention: Webmention) -> Any:
+        """
+        Store a webmention.
+
+        :param mention: The webmention to store
+        """
+
+    @abstractmethod
+    def delete_webmention(
         self,
         source: str,
         target: str,
         direction: WebmentionDirection,
-        data: dict | None = None,
     ) -> Any:
         """
-        Store a webmention.
+        Mark a webmention as deleted.
 
         :param source: The source URL of the webmention
         :param target: The target URL of the webmention
         :param direction: The direction of the webmention (inbound or outbound)
-        :param data: Optional dictionary with verified data from the source
         """
 
     @abstractmethod
@@ -82,26 +91,20 @@ class FileWebmentionsStorage(WebmentionsStorage):
         self.mentions_dir.mkdir(exist_ok=True, parents=True)
         self._resource_locks = defaultdict(RLock)
 
-    def store_webmention(
-        self,
-        source: str,
-        target: str,
-        direction: WebmentionDirection,
-        data: dict | None = None,
-    ):
+    def store_webmention(self, mention: Webmention):
         """
         Store Webmention as Markdown file
         """
 
-        if direction == WebmentionDirection.IN:
+        if mention.direction == WebmentionDirection.IN:
             # Extract post slug from target URL
-            post_slug = self._extract_post_slug(target)
+            post_slug = self._extract_post_slug(mention.target)
             post_mentions_dir = (
                 self.mentions_dir / WebmentionDirection.IN.value / post_slug
             )
         else:
             # Extract post slug from source URL
-            post_slug = self._extract_post_slug(source)
+            post_slug = self._extract_post_slug(mention.source)
             post_mentions_dir = (
                 self.mentions_dir / WebmentionDirection.OUT.value / post_slug
             )
@@ -109,37 +112,12 @@ class FileWebmentionsStorage(WebmentionsStorage):
         post_mentions_dir.mkdir(exist_ok=True)
 
         # Generate safe filename
-        filename = self._generate_mention_filename(source, "webmention")
+        filename = self._generate_mention_filename(mention.source, "webmention")
         filepath = post_mentions_dir / filename
 
         # Prepare metadata
-        metadata = {
-            "type": "webmention",
-            "source": source,
-            "target": target,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-            "verified": data is not None,
-            "status": "approved",  # pending, approved, spam
-        }
-
-        # Add parsed data if available
-        if data:
-            metadata.update(
-                {
-                    "title": data.get("title", ""),
-                    "excerpt": data.get("excerpt", ""),
-                    "author_name": data.get("author_name", ""),
-                    "author_url": data.get("author_url", ""),
-                    "author_photo": data.get("author_photo", ""),
-                    "content": data.get("content", ""),
-                    "mention_type": data.get(
-                        "mention_type", "mention"
-                    ),  # mention, reply, like, repost
-                    "mention_type_raw": data.get("mention_type", ""),
-                    "published": data.get("published", ""),
-                }
-            )
+        mention.created_at = datetime.now(timezone.utc)
+        mention.updated_at = mention.created_at
 
         with self._resource_locks[filepath]:
             # Parse existing file metadata if file exists
@@ -149,12 +127,13 @@ class FileWebmentionsStorage(WebmentionsStorage):
 
                 existing_metadata = self._parse_metadata(existing_content)
                 if existing_metadata:
-                    metadata["created_at"] = existing_metadata.get(
-                        "created_at", metadata["created_at"]
+                    mention.created_at = (
+                        Webmention.build(existing_metadata).created_at
+                        or mention.created_at
                     )
 
             # Write as Markdown with YAML frontmatter
-            content = self._format_webmention_markdown(metadata, data)
+            content = self._format_webmention_markdown(mention)
 
             # Atomic write
             self._atomic_write(filepath, content)
@@ -178,46 +157,82 @@ class FileWebmentionsStorage(WebmentionsStorage):
                 content = f.read()
 
             metadata = self._parse_metadata(content)
-            webmention = Webmention(
-                source=metadata["source"],
-                target=metadata["target"],
-                direction=WebmentionDirection.IN,
-                title=metadata.get("title"),
-                author_name=metadata.get("author_name"),
-                author_url=metadata.get("author_url"),
-                author_photo=metadata.get("author_photo"),
-                content=metadata.get("content"),
-                published=metadata.get("published"),
-                excerpt=metadata.get("excerpt"),
-                mention_type=WebmentionType.from_raw(metadata.get("mention_type")),
-                mention_type_raw=metadata.get("mention_type_raw"),
-                created_at=metadata["created_at"],
-                updated_at=metadata["updated_at"],
-            )
+            if metadata.get("status") == "deleted":
+                continue
 
-            webmentions.append(webmention)
+            webmentions.append(Webmention.build(metadata))
 
         return sorted(
             webmentions, key=lambda x: x.published or x.created_at, reverse=True
         )
 
+    def delete_webmention(
+        self,
+        source: str,
+        target: str,
+        direction: WebmentionDirection,
+    ):
+        """Mark a stored mention as deleted by updating its metadata."""
+
+        if direction == WebmentionDirection.IN:
+            post_slug = self._extract_post_slug(target)
+            post_mentions_dir = (
+                self.mentions_dir / WebmentionDirection.IN.value / post_slug
+            )
+        else:
+            post_slug = self._extract_post_slug(source)
+            post_mentions_dir = (
+                self.mentions_dir / WebmentionDirection.OUT.value / post_slug
+            )
+
+        filename = self._generate_mention_filename(source, "webmention")
+        filepath = post_mentions_dir / filename
+        if not filepath.exists():
+            return None
+
+        if config.webmentions_hard_delete:
+            with self._resource_locks[filepath]:
+                filepath.unlink(missing_ok=True)
+            return filepath
+
+        with self._resource_locks[filepath]:
+            with open(filepath, "r", encoding="utf-8") as f:
+                existing_content = f.read()
+
+            existing_metadata = self._parse_metadata(existing_content)
+            metadata = {
+                **existing_metadata,
+                "type": existing_metadata.get("type", "webmention"),
+                "source": source,
+                "target": target,
+                "updated_at": datetime.now(timezone.utc),
+                "status": "deleted",
+            }
+
+            content = self._format_webmention_markdown(Webmention.build(metadata))
+            self._atomic_write(filepath, content)
+
+        return filepath
+
     @staticmethod
-    def _format_webmention_markdown(metadata: dict, verified_data: dict | None = None):
+    def _format_webmention_markdown(mention: Webmention):
         """
         Format Webmention as Markdown and include metadata as comments.
         """
 
         md_content = ""
 
-        for key, value in metadata.items():
+        for key, value in asdict(mention).items():
             if key == "content" or value is None:
                 continue
+            if isinstance(value, Enum):
+                value = value.value
+            if isinstance(value, datetime):
+                value = value.isoformat()
 
             md_content += f"[//]: # ({key}: {value})\n"
 
-        if verified_data and verified_data.get("content"):
-            md_content += f"\n{verified_data['content']}\n"
-
+        md_content += f"\n{mention.content}\n"
         return md_content
 
     @staticmethod

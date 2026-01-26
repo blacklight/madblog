@@ -220,7 +220,7 @@ def webmention_listener_route():
         logger.info("Error while processing Webmention: %s", str(e))
         return jsonify({"status": "error", "message": str(e)}), 500
 
-    return jsonify({"status": "success", "message": "Webmention verified"}), 202
+    return jsonify({"status": "success", "message": "Webmention processed"}), 202
 
 
 # vim:sw=4:ts=4:et:
