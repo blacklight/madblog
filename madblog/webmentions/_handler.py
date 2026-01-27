@@ -10,7 +10,7 @@ from ._storage import WebmentionsStorage
 logger = logging.getLogger(__name__)
 
 
-class WebmentionsHandler:
+class Webmentions:
     """
     Webmentions handler.
     """

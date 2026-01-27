@@ -9,7 +9,7 @@ from markdown import markdown
 
 from .config import config
 from .latex import MarkdownLatex
-from .webmentions import WebmentionsHandler
+from .webmentions import Webmentions
 from ._sorters import PagesSorter, PagesSortByTime
 
 template_utils = {
@@ -33,7 +33,7 @@ class BlogApp(Flask):
         self.css_dir = config.default_css_dir
         self.js_dir = config.default_js_dir
         self.fonts_dir = config.default_fonts_dir
-        self.webmentions_handler = WebmentionsHandler()
+        self.webmentions_handler = Webmentions()
 
         if not os.path.isdir(self.pages_dir):
             # If the `markdown` subfolder does not exist, then the whole
