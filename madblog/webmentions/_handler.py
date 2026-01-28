@@ -4,7 +4,7 @@ from typing import Any
 
 from ..exceptions import WebmentionException
 from ._model import Webmention, WebmentionDirection
-from ._parser import WebmentionsParser, WebmentionGone
+from ._parser import WebmentionsRequestParser, WebmentionGone
 from ._storage import WebmentionsStorage
 
 logger = logging.getLogger(__name__)
@@ -16,6 +16,7 @@ class Webmentions:
     """
 
     def __init__(self):
+        self.parser = WebmentionsRequestParser()
         self.storage = WebmentionsStorage.build()
         self.parser = WebmentionsParser()
 
@@ -27,7 +28,6 @@ class Webmentions:
 
         :param source: The source URL of the webmention
         :param target: The target URL of the webmention
-        :param data: Optional dictionary with verified data from the source
         """
         logger.info("Received Webmention from '%s' to '%s'", source, target)
 

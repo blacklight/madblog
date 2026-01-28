@@ -16,9 +16,9 @@ from ._model import Webmention, WebmentionDirection, WebmentionType
 logger = logging.getLogger(__name__)
 
 
-class WebmentionsParser:  # pylint: disable=too-few-public-methods
+class WebmentionsRequestParser:  # pylint: disable=too-few-public-methods
     """
-    Webmentions parser.
+    Parses a Webmention request.
     """
 
     @classmethod
