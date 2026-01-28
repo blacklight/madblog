@@ -85,8 +85,6 @@ class FileWebmentionsStorage(WebmentionsStorage):
     """
 
     def __init__(self, mentions_dir: str = "mentions"):
-        from ..config import config
-
         self.mentions_dir = Path(config.content_dir) / mentions_dir
         self.mentions_dir.mkdir(exist_ok=True, parents=True)
         self._resource_locks = defaultdict(RLock)
