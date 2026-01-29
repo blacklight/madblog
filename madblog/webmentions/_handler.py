@@ -2,9 +2,9 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from ..exceptions import WebmentionException
+from ._exceptions import WebmentionException, WebmentionGone
 from ._model import Webmention, WebmentionDirection
-from ._parser import WebmentionsRequestParser, WebmentionGone
+from ._parser import WebmentionsRequestParser
 from ._storage import WebmentionsStorage
 
 logger = logging.getLogger(__name__)

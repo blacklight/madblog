@@ -14,7 +14,7 @@ from flask import (
 
 from .app import app
 from .config import config
-from .exceptions import WebmentionException
+from .webmentions import WebmentionException
 from ._sorters import PagesSortByTimeGroupedByFolder
 
 logger = logging.getLogger(__name__)
