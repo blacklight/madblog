@@ -208,7 +208,7 @@ class BlogApp(Flask):
 
         sorter_func = sorter(pages)
         pages.sort(key=sorter_func, reverse=reverse)
-        return [(i, page) for i, page in enumerate(pages)]
+        return list(enumerate(pages))
 
 
 app = BlogApp(__name__)
