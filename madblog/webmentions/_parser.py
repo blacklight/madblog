@@ -169,7 +169,7 @@ class WebmentionsRequestParser:  # pylint: disable=too-few-public-methods
         return None, None, None
 
     @classmethod
-    def _fill_from_h_entry(
+    def _fill_from_h_entry(  # pylint: disable=too-many-branches
         cls, mention: Webmention, entry: dict, target_url: str
     ) -> None:
         """
