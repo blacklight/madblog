@@ -10,7 +10,7 @@ import mf2py
 import requests
 
 from ..config import config
-from ..exceptions import WebmentionGone
+from ._exceptions import WebmentionGone
 from ._model import Webmention, WebmentionDirection, WebmentionType
 
 logger = logging.getLogger(__name__)
