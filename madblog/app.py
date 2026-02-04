@@ -1,6 +1,7 @@
 import datetime
 import os
 import re
+from pathlib import Path
 from typing import Optional, List, Tuple, Type
 from urllib.parse import urlparse
 
@@ -9,31 +10,49 @@ from markdown import markdown
 
 from .config import config
 from .latex import MarkdownLatex
-from .webmentions import Webmentions
+from .webmentions import WebmentionDirection, WebmentionsHandler
+from .webmentions._storage.file import FileWebmentionsStorage
 from ._sorters import PagesSorter, PagesSortByTime
 
 template_utils = {
     "format_date": lambda d: d.strftime("%b %d, %Y"),
     "format_datetime": lambda dt: (
-        dt
-        if isinstance(dt, datetime.datetime)
-        else datetime.datetime.fromisoformat(dt)
+        dt if isinstance(dt, datetime.datetime) else datetime.datetime.fromisoformat(dt)
     ).strftime("%b %d, %Y at %H:%M"),
     "hostname": lambda url: urlparse(url).hostname if url else "",
 }
 
 
 class BlogApp(Flask):
+    """
+    The main application class.
+    """
+
     _title_header_regex = re.compile(r"^#\s*((\[(.*)])|(.*))")
 
     def __init__(self, *args, **kwargs):
+        from . import __version__
+
         super().__init__(*args, template_folder=config.templates_dir, **kwargs)
-        self.pages_dir = os.path.join(config.content_dir, "markdown")
+        self.pages_dir = Path(Path(config.content_dir) / "markdown").resolve()
         self.img_dir = config.default_img_dir
         self.css_dir = config.default_css_dir
         self.js_dir = config.default_js_dir
         self.fonts_dir = config.default_fonts_dir
-        self.webmentions_handler = Webmentions()
+        self.mentions_dir = Path(Path(config.content_dir) / "mentions").resolve()
+        self.webmentions_storage = FileWebmentionsStorage(
+            content_dir=self.pages_dir,
+            mentions_dir=self.mentions_dir,
+            base_url=config.link,
+            webmentions_hard_delete=config.webmentions_hard_delete,
+        )
+
+        self.webmentions_handler = WebmentionsHandler(
+            storage=self.webmentions_storage,
+            base_url=config.link,
+            user_agent=f"Madblog/{__version__} ({config.link})",
+            exclude_netlocs={urlparse(config.link).netloc} if config.link else set(),
+        )
 
         if not os.path.isdir(self.pages_dir):
             # If the `markdown` subfolder does not exist, then the whole
@@ -61,6 +80,20 @@ class BlogApp(Flask):
         templates_dir = os.path.join(config.content_dir, "templates")
         if os.path.isdir(templates_dir):
             self.template_folder = os.path.abspath(templates_dir)
+
+    def start(self) -> None:
+        if not config.enable_webmentions:
+            return
+
+        self.webmentions_storage.start_watcher(
+            webmentions_handler=self.webmentions_handler
+        )
+
+    def stop(self) -> None:
+        if not config.enable_webmentions:
+            return
+
+        self.webmentions_storage.stop_watcher()
 
     def get_page_metadata(self, page: str) -> dict:
         if not page.endswith(".md"):
@@ -163,8 +196,9 @@ class BlogApp(Flask):
                     f.read(),
                     extensions=["fenced_code", "codehilite", "tables", MarkdownLatex()],
                 ),
-                mentions=self.webmentions_handler.retrieve_webmentions(
-                    config.link + metadata.get("uri", "")
+                mentions=self.webmentions_handler.retrieve_stored_webmentions(
+                    config.link + metadata.get("uri", ""),
+                    direction=WebmentionDirection.IN,
                 ),
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
@@ -179,13 +213,16 @@ class BlogApp(Flask):
 
     def get_pages(
         self,
+        *,
         with_content: bool = False,
         skip_header: bool = False,
         skip_html_head: bool = False,
         sorter: Type[PagesSorter] = PagesSortByTime,
         reverse: bool = True,
     ) -> List[Tuple[int, dict]]:
-        pages_dir = app.pages_dir.rstrip("/")
+        pages_dir = getattr(app, "pages_dir", "")
+        assert pages_dir  # for mypy
+        pages_dir = pages_dir.rstrip("/")
         pages = [
             {
                 "path": os.path.join(root[len(pages_dir) + 1 :], f),

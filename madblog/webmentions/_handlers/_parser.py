@@ -1,5 +1,4 @@
 import logging
-import os
 import re
 from urllib.parse import urlparse
 from typing import Any
@@ -9,9 +8,9 @@ from bs4 import BeautifulSoup
 import mf2py
 import requests
 
-from ..config import config
-from ._exceptions import WebmentionGone
-from ._model import Webmention, WebmentionDirection, WebmentionType
+from .._exceptions import WebmentionGone
+from .._model import Webmention, WebmentionDirection, WebmentionType
+from ._constants import DEFAULT_HTTP_TIMEOUT, DEFAULT_USER_AGENT
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +20,19 @@ class WebmentionsRequestParser:  # pylint: disable=too-few-public-methods
     Parses a Webmention request.
     """
 
-    @classmethod
-    def parse(cls, source: str | None, target: str | None) -> Webmention:
+    def __init__(
+        self,
+        *,
+        base_url: str | None = None,
+        http_timeout: float = DEFAULT_HTTP_TIMEOUT,
+        user_agent: str = DEFAULT_USER_AGENT,
+        **_,
+    ) -> None:
+        self._base_url = base_url
+        self._http_timeout = http_timeout
+        self._user_agent = user_agent
+
+    def parse(self, source: str | None, target: str | None) -> Webmention:
         """
         Parse a Webmention.
 
@@ -34,26 +44,17 @@ class WebmentionsRequestParser:  # pylint: disable=too-few-public-methods
             raise ValueError(source, target, "Missing source or target URL")
 
         # Check that the target domain is the same as this server's domain
-        target_domain = urlparse(target).netloc
-        server_domain = urlparse(config.link).netloc
-        if target_domain != server_domain:
-            raise ValueError("Target URL domain does not match server domain")
-
-        # Check that the target path is an actual path on this server
-        filename = os.path.join(
-            config.content_dir,
-            "markdown",
-            re.sub(r"^/article", "", urlparse(target).path).strip("/") + ".md",
-        )
-
-        if not os.path.isfile(filename):
-            raise ValueError("Target URL does not correspond to any known content")
+        if self._base_url:
+            target_domain = urlparse(target).netloc
+            server_domain = urlparse(self._base_url).netloc
+            if target_domain != server_domain:
+                raise ValueError("Target URL domain does not match server domain")
 
         # Check that the source URL is reachable
         resp = requests.get(
             source,
-            timeout=10,  # TODO Make this a configurable parameter
-            headers={"User-Agent": "Madblog Webmention Listener"},
+            timeout=self._http_timeout,
+            headers={"User-Agent": self._user_agent},
         )
 
         if resp.status_code in (404, 410):
@@ -73,7 +74,7 @@ class WebmentionsRequestParser:  # pylint: disable=too-few-public-methods
             direction=WebmentionDirection.IN,
         )
 
-        cls._parse_source_payload(mention, resp.text, source, target)
+        self._parse_source_payload(mention, resp.text, source, target)
         return mention
 
     @classmethod

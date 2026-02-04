@@ -1,0 +1,2 @@
+DEFAULT_USER_AGENT = "Webmention sender"
+DEFAULT_HTTP_TIMEOUT = 10.0

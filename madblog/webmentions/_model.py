@@ -24,6 +24,16 @@ class WebmentionStatus(str, Enum):
     DELETED = "deleted"
 
 
+class ContentTextFormat(str, Enum):
+    """
+    Supported content text formats.
+    """
+
+    HTML = "html"
+    MARKDOWN = "markdown"
+    TEXT = "text"
+
+
 class WebmentionType(str, Enum):
     """
     Enum representing the type of Webmention.

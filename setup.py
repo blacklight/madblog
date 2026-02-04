@@ -37,5 +37,9 @@ setup(
         "markdown",
         "pygments",
         "pyyaml",
+        "requests",
+        "beautifulsoup4",
+        "mf2py",
+        "watchdog",
     ],
 )
