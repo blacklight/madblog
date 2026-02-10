@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import sys
 
@@ -79,6 +80,10 @@ def run():
     opts, _ = get_args(sys.argv[1:])
     config_file = opts.config if opts.config else os.path.join(opts.dir, "config.yaml")
     config = init_config(config_file=config_file, args=opts)
+    logging.basicConfig(
+        level=logging.DEBUG if config.debug else logging.INFO,
+        format="%(levelname)s: %(message)s",
+    )
 
     from .app import app
 
