@@ -33,6 +33,7 @@ class Config:
     author: str | None = None
     author_url: str | None = None
     author_photo: str | None = None
+    throttle_seconds_on_update: int = 10
 
     @property
     def templates_dir(self) -> str:
@@ -119,6 +120,8 @@ def _init_config_from_file(config_file: str):
         config.author_url = cfg["author_url"]
     if cfg.get("author_photo"):
         config.author_photo = cfg["author_photo"]
+    if cfg.get("throttle_seconds_on_update"):
+        config.throttle_seconds_on_update = int(cfg["throttle_seconds_on_update"])
 
     config.categories = cfg.get("categories", [])
 
@@ -166,6 +169,10 @@ def _init_config_from_env():
         config.author_url = os.environ["MADBLOG_AUTHOR_URL"]
     if os.getenv("MADBLOG_AUTHOR_PHOTO"):
         config.author_photo = os.environ["MADBLOG_AUTHOR_PHOTO"]
+    if os.getenv("MADBLOG_THROTTLE_SECONDS_ON_UPDATE"):
+        config.throttle_seconds_on_update = int(
+            os.environ["MADBLOG_THROTTLE_SECONDS_ON_UPDATE"]
+        )
 
 
 def _init_config_from_cli(args: Optional[Namespace]):

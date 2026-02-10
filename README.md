@@ -84,7 +84,7 @@ Webmentions configuration options:
     configured `link` domain.
 
 - **Endpoint**
-  - The Webmention endpoint is available at: `/webmention`.
+  - The Webmention endpoint is available at: `/webmentions`.
 
 - **Storage**
   - Inbound Webmentions are stored as Markdown files under:
@@ -101,6 +101,16 @@ You can enable hard-deletes with either:
 
 - **Config file**: `webmentions_hard_delete: true`
 - **Environment variable**: `MADBLOG_WEBMENTIONS_HARD_DELETE=1`
+
+Outgoing Webmentions will be automatically processed when the modification time of
+a Markdown file is updated.
+
+By default the throttle for outgoing Webmentions is set to one batch of requests every 10 seconds.
+
+You can tweak this either through:
+
+- **Config file**: `throttle_seconds_on_update`
+- **Environment variable**: `MADBLOG_THROTTLE_SECONDS_ON_UPDATE`
 
 ## Markdown files
 
