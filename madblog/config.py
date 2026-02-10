@@ -62,7 +62,7 @@ class Config:
         webmention_url = None
         if config.enable_webmentions:
             webmention_url = (
-                f'{config.link.rstrip("/")}/webmention'
+                f'{config.link.rstrip("/")}/webmentions'
                 if re.match(r"^https?://", config.link)
                 else url_for("webmention_listener_route", _external=True)
             )

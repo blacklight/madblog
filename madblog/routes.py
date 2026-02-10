@@ -14,7 +14,6 @@ from flask import (
 
 from .app import app
 from .config import config
-from .webmentions import WebmentionException
 from ._sorters import PagesSortByTimeGroupedByFolder
 
 logger = logging.getLogger(__name__)
@@ -196,31 +195,6 @@ def rss_route():
         ),
         mimetype="application/xml",
     )
-
-
-@app.route("/webmention", methods=["POST"])
-def webmention_listener_route():
-    """
-    Webmention endpoint to receive and process webmentions.
-    """
-
-    if not config.enable_webmentions:
-        return jsonify({"status": "error", "message": "Webmentions are disabled"}), 403
-
-    source = request.form.get("source")
-    target = request.form.get("target")
-    hndl = app.webmentions_handler
-
-    try:
-        hndl.process_incoming_webmention(source, target)
-    except WebmentionException as e:
-        logger.info(str(e))
-        return jsonify({"status": "error", "message": e.message}), 400
-    except Exception as e:
-        logger.info("Error while processing Webmention: %s", str(e))
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-    return jsonify({"status": "success", "message": "Webmention processed"}), 202
 
 
 # vim:sw=4:ts=4:et:
