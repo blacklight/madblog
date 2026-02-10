@@ -29,6 +29,8 @@ class BlogApp(Flask):
     """
 
     _title_header_regex = re.compile(r"^#\s*((\[(.*)])|(.*))")
+    _author_regex = re.compile(r"^(.+?)\s+<([^>]+)>$")
+    _url_regex = re.compile(r"^(https?:\/\/)?[\w\.\-]+\.[a-z]{2,6}\/?")
 
     def __init__(self, *args, **kwargs):
         from . import __version__
@@ -163,17 +165,27 @@ class BlogApp(Flask):
         if not (title or metadata.get("title_inferred")):
             title = metadata.get("title", config.title)
 
-        author_regex = re.compile(r"^(.+?)\s+<([^>]+)>$")
         author = None
-        author_email = None
+        author_url = None
+        author_photo = None
 
         if metadata.get("author"):
-            match = author_regex.match(metadata["author"])
-            if match:
+            if match := self._author_regex.match(metadata["author"]):
                 author = match[1]
-                author_email = match[2]
+                if link := match[2].strip():
+                    author_url = link
             else:
                 author = metadata["author"]
+        else:
+            author = config.author
+            author_url = config.author_url
+
+        if metadata.get("author_photo"):
+            if link := metadata["author_photo"].strip():
+                if self._url_regex.match(link):
+                    author_photo = link
+        else:
+            author_photo = config.author_photo
 
         with open(os.path.join(self.pages_dir, page), "r") as f:
             html = render_template(
@@ -185,7 +197,9 @@ class BlogApp(Flask):
                 image=metadata.get("image"),
                 description=metadata.get("description"),
                 author=author,
-                author_email=author_email,
+                author_url=author_url,
+                author_photo=author_photo,
+                published_datetime=metadata.get("published"),
                 published=(
                     metadata["published"].strftime("%b %d, %Y")
                     if metadata.get("published")

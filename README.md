@@ -111,8 +111,15 @@ you need to start the Markdown file with the following metadata header:
 [//]: # (title: Title of the article)
 [//]: # (description: Short description of the content)
 [//]: # (image: /img/some-header-image.png)
-[//]: # (author: Author Name <email@author.me>)
+[//]: # (author: Author Name <https://author.me>)
+[//]: # (author_photo: https://author.me/avatar.png)
 [//]: # (published: 2022-01-01)
+```
+
+Or, if you want to pass an email rather than a URL for the author:
+
+```markdown
+[//]: # (author: Author Name <mailto:email@author.me>)
 ```
 
 If no `markdown` folder exists in the base directory, then the base directory itself will be treated as a root for

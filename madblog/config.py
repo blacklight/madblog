@@ -30,6 +30,9 @@ class Config:
     webmentions_hard_delete: bool = False
     debug: bool = False
     basedir = os.path.abspath(os.path.dirname(__file__))
+    author: str | None = None
+    author_url: str | None = None
+    author_photo: str | None = None
 
     @property
     def templates_dir(self) -> str:
@@ -149,6 +152,14 @@ def _init_config_from_env():
         )
     if os.getenv("MADBLOG_DEBUG"):
         config.debug = os.environ["MADBLOG_DEBUG"] == "1"
+    if os.getenv("MADBLOG_CATEGORIES"):
+        config.categories = re.split(r"[,\s]+", os.environ["MADBLOG_CATEGORIES"])
+    if os.getenv("MADBLOG_AUTHOR"):
+        config.author = os.environ["MADBLOG_AUTHOR"]
+    if os.getenv("MADBLOG_AUTHOR_URL"):
+        config.author_url = os.environ["MADBLOG_AUTHOR_URL"]
+    if os.getenv("MADBLOG_AUTHOR_PHOTO"):
+        config.author_photo = os.environ["MADBLOG_AUTHOR_PHOTO"]
 
 
 def _init_config_from_cli(args: Optional[Namespace]):

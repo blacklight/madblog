@@ -41,6 +41,16 @@ link: https://myblog.example.com
 # The language of the blog (optional, default: "en-US")
 # language: en-US
 
+# Default author name to be used when no author is specified (optional)
+# author: Your Name
+
+# Default author URL to be used when no author URL is specified (optional)
+# mailto: links are also supported
+# author_url: https://myblog.example.com
+
+# Default author photo to be used when no author photo is specified (optional)
+# author_photo: https://myblog.example.com/author.png
+
 # Whether to show the blog header in the generated pages (optional, default: true)
 # header: true
 
