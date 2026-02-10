@@ -1,4 +1,5 @@
 import datetime
+import json
 import os
 import re
 from pathlib import Path
@@ -7,11 +8,13 @@ from urllib.parse import urlparse
 
 from flask import Flask, abort, make_response, render_template
 from markdown import markdown
+from webmentions import WebmentionDirection, WebmentionsHandler
+from webmentions.storage.adapters.file import FileSystemMonitor
+from webmentions.server.adapters.flask import bind_webmentions
 
 from .config import config
 from .latex import MarkdownLatex
-from .webmentions import WebmentionDirection, WebmentionsHandler
-from .webmentions._storage.file import FileWebmentionsStorage
+from .storage.mentions import FileWebmentionsStorage
 from ._sorters import PagesSorter, PagesSortByTime
 
 template_utils = {
@@ -19,7 +22,35 @@ template_utils = {
     "format_datetime": lambda dt: (
         dt if isinstance(dt, datetime.datetime) else datetime.datetime.fromisoformat(dt)
     ).strftime("%b %d, %Y at %H:%M"),
-    "hostname": lambda url: urlparse(url).hostname if url else "",
+    "as_url": lambda v: (
+        v
+        if isinstance(v, str)
+        else (
+            (v.get("url") or v.get("value"))
+            if isinstance(v, dict)
+            else (v[0] if isinstance(v, (list, tuple)) and v else "")
+        )
+    ),
+    "hostname": lambda url: (
+        urlparse(
+            (
+                url
+                if isinstance(url, str)
+                else (
+                    (url.get("url") or url.get("value"))
+                    if isinstance(url, dict)
+                    else (url[0] if isinstance(url, (list, tuple)) and url else "")
+                )
+            )
+        ).hostname
+        if url
+        else ""
+    ),
+    "fromjson": lambda v: (
+        json.loads(v)
+        if isinstance(v, str) and v and v.strip() and v.strip()[0] in '[{"'
+        else ({} if v is None else v)
+    ),
 }
 
 
@@ -31,30 +62,17 @@ class BlogApp(Flask):
     _title_header_regex = re.compile(r"^#\s*((\[(.*)])|(.*))")
     _author_regex = re.compile(r"^(.+?)\s+<([^>]+)>$")
     _url_regex = re.compile(r"^(https?:\/\/)?[\w\.\-]+\.[a-z]{2,6}\/?")
+    _email_regex = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
 
     def __init__(self, *args, **kwargs):
-        from . import __version__
-
         super().__init__(*args, template_folder=config.templates_dir, **kwargs)
-        self.pages_dir = Path(Path(config.content_dir) / "markdown").resolve()
+        self.pages_dir = (
+            Path(Path(config.content_dir) / "markdown").expanduser().resolve()
+        )
         self.img_dir = config.default_img_dir
         self.css_dir = config.default_css_dir
         self.js_dir = config.default_js_dir
         self.fonts_dir = config.default_fonts_dir
-        self.mentions_dir = Path(Path(config.content_dir) / "mentions").resolve()
-        self.webmentions_storage = FileWebmentionsStorage(
-            content_dir=self.pages_dir,
-            mentions_dir=self.mentions_dir,
-            base_url=config.link,
-            webmentions_hard_delete=config.webmentions_hard_delete,
-        )
-
-        self.webmentions_handler = WebmentionsHandler(
-            storage=self.webmentions_storage,
-            base_url=config.link,
-            user_agent=f"Madblog/{__version__} ({config.link})",
-            exclude_netlocs={urlparse(config.link).netloc} if config.link else set(),
-        )
 
         if not os.path.isdir(self.pages_dir):
             # If the `markdown` subfolder does not exist, then the whole
@@ -83,19 +101,49 @@ class BlogApp(Flask):
         if os.path.isdir(templates_dir):
             self.template_folder = os.path.abspath(templates_dir)
 
-    def start(self) -> None:
-        if not config.enable_webmentions:
-            return
+        self._init_webmentions()
 
-        self.webmentions_storage.start_watcher(
-            webmentions_handler=self.webmentions_handler
+    def _init_webmentions(self):
+        from . import __version__
+
+        self.mentions_dir = (
+            Path(Path(config.content_dir) / "mentions").expanduser().resolve()
         )
 
-    def stop(self) -> None:
-        if not config.enable_webmentions:
-            return
+        self.webmentions_storage = FileWebmentionsStorage(
+            content_dir=self.pages_dir,
+            mentions_dir=self.mentions_dir,
+            base_url=config.link,
+            webmentions_hard_delete=config.webmentions_hard_delete,
+        )
 
-        self.webmentions_storage.stop_watcher()
+        self.webmentions_handler = WebmentionsHandler(
+            storage=self.webmentions_storage,
+            base_url=config.link,
+            user_agent=f"Madblog/{__version__} ({config.link})",
+        )
+
+        self.filesystem_monitor = FileSystemMonitor(
+            root_dir=str(self.pages_dir),
+            handler=self.webmentions_handler,
+            file_to_url_mapper=self._file_to_url,
+        )
+
+        if config.enable_webmentions:
+            bind_webmentions(self, self.webmentions_handler)
+
+    def _file_to_url(self, f: str) -> str:
+        # Return the path relative to self.pages_dir and strip the extension
+        f = os.path.relpath(f, self.pages_dir).rsplit(".", 1)[0]
+        return f"{config.link}/article/{f}"
+
+    def start(self) -> None:
+        if config.enable_webmentions:
+            self.filesystem_monitor.start()
+
+    def stop(self) -> None:
+        if config.enable_webmentions:
+            self.filesystem_monitor.stop()
 
     def get_page_metadata(self, page: str) -> dict:
         if not page.endswith(".md"):
@@ -239,7 +287,7 @@ class BlogApp(Flask):
     ) -> List[Tuple[int, dict]]:
         pages_dir = getattr(app, "pages_dir", "")
         assert pages_dir  # for mypy
-        pages_dir = pages_dir.rstrip("/")
+        pages_dir = str(pages_dir).rstrip("/")
         pages = [
             {
                 "path": os.path.join(root[len(pages_dir) + 1 :], f),
