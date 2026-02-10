@@ -113,6 +113,12 @@ def _init_config_from_file(config_file: str):
         config.webmentions_hard_delete = bool(cfg["webmentions_hard_delete"])
     if cfg.get("debug") is not None:
         config.debug = bool(cfg["debug"])
+    if cfg.get("author"):
+        config.author = cfg["author"]
+    if cfg.get("author_url"):
+        config.author_url = cfg["author_url"]
+    if cfg.get("author_photo"):
+        config.author_photo = cfg["author_photo"]
 
     config.categories = cfg.get("categories", [])
 
