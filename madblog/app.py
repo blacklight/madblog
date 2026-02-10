@@ -180,6 +180,9 @@ class BlogApp(Flask):
             author = config.author
             author_url = config.author_url
 
+        if author_url and self._email_regex.match(author_url):
+            author_url = "mailto:" + author_url
+
         if metadata.get("author_photo"):
             if link := metadata["author_photo"].strip():
                 if self._url_regex.match(link):
