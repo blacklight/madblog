@@ -1,55 +1,69 @@
 {% if not skip_html_head %}
   {% with title=title, description=description, image=image, url=url, type='article', skip_header=skip_header or not config.header, styles=['/css/blog.css', '/css/code.css'] %}
-      {% include 'common-head.html' %}
+    {% include 'common-head.html' %}
   {% endwith %}
 
 <main>
-    <div class="container">
-        {% if not skip_header %}
-            {% if title %}
-              <div class="title">
-                  <h1>{{ title }}</h1>
-              </div>
-            {% endif %}
-
-            {% if description %}
-            <div class="description">
-                <h3>{{ description }}</h3>
-            </div>
-            {% endif %}
-
-            {% if published %}
-            <div class="published-date">
-                Published
-                {% if author %} by
-                    {% if author_email %}
-                        <a href="mailto:{{ author_email }}">
-                    {% endif %}
-
-                    {{ author }}
-
-                    {% if author_email %}
-                        </a>
-                    {% endif %}
-                {% endif %}
-                on {{ published }}
-            </div>
-            {% endif %}
-        {% endif %}
-
-        {% if image %}
-        <div class="main-image-container">
-            <img class="main-image" src="{{ image }}" alt=".">
+  <article class="container h-entry">
+    {% if not skip_header %}
+      {% if title %}
+        <div class="title">
+          <h1 class="p-name">{{ title }}</h1>
         </div>
+      {% endif %}
+
+      {% if description %}
+      <div class="description">
+        <h3 class="p-summary">{{ description }}</h3>
+      </div>
+      {% endif %}
+
+      {% if published or author %}
+      <div class="meta">
+        Published
+        {% if author %}
+          by
+          <span class="p-author h-card">
+            {% if author_photo %}
+              <img class="u-photo" src="{{ author_photo }}" alt="Author photo" loading="lazy">
+            {% endif %}
+            {% if author_url %}
+              <a class="p-url" href="{{ author_url }}">
+            {% endif %}
+
+            <span class="p-name">
+              {{ author }}
+            </span>
+          </span>
+
+          {% if author_url %}
+            </a>
+          {% endif %}
         {% endif %}
 
-        <div class="content">
+        {% if published %}
+          on
+          <div class="published-date">
+            <time class="dt-published" datetime="{{ published_datetime.isoformat() }}">{{ published }}</time>
+          </div>
+        {% endif %}
+      </div>
+      {% endif %}
+    {% endif %}
+
+    {% if image %}
+    <div class="main-image-container">
+      <img class="u-featured main-image" src="{{ image }}" alt=".">
+    </div>
+    {% endif %}
+
+    <div class="content e-content">
 {% endif %}
 
-            {{ content | safe }}
+      {{ content | safe }}
 
 {% if not skip_html_head %}
-        </div>
+    </div>
 
 {% if mentions %}
   {% with mentions=mentions %}
@@ -61,6 +75,7 @@
 
     {% include 'footer.html' %}
 
+  </article>
 </main>
   {% include 'common-tail.html' %}
 {% endif %}
