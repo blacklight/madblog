@@ -65,7 +65,7 @@ class FileWebmentionsStorage(WebmentionsStorage):
                 self.mentions_dir / WebmentionDirection.OUT.value / post_slug
             )
 
-        post_mentions_dir.mkdir(exist_ok=True)
+        post_mentions_dir.mkdir(exist_ok=True, parents=True)
 
         # Generate safe filename
         filename = self._generate_mention_filename(mention.source, "webmention")
