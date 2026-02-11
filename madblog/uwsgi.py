@@ -1,14 +1,39 @@
 import os
 import sys
 import logging
+import fcntl
 
 from .cli import get_args
 from .config import init_config
 
-arg_delim_idx = [i for i, arg in enumerate(sys.argv) if arg == "madblog.uwsgi"][0]
+# When running under gunicorn/uWSGI, sys.argv usually belongs to the process
+# manager, not to madblog. Prefer environment variables for configuration.
+env_blog_dir = os.environ.get("MADBLOG_CONTENT_DIR")
+env_config_file = os.environ.get("MADBLOG_CONFIG")
 
-opts, _ = get_args(sys.argv[arg_delim_idx + 1 :])
-config_file = opts.config if opts.config else os.path.join(opts.dir, "config.yaml")
+opts = None
+blog_dir = env_blog_dir
+config_file = env_config_file
+
+if not blog_dir and not config_file:
+    try:
+        parsed, _ = get_args(sys.argv[1:])
+        # Only trust the positional dir if it's a real directory.
+        if parsed.dir and os.path.isdir(parsed.dir):
+            opts = parsed
+            blog_dir = parsed.dir
+
+        # Only trust the config path if it points to an actual file.
+        if parsed.config and os.path.isfile(os.path.expanduser(parsed.config)):
+            opts = parsed
+            config_file = os.path.expanduser(parsed.config)
+    except Exception:
+        pass
+
+if not config_file:
+    blog_dir = blog_dir or "."
+    config_file = os.path.join(blog_dir, "config.yaml")
+
 config = init_config(config_file=config_file, args=opts)
 
 logging.basicConfig(
@@ -21,9 +46,22 @@ from .app import app
 # For gunicorn/uWSGI compatibility
 application = app
 
+_monitor_lock_f = None
+
 
 def _start_monitor_once() -> None:
     if not getattr(config, "enable_webmentions", False):
+        return
+
+    global _monitor_lock_f
+
+    lock_path = os.path.join(
+        getattr(config, "content_dir", "."), ".madblog-webmentions-monitor.lock"
+    )
+    try:
+        _monitor_lock_f = open(lock_path, "w")
+        fcntl.flock(_monitor_lock_f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except Exception:
         return
 
     try:
@@ -47,8 +85,8 @@ try:
         _start_monitor_once()
 
 except Exception:
-    # Not running under uWSGI - ignore.
-    pass
+    # Not running under uWSGI - start when imported (e.g. gunicorn workers).
+    _start_monitor_once()
 
 
 # vim:sw=4:ts=4:et:

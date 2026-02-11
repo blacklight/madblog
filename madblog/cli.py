@@ -33,7 +33,7 @@ The folder should have the following structure:
     parser.add_argument(
         "dir",
         nargs="?",
-        default=".",
+        default=None,
         help="Base path for the blog (default: current directory)",
     )
     parser.add_argument(
@@ -78,7 +78,8 @@ def run():
     from .config import init_config
 
     opts, _ = get_args(sys.argv[1:])
-    config_file = opts.config if opts.config else os.path.join(opts.dir, "config.yaml")
+    blog_dir = opts.dir or "."
+    config_file = opts.config if opts.config else os.path.join(blog_dir, "config.yaml")
     config = init_config(config_file=config_file, args=opts)
     logging.basicConfig(
         level=logging.DEBUG if config.debug else logging.INFO,
