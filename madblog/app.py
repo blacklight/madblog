@@ -127,6 +127,7 @@ class BlogApp(Flask):
             root_dir=str(self.pages_dir),
             handler=self.webmentions_handler,
             file_to_url_mapper=self._file_to_url,
+            throttle_seconds=config.throttle_seconds_on_update,
         )
 
         if config.enable_webmentions:
