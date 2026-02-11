@@ -4,6 +4,8 @@
 
 **Added**
 
+- [Support for Webmentions](https://git.fabiomanganiello.com/blacklight/madblog/pulls/1)
+  (see [issue #2](https://git.fabiomanganiello.com/blacklight/madblog/issues/2)).
 - Support for `rel="me"` links in the blog header for Mastodon and other social profiles.
 
 ## 0.2.37
