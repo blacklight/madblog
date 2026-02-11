@@ -41,6 +41,16 @@ link: https://myblog.example.com
 # The language of the blog (optional, default: "en-US")
 # language: en-US
 
+# Default author name to be used when no author is specified (optional)
+# author: Your Name
+
+# Default author URL to be used when no author URL is specified (optional)
+# mailto: links are also supported
+# author_url: https://myblog.example.com
+
+# Default author photo to be used when no author photo is specified (optional)
+# author_photo: https://myblog.example.com/author.png
+
 # Whether to show the blog header in the generated pages (optional, default: true)
 # header: true
 
@@ -50,6 +60,10 @@ link: https://myblog.example.com
 
 # Whether to enable Webmentions support (optional, default: true)
 # enable_webmentions: true
+
+# If set to true, then deleted Webmentions will be hard-deleted (their stored files
+# will be removed) instead of being marked as deleted (optional, default: false)
+# webmentions_hard_delete: false
 
 # A list of categories for the blog (optional)
 # categories:

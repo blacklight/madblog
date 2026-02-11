@@ -1,9 +1,14 @@
 import argparse
+import logging
 import os
 import sys
 
 
 def get_args(args):
+    """
+    Parse command line arguments.
+    """
+
     parser = argparse.ArgumentParser(
         description="""Serve a Markdown folder as a web blog.
 
@@ -66,15 +71,27 @@ The folder should have the following structure:
 
 
 def run():
+    """
+    Run the application.
+    """
+
     from .config import init_config
 
     opts, _ = get_args(sys.argv[1:])
     config_file = opts.config if opts.config else os.path.join(opts.dir, "config.yaml")
     config = init_config(config_file=config_file, args=opts)
+    logging.basicConfig(
+        level=logging.DEBUG if config.debug else logging.INFO,
+        format="%(levelname)s: %(message)s",
+    )
 
     from .app import app
 
-    app.run(host=config.host, port=config.port, debug=config.debug)
+    try:
+        app.start()
+        app.run(host=config.host, port=config.port, debug=config.debug)
+    finally:
+        app.stop()
 
 
 # vim:sw=4:ts=4:et:

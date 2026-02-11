@@ -1,15 +1,18 @@
 import os
 import re
 from argparse import Namespace
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 import yaml
 
-from dataclasses import dataclass, field
-
 
 @dataclass
 class Config:
+    """
+    Configuration for the blog
+    """
+
     title: str = "Blog"
     description: str = ""
     link: str = "/"
@@ -24,8 +27,13 @@ class Config:
     categories: List[str] = field(default_factory=list)
     short_feed: bool = False
     enable_webmentions: bool = True
+    webmentions_hard_delete: bool = False
     debug: bool = False
     basedir = os.path.abspath(os.path.dirname(__file__))
+    author: str | None = None
+    author_url: str | None = None
+    author_photo: str | None = None
+    throttle_seconds_on_update: int = 10
 
     @property
     def templates_dir(self) -> str:
@@ -58,7 +66,7 @@ class Config:
         webmention_url = None
         if config.enable_webmentions:
             webmention_url = (
-                f'{config.link.rstrip("/")}/webmention'
+                f'{config.link.rstrip("/")}/webmentions'
                 if re.match(r"^https?://", config.link)
                 else url_for("webmention_listener_route", _external=True)
             )
@@ -102,8 +110,18 @@ def _init_config_from_file(config_file: str):
         config.short_feed = bool(cfg["short_feed"])
     if cfg.get("enable_webmentions") is not None:
         config.enable_webmentions = bool(cfg["enable_webmentions"])
+    if cfg.get("webmentions_hard_delete") is not None:
+        config.webmentions_hard_delete = bool(cfg["webmentions_hard_delete"])
     if cfg.get("debug") is not None:
         config.debug = bool(cfg["debug"])
+    if cfg.get("author"):
+        config.author = cfg["author"]
+    if cfg.get("author_url"):
+        config.author_url = cfg["author_url"]
+    if cfg.get("author_photo"):
+        config.author_photo = cfg["author_photo"]
+    if cfg.get("throttle_seconds_on_update"):
+        config.throttle_seconds_on_update = int(cfg["throttle_seconds_on_update"])
 
     config.categories = cfg.get("categories", [])
 
@@ -137,8 +155,24 @@ def _init_config_from_env():
         config.short_feed = os.environ["MADBLOG_SHORT_FEED"] == "1"
     if os.getenv("MADBLOG_ENABLE_WEBMENTIONS"):
         config.enable_webmentions = os.environ["MADBLOG_ENABLE_WEBMENTIONS"] == "1"
+    if os.getenv("MADBLOG_WEBMENTIONS_HARD_DELETE"):
+        config.webmentions_hard_delete = (
+            os.environ["MADBLOG_WEBMENTIONS_HARD_DELETE"] == "1"
+        )
     if os.getenv("MADBLOG_DEBUG"):
         config.debug = os.environ["MADBLOG_DEBUG"] == "1"
+    if os.getenv("MADBLOG_CATEGORIES"):
+        config.categories = re.split(r"[,\s]+", os.environ["MADBLOG_CATEGORIES"])
+    if os.getenv("MADBLOG_AUTHOR"):
+        config.author = os.environ["MADBLOG_AUTHOR"]
+    if os.getenv("MADBLOG_AUTHOR_URL"):
+        config.author_url = os.environ["MADBLOG_AUTHOR_URL"]
+    if os.getenv("MADBLOG_AUTHOR_PHOTO"):
+        config.author_photo = os.environ["MADBLOG_AUTHOR_PHOTO"]
+    if os.getenv("MADBLOG_THROTTLE_SECONDS_ON_UPDATE"):
+        config.throttle_seconds_on_update = int(
+            os.environ["MADBLOG_THROTTLE_SECONDS_ON_UPDATE"]
+        )
 
 
 def _init_config_from_cli(args: Optional[Namespace]):
@@ -158,12 +192,13 @@ def _init_config_from_cli(args: Optional[Namespace]):
 def init_config(
     config_file: str = "config.yaml", args: Optional[Namespace] = None
 ) -> Config:
+    config_file = os.path.abspath(os.path.expanduser(config_file))
     _init_config_from_file(config_file)
     _init_config_from_env()
     _init_config_from_cli(args)
 
     # Normalize/expand paths
-    config.content_dir = os.path.expanduser(os.path.abspath(config.content_dir))
+    config.content_dir = os.path.abspath(os.path.expanduser(config.content_dir))
 
     return config
 

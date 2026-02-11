@@ -4,3 +4,4 @@ dist/
 .vscode/
 *.egg-info
 config.yaml
+/requests

@@ -25,6 +25,10 @@
     <link rel="stylesheet" href="/fonts/poppins.css">
     <link rel="stylesheet" href="/fonts/fira-sans.css">
     <link rel="stylesheet" href="/css/common.css">
+    {% if config.webmention_url %}
+    <!-- Webmention handler -->
+    <link rel="webmention" href="{{ config.webmention_url }}">
+    {% endif %}
     {% if config.external_links %}
     <!-- Rel="me" links for identity verification -->
     {% for external_link in config.external_links %}

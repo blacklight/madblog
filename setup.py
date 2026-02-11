@@ -18,7 +18,7 @@ setup(
     python_requires=">= 3.8",
     keywords="blog markdown",
     url="https://git.platypush.tech/blacklight/madblog",
-    packages=find_packages(include=["madblog"]),
+    packages=find_packages(include=["madblog", "madblog.*"]),
     include_package_data=True,
     entry_points={
         "console_scripts": [
@@ -37,5 +37,9 @@ setup(
         "markdown",
         "pygments",
         "pyyaml",
+        "requests",
+        "beautifulsoup4",
+        "mf2py",
+        "watchdog",
     ],
 )

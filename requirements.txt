@@ -2,3 +2,6 @@ flask
 markdown
 pygments
 pyyaml
+requests
+watchdog
+webmentions[file]

@@ -1,22 +1,74 @@
 import datetime
+import json
 import os
 import re
+from pathlib import Path
 from typing import Optional, List, Tuple, Type
+from urllib.parse import urlparse
 
-from flask import Flask, abort, render_template
+from flask import Flask, abort, make_response, render_template
 from markdown import markdown
+from webmentions import WebmentionDirection, WebmentionsHandler
+from webmentions.storage.adapters.file import FileSystemMonitor
+from webmentions.server.adapters.flask import bind_webmentions
 
 from .config import config
 from .latex import MarkdownLatex
+from .storage.mentions import FileWebmentionsStorage
 from ._sorters import PagesSorter, PagesSortByTime
+
+template_utils = {
+    "format_date": lambda d: d.strftime("%b %d, %Y"),
+    "format_datetime": lambda dt: (
+        dt if isinstance(dt, datetime.datetime) else datetime.datetime.fromisoformat(dt)
+    ).strftime("%b %d, %Y at %H:%M"),
+    "as_url": lambda v: (
+        v
+        if isinstance(v, str)
+        else (
+            (v.get("url") or v.get("value"))
+            if isinstance(v, dict)
+            else (v[0] if isinstance(v, (list, tuple)) and v else "")
+        )
+    ),
+    "hostname": lambda url: (
+        urlparse(
+            (
+                url
+                if isinstance(url, str)
+                else (
+                    (url.get("url") or url.get("value"))
+                    if isinstance(url, dict)
+                    else (url[0] if isinstance(url, (list, tuple)) and url else "")
+                )
+            )
+        ).hostname
+        if url
+        else ""
+    ),
+    "fromjson": lambda v: (
+        json.loads(v)
+        if isinstance(v, str) and v and v.strip() and v.strip()[0] in '[{"'
+        else ({} if v is None else v)
+    ),
+}
 
 
 class BlogApp(Flask):
-    _title_header_regex = re.compile(r"^#\s*((\[(.*)\])|(.*))")
+    """
+    The main application class.
+    """
+
+    _title_header_regex = re.compile(r"^#\s*((\[(.*)])|(.*))")
+    _author_regex = re.compile(r"^(.+?)\s+<([^>]+)>$")
+    _url_regex = re.compile(r"^(https?:\/\/)?[\w\.\-]+\.[a-z]{2,6}\/?")
+    _email_regex = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, template_folder=config.templates_dir, **kwargs)
-        self.pages_dir = os.path.join(config.content_dir, "markdown")
+        self.pages_dir = (
+            Path(Path(config.content_dir) / "markdown").expanduser().resolve()
+        )
         self.img_dir = config.default_img_dir
         self.css_dir = config.default_css_dir
         self.js_dir = config.default_js_dir
@@ -24,7 +76,7 @@ class BlogApp(Flask):
 
         if not os.path.isdir(self.pages_dir):
             # If the `markdown` subfolder does not exist, then the whole
-            # `config.content_dir` is treated as the root for markdown files.
+            # `config.content_dir` is treated as the root for Markdown files.
             self.pages_dir = config.content_dir
 
         img_dir = os.path.join(config.content_dir, "img")
@@ -48,6 +100,51 @@ class BlogApp(Flask):
         templates_dir = os.path.join(config.content_dir, "templates")
         if os.path.isdir(templates_dir):
             self.template_folder = os.path.abspath(templates_dir)
+
+        self._init_webmentions()
+
+    def _init_webmentions(self):
+        from . import __version__
+
+        self.mentions_dir = (
+            Path(Path(config.content_dir) / "mentions").expanduser().resolve()
+        )
+
+        self.webmentions_storage = FileWebmentionsStorage(
+            content_dir=self.pages_dir,
+            mentions_dir=self.mentions_dir,
+            base_url=config.link,
+            webmentions_hard_delete=config.webmentions_hard_delete,
+        )
+
+        self.webmentions_handler = WebmentionsHandler(
+            storage=self.webmentions_storage,
+            base_url=config.link,
+            user_agent=f"Madblog/{__version__} ({config.link})",
+        )
+
+        self.filesystem_monitor = FileSystemMonitor(
+            root_dir=str(self.pages_dir),
+            handler=self.webmentions_handler,
+            file_to_url_mapper=self._file_to_url,
+            throttle_seconds=config.throttle_seconds_on_update,
+        )
+
+        if config.enable_webmentions:
+            bind_webmentions(self, self.webmentions_handler)
+
+    def _file_to_url(self, f: str) -> str:
+        # Return the path relative to self.pages_dir and strip the extension
+        f = os.path.relpath(f, self.pages_dir).rsplit(".", 1)[0]
+        return f"{config.link}/article/{f}"
+
+    def start(self) -> None:
+        if config.enable_webmentions:
+            self.filesystem_monitor.start()
+
+    def stop(self) -> None:
+        if config.enable_webmentions:
+            self.filesystem_monitor.stop()
 
     def get_page_metadata(self, page: str) -> dict:
         if not page.endswith(".md"):
@@ -117,20 +214,33 @@ class BlogApp(Flask):
         if not (title or metadata.get("title_inferred")):
             title = metadata.get("title", config.title)
 
-        author_regex = re.compile(r"^(.+?)\s+<([^>]+)>$")
         author = None
-        author_email = None
+        author_url = None
+        author_photo = None
 
         if metadata.get("author"):
-            match = author_regex.match(metadata["author"])
-            if match:
+            if match := self._author_regex.match(metadata["author"]):
                 author = match[1]
-                author_email = match[2]
+                if link := match[2].strip():
+                    author_url = link
             else:
                 author = metadata["author"]
+        else:
+            author = config.author
+            author_url = config.author_url
+
+        if author_url and self._email_regex.match(author_url):
+            author_url = "mailto:" + author_url
+
+        if metadata.get("author_photo"):
+            if link := metadata["author_photo"].strip():
+                if self._url_regex.match(link):
+                    author_photo = link
+        else:
+            author_photo = config.author_photo
 
         with open(os.path.join(self.pages_dir, page), "r") as f:
-            return render_template(
+            html = render_template(
                 "article.html",
                 config=config,
                 title=title,
@@ -139,7 +249,9 @@ class BlogApp(Flask):
                 image=metadata.get("image"),
                 description=metadata.get("description"),
                 author=author,
-                author_email=author_email,
+                author_url=author_url,
+                author_photo=author_photo,
+                published_datetime=metadata.get("published"),
                 published=(
                     metadata["published"].strftime("%b %d, %Y")
                     if metadata.get("published")
@@ -150,19 +262,33 @@ class BlogApp(Flask):
                     f.read(),
                     extensions=["fenced_code", "codehilite", "tables", MarkdownLatex()],
                 ),
+                mentions=self.webmentions_handler.retrieve_stored_webmentions(
+                    config.link + metadata.get("uri", ""),
+                    direction=WebmentionDirection.IN,
+                ),
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
+                **template_utils,
             )
+
+        response = make_response(html)
+        if config.webmention_url:
+            response.headers["Link"] = f'<{config.webmention_url}>; rel="webmention"'
+
+        return response
 
     def get_pages(
         self,
+        *,
         with_content: bool = False,
         skip_header: bool = False,
         skip_html_head: bool = False,
         sorter: Type[PagesSorter] = PagesSortByTime,
         reverse: bool = True,
     ) -> List[Tuple[int, dict]]:
-        pages_dir = app.pages_dir.rstrip("/")
+        pages_dir = getattr(app, "pages_dir", "")
+        assert pages_dir  # for mypy
+        pages_dir = str(pages_dir).rstrip("/")
         pages = [
             {
                 "path": os.path.join(root[len(pages_dir) + 1 :], f),
@@ -185,13 +311,11 @@ class BlogApp(Flask):
 
         sorter_func = sorter(pages)
         pages.sort(key=sorter_func, reverse=reverse)
-        return [(i, page) for i, page in enumerate(pages)]
+        return list(enumerate(pages))
 
 
 app = BlogApp(__name__)
 
-
 from .routes import *
-
 
 # vim:sw=4:ts=4:et:

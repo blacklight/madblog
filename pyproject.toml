@@ -20,6 +20,9 @@ keywords = ["blog", "markdown"]
 version = {attr = "madblog.__version__"}
 dependencies = {file = "requirements.txt"}
 
+[tool.setuptools.packages.find]
+include = ["madblog", "madblog.*"]
+
 [project.scripts]
 madblog = 'madblog.cli:run'
 

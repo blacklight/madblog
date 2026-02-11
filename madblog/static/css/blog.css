@@ -40,10 +40,25 @@ a:hover {
   margin: -.5em auto .5em auto;
 }
 
-.published-date {
+.meta {
   font-size: 0.75em;
   opacity: .75;
   margin-bottom: 2em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+}
+
+.meta .p-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+}
+
+.meta .p-author img.u-photo {
+  width: 1.25em;
+  height: 1.25em;
+  border-radius: 50%;
 }
 
 @media screen and (max-width: 1024px) {
@@ -73,4 +88,120 @@ a:hover {
 
 .main-image-container img {
   width: 80%;
+}
+
+/* Webmentions */
+
+#mentions {
+  margin-top: 1.5em;
+  border-top: 3px solid #ccc;
+}
+
+#mentions .mention {
+  margin-bottom: 1.5em;
+  padding: 1em;
+  border: 1px solid #eee;
+  border-radius: 0.6em;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+#mentions .mention-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+}
+
+#mentions .mention-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  padding: 0.2em 0.6em;
+  border-radius: 999px;
+  font-size: 0.8em;
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.75);
+  white-space: nowrap;
+}
+
+#mentions .mention-title {
+  margin: 0;
+  flex: 1;
+  font-size: 1.05em;
+}
+
+#mentions .mention-source {
+  text-decoration: none;
+}
+
+#mentions .mention-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  min-width: 0;
+}
+
+#mentions .mention-author-photo {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+#mentions .mention-author-name {
+  font-size: 0.85em;
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#mentions .mention-published {
+  font-size: 0.75em;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+#mentions .mention-published .label {
+  margin-right: 0.35em;
+}
+
+#mentions .mention-body {
+  margin-top: 0.75em;
+}
+
+#mentions .mention-excerpt {
+  margin: 0;
+  opacity: 0.9;
+  line-height: 1.45em;
+}
+
+#mentions h2 {
+  margin-top: 0.5em;
+  margin-bottom: 1em;
+  padding-top: 0.5em;
+  font-weight: normal;
+  opacity: 0.8;
+}
+
+#mentions .mention-date {
+  font-size: 0.6em;
+  opacity: 0.6;
+}
+
+#mentions .mention-domain {
+  font-size: 0.75em;
+  opacity: 0.6;
+  margin-left: 0.5em;
+}
+
+#mentions img,
+#mentions video,
+#mentions audio {
+  max-width: 100%;
+  max-height: 75vh;
+}
+
+#mentions .mention-mf2 {
+  padding-top: 1em;
 }

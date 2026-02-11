@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 from typing import Optional
@@ -15,13 +16,15 @@ from .app import app
 from .config import config
 from ._sorters import PagesSortByTimeGroupedByFolder
 
+logger = logging.getLogger(__name__)
+
 
 def send_from_directory(
-    path: str, file: str, alternative_path: Optional[str] = None, *args, **kwargs
+    path: str, file: str, alternative_path: Optional[str] = None, **kwargs
 ):
     if not os.path.exists(os.path.join(path, file)) and alternative_path:
         path = alternative_path
-    return send_from_directory_(path, file, *args, **kwargs)
+    return send_from_directory_(path, file, **kwargs)
 
 
 @app.route("/", methods=["GET"])
