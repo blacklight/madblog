@@ -18,6 +18,11 @@ config_file = env_config_file
 if not blog_dir and not config_file:
     try:
         parsed, _ = get_args(sys.argv[1:])
+        # Gunicorn/uWSGI may pass arguments like `-w 8` - `8` would otherwise be
+        # interpreted as the positional blog dir and override config.content_dir.
+        if parsed.dir and not os.path.isdir(parsed.dir):
+            parsed.dir = None
+
         # Only trust the positional dir if it's a real directory.
         if parsed.dir and os.path.isdir(parsed.dir):
             opts = parsed
