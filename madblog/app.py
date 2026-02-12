@@ -1,10 +1,8 @@
 import datetime
-import json
 import os
 import re
 from pathlib import Path
 from typing import Optional, List, Tuple, Type
-from urllib.parse import urlparse
 
 from flask import Flask, abort, make_response, render_template
 from markdown import markdown
@@ -16,42 +14,6 @@ from .config import config
 from .latex import MarkdownLatex
 from .storage.mentions import FileWebmentionsStorage
 from ._sorters import PagesSorter, PagesSortByTime
-
-template_utils = {
-    "format_date": lambda d: d.strftime("%b %d, %Y"),
-    "format_datetime": lambda dt: (
-        dt if isinstance(dt, datetime.datetime) else datetime.datetime.fromisoformat(dt)
-    ).strftime("%b %d, %Y at %H:%M"),
-    "as_url": lambda v: (
-        v
-        if isinstance(v, str)
-        else (
-            (v.get("url") or v.get("value"))
-            if isinstance(v, dict)
-            else (v[0] if isinstance(v, (list, tuple)) and v else "")
-        )
-    ),
-    "hostname": lambda url: (
-        urlparse(
-            (
-                url
-                if isinstance(url, str)
-                else (
-                    (url.get("url") or url.get("value"))
-                    if isinstance(url, dict)
-                    else (url[0] if isinstance(url, (list, tuple)) and url else "")
-                )
-            )
-        ).hostname
-        if url
-        else ""
-    ),
-    "fromjson": lambda v: (
-        json.loads(v)
-        if isinstance(v, str) and v and v.strip() and v.strip()[0] in '[{"'
-        else ({} if v is None else v)
-    ),
-}
 
 
 class BlogApp(Flask):
@@ -239,6 +201,13 @@ class BlogApp(Flask):
         else:
             author_photo = config.author_photo
 
+        mentions = self.webmentions_handler.retrieve_stored_webmentions(
+            config.link + metadata.get("uri", ""),
+            direction=WebmentionDirection.IN,
+        )
+
+        rendered_mentions = self.webmentions_handler.render_webmentions(mentions)
+
         with open(os.path.join(self.pages_dir, page), "r") as f:
             html = render_template(
                 "article.html",
@@ -262,13 +231,10 @@ class BlogApp(Flask):
                     f.read(),
                     extensions=["fenced_code", "codehilite", "tables", MarkdownLatex()],
                 ),
-                mentions=self.webmentions_handler.retrieve_stored_webmentions(
-                    config.link + metadata.get("uri", ""),
-                    direction=WebmentionDirection.IN,
-                ),
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
-                **template_utils,
+                mentions=mentions,
+                rendered_mentions=rendered_mentions,
             )
 
         response = make_response(html)
