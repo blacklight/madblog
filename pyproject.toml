@@ -27,7 +27,7 @@ include = ["madblog", "madblog.*"]
 madblog = 'madblog.cli:run'
 
 [tool.bumpversion]
-current_version = "0.3.0"
+current_version = "0.3.1"
 commit = true
 tag = true
 
