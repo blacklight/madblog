@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+**Changed**
+
+- Use the new `render_webmentions` API from the `webmentions` library to render
+  mentions instead of managing templates directly.
+
 ## 0.3.0
 
 **Added**
