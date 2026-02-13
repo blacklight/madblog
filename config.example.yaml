@@ -65,6 +65,13 @@ link: https://myblog.example.com
 # will be removed) instead of being marked as deleted (optional, default: false)
 # webmentions_hard_delete: false
 
+# Default status for incoming Webmentions (if Webmentions are enabled) (optional,
+# default: "confirmed"). If set to "pending" then the Webmention will be stored
+# under the `mentions` directory as a Markdown file, with metadata header `status`
+# set to "pending". If set to "confirmed" then the Webmention will be displayed
+# on the site.
+# webmentions_default_status: "confirmed"
+
 # A list of categories for the blog (optional)
 # categories:
 #   - Technology

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 import yaml
+from webmentions import WebmentionStatus
 
 
 @dataclass
@@ -28,6 +29,7 @@ class Config:
     short_feed: bool = False
     enable_webmentions: bool = True
     webmentions_hard_delete: bool = False
+    default_webmention_status: WebmentionStatus = WebmentionStatus.CONFIRMED
     debug: bool = False
     basedir = os.path.abspath(os.path.dirname(__file__))
     author: str | None = None
@@ -112,6 +114,10 @@ def _init_config_from_file(config_file: str):
         config.enable_webmentions = bool(cfg["enable_webmentions"])
     if cfg.get("webmentions_hard_delete") is not None:
         config.webmentions_hard_delete = bool(cfg["webmentions_hard_delete"])
+    if cfg.get("default_webmention_status"):
+        config.default_webmention_status = WebmentionStatus(
+            cfg["default_webmention_status"]
+        )
     if cfg.get("debug") is not None:
         config.debug = bool(cfg["debug"])
     if cfg.get("author"):
@@ -158,6 +164,10 @@ def _init_config_from_env():
     if os.getenv("MADBLOG_WEBMENTIONS_HARD_DELETE"):
         config.webmentions_hard_delete = (
             os.environ["MADBLOG_WEBMENTIONS_HARD_DELETE"] == "1"
+        )
+    if os.getenv("MADBLOG_DEFAULT_WEBMENTION_STATUS"):
+        config.default_webmention_status = WebmentionStatus(
+            os.environ["MADBLOG_DEFAULT_WEBMENTION_STATUS"]
         )
     if os.getenv("MADBLOG_DEBUG"):
         config.debug = os.environ["MADBLOG_DEBUG"] == "1"
