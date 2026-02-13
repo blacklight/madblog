@@ -1,7 +1,9 @@
 import logging
 import smtplib
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from email.message import EmailMessage
+from email.utils import format_datetime, make_msgid
 from typing import Callable, Optional
 
 from webmentions import Webmention, WebmentionDirection
@@ -31,6 +33,8 @@ def _send_email(
     msg["To"] = recipient
     msg["From"] = smtp.sender or smtp.username or recipient
     msg["Subject"] = subject
+    msg["Date"] = format_datetime(datetime.now(timezone.utc))
+    msg["Message-ID"] = make_msgid(domain=None)
     msg.set_content(body)
 
     with smtplib.SMTP(smtp.server, smtp.port) as client:
