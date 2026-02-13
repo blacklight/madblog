@@ -12,6 +12,7 @@ from webmentions.server.adapters.flask import bind_webmentions
 
 from .config import config
 from .latex import MarkdownLatex
+from .notifications import SmtpConfig, build_webmention_email_notifier
 from .storage.mentions import FileWebmentionsStorage
 from ._sorters import PagesSorter, PagesSortByTime
 
@@ -79,10 +80,27 @@ class BlogApp(Flask):
             webmentions_hard_delete=config.webmentions_hard_delete,
         )
 
+        on_mention_processed = None
+        if config.webmentions_email and config.smtp_server:
+            on_mention_processed = build_webmention_email_notifier(
+                recipient=config.webmentions_email,
+                blog_base_url=config.link,
+                smtp=SmtpConfig(
+                    server=config.smtp_server,
+                    port=config.smtp_port,
+                    username=config.smtp_username,
+                    password=config.smtp_password,
+                    starttls=config.smtp_starttls,
+                    enable_starttls_auto=config.smtp_enable_starttls_auto,
+                    sender=config.smtp_sender,
+                ),
+            )
+
         self.webmentions_handler = WebmentionsHandler(
             storage=self.webmentions_storage,
             base_url=config.link,
             user_agent=f"Madblog/{__version__} ({config.link})",
+            on_mention_processed=on_mention_processed,
         )
 
         self.filesystem_monitor = FileSystemMonitor(

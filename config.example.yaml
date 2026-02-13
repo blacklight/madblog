@@ -78,3 +78,15 @@ link: https://myblog.example.com
 #   - Lifestyle
 #   - Travel
 #   - Food
+
+#### (Optional) Email Settings ####
+
+# The email address to which webmentions will be sent (optional)
+# webmentions_email: 0q9aA@example.com
+# Outgoing mail server configuration (optional)
+# smtp_server: smtp.example.com
+# smtp_port: 587
+# smtp_username: username
+# smtp_password: password
+# smtp_starttls: true
+# smtp_enable_starttls_auto: true
