@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+**Added**
+
+- Added support for email notifications on Webmentions
+
+- Added `default_webmention_stats`
+
 ## 0.3.1
 
 **Changed**
