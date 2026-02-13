@@ -36,6 +36,14 @@ class Config:
     author_url: str | None = None
     author_photo: str | None = None
     throttle_seconds_on_update: int = 10
+    webmentions_email: str | None = None
+    smtp_server: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_starttls: bool = True
+    smtp_enable_starttls_auto: bool = True
+    smtp_sender: str | None = None
 
     @property
     def templates_dir(self) -> str:
@@ -129,6 +137,23 @@ def _init_config_from_file(config_file: str):
     if cfg.get("throttle_seconds_on_update"):
         config.throttle_seconds_on_update = int(cfg["throttle_seconds_on_update"])
 
+    if cfg.get("webmentions_email"):
+        config.webmentions_email = cfg["webmentions_email"]
+    if cfg.get("smtp_server"):
+        config.smtp_server = cfg["smtp_server"]
+    if cfg.get("smtp_port"):
+        config.smtp_port = int(cfg["smtp_port"])
+    if cfg.get("smtp_username"):
+        config.smtp_username = cfg["smtp_username"]
+    if cfg.get("smtp_password"):
+        config.smtp_password = cfg["smtp_password"]
+    if cfg.get("smtp_starttls") is not None:
+        config.smtp_starttls = bool(cfg["smtp_starttls"])
+    if cfg.get("smtp_enable_starttls_auto") is not None:
+        config.smtp_enable_starttls_auto = bool(cfg["smtp_enable_starttls_auto"])
+    if cfg.get("smtp_sender"):
+        config.smtp_sender = cfg["smtp_sender"]
+
     config.categories = cfg.get("categories", [])
 
 
@@ -183,6 +208,25 @@ def _init_config_from_env():
         config.throttle_seconds_on_update = int(
             os.environ["MADBLOG_THROTTLE_SECONDS_ON_UPDATE"]
         )
+
+    if os.getenv("MADBLOG_WEBMENTIONS_EMAIL"):
+        config.webmentions_email = os.environ["MADBLOG_WEBMENTIONS_EMAIL"]
+    if os.getenv("MADBLOG_SMTP_SERVER"):
+        config.smtp_server = os.environ["MADBLOG_SMTP_SERVER"]
+    if os.getenv("MADBLOG_SMTP_PORT"):
+        config.smtp_port = int(os.environ["MADBLOG_SMTP_PORT"])
+    if os.getenv("MADBLOG_SMTP_USERNAME"):
+        config.smtp_username = os.environ["MADBLOG_SMTP_USERNAME"]
+    if os.getenv("MADBLOG_SMTP_PASSWORD"):
+        config.smtp_password = os.environ["MADBLOG_SMTP_PASSWORD"]
+    if os.getenv("MADBLOG_SMTP_STARTTLS"):
+        config.smtp_starttls = os.environ["MADBLOG_SMTP_STARTTLS"] == "1"
+    if os.getenv("MADBLOG_SMTP_ENABLE_STARTTLS_AUTO"):
+        config.smtp_enable_starttls_auto = (
+            os.environ["MADBLOG_SMTP_ENABLE_STARTTLS_AUTO"] == "1"
+        )
+    if os.getenv("MADBLOG_SMTP_SENDER"):
+        config.smtp_sender = os.environ["MADBLOG_SMTP_SENDER"]
 
 
 def _init_config_from_cli(args: Optional[Namespace]):
