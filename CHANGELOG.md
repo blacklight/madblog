@@ -5,6 +5,7 @@
 **Added**
 
 - Added Atom feeds under `/feed?type=atom`.
+- Added `max_entries_per_feed` configuration parameters for RSS and Atom feeds (default: 10).
 
 **Changed**
 
