@@ -1,4 +1,5 @@
 import logging
+import datetime
 import os
 import re
 from typing import Optional
@@ -130,6 +131,23 @@ def _get_absolute_url(url: str) -> str:
     return urljoin(config.link, url)
 
 
+def _to_feed_datetime(dt: object) -> Optional[datetime.datetime]:
+    if not dt:
+        return None
+
+    if isinstance(dt, datetime.datetime):
+        return (
+            dt.replace(tzinfo=datetime.timezone.utc)
+            if dt.tzinfo is None
+            else dt.astimezone(datetime.timezone.utc)
+        )
+
+    if isinstance(dt, datetime.date):
+        return datetime.datetime(dt.year, dt.month, dt.day, tzinfo=datetime.timezone.utc)
+
+    return None
+
+
 @app.route("/feed", methods=["GET"])
 def feed_route():
     feed_type = request.args.get("type", "rss").lower().strip()
@@ -162,8 +180,10 @@ def feed_route():
     self_url = _get_absolute_url(f"/feed?type={feed_type}")
     fg.link(href=self_url, rel="self")
 
-    if pages and pages[0][1].get("published"):
-        fg.updated(pages[0][1]["published"])
+    if pages:
+        updated = _to_feed_datetime(pages[0][1].get("published"))
+        if updated:
+            fg.updated(updated)
 
     for _, page in pages:
         uri = page.get("uri", "")
@@ -176,9 +196,10 @@ def feed_route():
 
         fe.title(page.get("title", "[No Title]"))
 
-        if page.get("published"):
-            fe.published(page["published"])
-            fe.updated(page["published"])
+        published = _to_feed_datetime(page.get("published"))
+        if published:
+            fe.published(published)
+            fe.updated(published)
 
         if page.get("description"):
             fe.summary(page.get("description", ""))
