@@ -17,7 +17,7 @@ setup(
     license="MIT",
     python_requires=">= 3.8",
     keywords="blog markdown",
-    url="https://git.platypush.tech/blacklight/madblog",
+    url="https://git.fabiomanganiello.com/madblog",
     packages=find_packages(include=["madblog", "madblog.*"]),
     include_package_data=True,
     entry_points={
