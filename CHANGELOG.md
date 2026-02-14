@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.7
+
+**Fixed**
+
+- The legacy `/rss` route should transparently provide the same content as `/feed?type=rss` - not a redirect.
+
 ## 0.3.6
 
 **Fixed**

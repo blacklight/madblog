@@ -8,10 +8,10 @@ from urllib.parse import urljoin
 
 from feedgen.feed import FeedGenerator
 from flask import (
+    Request,
     jsonify,
     request,
     Response,
-    redirect,
     send_from_directory as send_from_directory_,
     render_template,
 )
@@ -144,7 +144,9 @@ def _to_feed_datetime(dt: object) -> Optional[datetime.datetime]:
         )
 
     if isinstance(dt, datetime.date):
-        return datetime.datetime(dt.year, dt.month, dt.day, tzinfo=datetime.timezone.utc)
+        return datetime.datetime(
+            dt.year, dt.month, dt.day, tzinfo=datetime.timezone.utc
+        )
 
     return None
 
@@ -159,9 +161,11 @@ def _to_feed_text(obj: object) -> str:
     return str(obj)
 
 
-@app.route("/feed", methods=["GET"])
-def feed_route():
-    feed_type = request.args.get("type", "rss").lower().strip()
+def _get_feed(request: Request, feed_type: Optional[str] = None):
+    if not feed_type:
+        feed_type = request.args.get("type", "rss")
+
+    feed_type = feed_type.lower().strip()
     if feed_type not in {"rss", "atom"}:
         return Response("Invalid feed type", status=400, mimetype="text/plain")
 
@@ -230,6 +234,11 @@ def feed_route():
     return Response(fg.rss_str(pretty=True), mimetype="application/rss+xml")
 
 
+@app.route("/feed", methods=["GET"])
+def feed_route():
+    return _get_feed(request)
+
+
 @app.route("/rss", methods=["GET"])
 def rss_route():
     """
@@ -237,10 +246,7 @@ def rss_route():
 
     It redirects to the /feed route with the appropriate query parameter to generate an RSS feed.
     """
-    qs = request.query_string.decode("utf-8")
-    if qs:
-        return redirect(f"/feed?type=rss&{qs}")
-    return redirect("/feed?type=rss")
+    return _get_feed(request, "rss")
 
 
 # vim:sw=4:ts=4:et:
