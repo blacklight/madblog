@@ -27,6 +27,7 @@ class Config:
     content_dir: str = "."
     categories: List[str] = field(default_factory=list)
     short_feed: bool = False
+    max_entries_per_feed: int = 10
     enable_webmentions: bool = True
     webmentions_hard_delete: bool = False
     default_webmention_status: WebmentionStatus = WebmentionStatus.CONFIRMED
@@ -118,6 +119,8 @@ def _init_config_from_file(config_file: str):
         config.header = bool(cfg["header"])
     if cfg.get("short_feed"):
         config.short_feed = bool(cfg["short_feed"])
+    if cfg.get("max_entries_per_feed") is not None:
+        config.max_entries_per_feed = int(cfg["max_entries_per_feed"])
     if cfg.get("enable_webmentions") is not None:
         config.enable_webmentions = bool(cfg["enable_webmentions"])
     if cfg.get("webmentions_hard_delete") is not None:
@@ -184,6 +187,8 @@ def _init_config_from_env():
         config.header = os.environ["MADBLOG_HEADER"] == "1"
     if os.getenv("MADBLOG_SHORT_FEED"):
         config.short_feed = os.environ["MADBLOG_SHORT_FEED"] == "1"
+    if os.getenv("MADBLOG_MAX_ENTRIES_PER_FEED"):
+        config.max_entries_per_feed = int(os.environ["MADBLOG_MAX_ENTRIES_PER_FEED"])
     if os.getenv("MADBLOG_ENABLE_WEBMENTIONS"):
         config.enable_webmentions = os.environ["MADBLOG_ENABLE_WEBMENTIONS"] == "1"
     if os.getenv("MADBLOG_WEBMENTIONS_HARD_DELETE"):

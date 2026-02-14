@@ -143,6 +143,8 @@ def feed_route():
         skip_html_head=True,
     )
 
+    pages = pages[: config.max_entries_per_feed]
+
     fg = FeedGenerator()
     fg.id(config.link)
     fg.title(config.title)

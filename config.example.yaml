@@ -58,6 +58,9 @@ link: https://myblog.example.com
 # of each post (optional, default: false)
 # short_feed: false
 
+# Max number of entries returned by the RSS/Atom feeds (optional, default: 10)
+# max_entries_per_feed: 10
+
 # Whether to enable Webmentions support (optional, default: true)
 # enable_webmentions: true
 
