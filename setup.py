@@ -10,7 +10,7 @@ def readfile(file):
 
 setup(
     name="madblog",
-    version="0.3.6",
+    version="0.3.7",
     author="Fabio Manganiello",
     author_email="info@fabiomanganiello.com",
     description="A minimal platform for Markdown-based blogs",
