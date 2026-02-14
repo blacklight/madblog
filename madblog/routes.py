@@ -1,5 +1,6 @@
 import logging
 import datetime
+import mimetypes
 import os
 import re
 from typing import Optional
@@ -219,7 +220,9 @@ def feed_route():
 
         image_url = _get_absolute_url(page.get("image", ""))
         if image_url:
-            fe.link(href=image_url, rel="enclosure")
+            mime_type, _ = mimetypes.guess_type(image_url)
+            if mime_type:
+                fe.enclosure(image_url, 0, mime_type)
 
     if feed_type == "atom":
         return Response(fg.atom_str(pretty=True), mimetype="application/atom+xml")
