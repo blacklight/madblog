@@ -1,10 +1,10 @@
 # Changelog
 
-## 0.3.4
+## 0.3.5
 
 **Fixed**
 
-- Fixed datetime conversion in feeds
+- Fixed feeds generation
 
 ## 0.3.3
 

@@ -148,6 +148,16 @@ def _to_feed_datetime(dt: object) -> Optional[datetime.datetime]:
     return None
 
 
+def _to_feed_text(obj: object) -> str:
+    if obj is None:
+        return ""
+
+    if isinstance(obj, Response):
+        return obj.get_data(as_text=True)
+
+    return str(obj)
+
+
 @app.route("/feed", methods=["GET"])
 def feed_route():
     feed_type = request.args.get("type", "rss").lower().strip()
@@ -194,7 +204,7 @@ def feed_route():
             fe.id(entry_url)
             fe.link(href=entry_url)
 
-        fe.title(page.get("title", "[No Title]"))
+        fe.title(_to_feed_text(page.get("title", "[No Title]")))
 
         published = _to_feed_datetime(page.get("published"))
         if published:
@@ -202,10 +212,10 @@ def feed_route():
             fe.updated(published)
 
         if page.get("description"):
-            fe.summary(page.get("description", ""))
+            fe.summary(_to_feed_text(page.get("description", "")))
 
         if not short_description:
-            fe.content(page.get("content", ""), type="html")
+            fe.content(_to_feed_text(page.get("content", "")), type="html")
 
         image_url = _get_absolute_url(page.get("image", ""))
         if image_url:
