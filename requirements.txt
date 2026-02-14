@@ -1,3 +1,4 @@
+feedgen
 flask
 markdown
 pygments

@@ -33,13 +33,13 @@ setup(
         "Development Status :: 4 - Beta",
     ],
     install_requires=[
+        "feedgen",
         "flask",
         "markdown",
         "pygments",
         "pyyaml",
         "requests",
-        "beautifulsoup4",
-        "mf2py",
         "watchdog",
+        "webmentions[file]",
     ],
 )

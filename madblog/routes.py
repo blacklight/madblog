@@ -4,10 +4,12 @@ import re
 from typing import Optional
 from urllib.parse import urljoin
 
+from feedgen.feed import FeedGenerator
 from flask import (
     jsonify,
     request,
     Response,
+    redirect,
     send_from_directory as send_from_directory_,
     render_template,
 )
@@ -118,8 +120,22 @@ def article_route(article: str):
     return article_with_path_route("", article)
 
 
-@app.route("/rss", methods=["GET"])
-def rss_route():
+def _get_absolute_url(url: str) -> str:
+    if not url:
+        return ""
+
+    if re.search(r"^https?://", url):
+        return url
+
+    return urljoin(config.link, url)
+
+
+@app.route("/feed", methods=["GET"])
+def feed_route():
+    feed_type = request.args.get("type", "rss").lower().strip()
+    if feed_type not in {"rss", "atom"}:
+        return Response("Invalid feed type", status=400, mimetype="text/plain")
+
     short_description = "short" in request.args or config.short_feed
     pages = app.get_pages(
         with_content=not short_description,
@@ -127,74 +143,68 @@ def rss_route():
         skip_html_head=True,
     )
 
-    return Response(
-        """<?xml version="1.0" encoding="UTF-8" ?>
-<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
-    <channel>
-        <title>{title}</title>
-        <link>{link}</link>
-        <description>{description}</description>
-        <category>{categories}</category>
-        <image>
-            <url>{link}/img/icon.png</url>
-            <title>{title}</title>
-            <link>{link}</link>
-        </image>
-        <pubDate>{last_pub_date}</pubDate>
-        <language>{language}</language>
+    fg = FeedGenerator()
+    fg.id(config.link)
+    fg.title(config.title)
+    fg.link(href=config.link, rel="alternate")
+    fg.description(config.description)
+    fg.language(config.language)
 
-        {items}
-    </channel>
-</rss>""".format(
-            title=config.title,
-            description=config.description,
-            link=config.link,
-            categories=",".join(config.categories),
-            language=config.language,
-            last_pub_date=(
-                pages[0][1]["published"].strftime("%a, %d %b %Y %H:%M:%S GMT")
-                if pages
-                else ""
-            ),
-            items="\n\n".join(
-                [
-                    (
-                        """
-            <item>
-                <title>{title}</title>
-                <link>{base_link}{link}</link>
-                <pubDate>{published}</pubDate>
-                <description><![CDATA[{content}]]></description>
-                <media:content medium="image" url="{image}" width="200" height="150" />
-            </item>
-                    """
-                    ).format(
-                        base_link=config.link,
-                        title=page.get("title", "[No Title]"),
-                        link=page.get("uri", ""),
-                        published=(
-                            page["published"].strftime("%a, %d %b %Y %H:%M:%S GMT")
-                            if "published" in page
-                            else ""
-                        ),
-                        content=(
-                            page.get("description", "")
-                            if short_description
-                            else page.get("content", "")
-                        ),
-                        image=(
-                            urljoin(config.link, page["image"])
-                            if page.get("image")
-                            and not re.search(r"^https?://", page["image"])
-                            else page.get("image", "")
-                        ),
-                    )
-                    for _, page in pages
-                ]
-            ),
-        ),
-        mimetype="application/xml",
-    )
+    for category in config.categories:
+        fg.category(term=category)
+
+    icon_url = _get_absolute_url("/img/icon.png")
+    if icon_url:
+        fg.logo(icon_url)
+
+    self_url = _get_absolute_url(f"/feed?type={feed_type}")
+    fg.link(href=self_url, rel="self")
+
+    if pages and pages[0][1].get("published"):
+        fg.updated(pages[0][1]["published"])
+
+    for _, page in pages:
+        uri = page.get("uri", "")
+        entry_url = _get_absolute_url(uri)
+
+        fe = fg.add_entry()
+        if entry_url:
+            fe.id(entry_url)
+            fe.link(href=entry_url)
+
+        fe.title(page.get("title", "[No Title]"))
+
+        if page.get("published"):
+            fe.published(page["published"])
+            fe.updated(page["published"])
+
+        if page.get("description"):
+            fe.summary(page.get("description", ""))
+
+        if not short_description:
+            fe.content(page.get("content", ""), type="html")
+
+        image_url = _get_absolute_url(page.get("image", ""))
+        if image_url:
+            fe.link(href=image_url, rel="enclosure")
+
+    if feed_type == "atom":
+        return Response(fg.atom_str(pretty=True), mimetype="application/atom+xml")
+
+    return Response(fg.rss_str(pretty=True), mimetype="application/rss+xml")
+
+
+@app.route("/rss", methods=["GET"])
+def rss_route():
+    """
+    This route exists only for backward compatibility.
+
+    It redirects to the /feed route with the appropriate query parameter to generate an RSS feed.
+    """
+    qs = request.query_string.decode("utf-8")
+    if qs:
+        return redirect(f"/feed?type=rss&{qs}")
+    return redirect("/feed?type=rss")
 
 
 # vim:sw=4:ts=4:et:

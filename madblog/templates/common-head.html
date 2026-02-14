@@ -19,7 +19,8 @@
     <!-- Orientation  -->
     <meta name="screen-orientation" content="portrait">
     <!-- RSS feed -->
-    <link rel="alternate" type="application/rss+xml" title="{{ config.title }}" href="/rss" />
+    <link rel="alternate" type="application/rss+xml" title="{{ config.title }} (RSS)" href="/feed?type=rss" />
+    <link rel="alternate" type="application/atom+xml" title="{{ config.title }} (Atom)" href="/feed?type=atom" />
     <!-- Fonts & Styles -->
     <link rel="stylesheet" href="/fonts/lora.css">
     <link rel="stylesheet" href="/fonts/poppins.css">
@@ -69,7 +70,7 @@
         </div>
 
         <div class="right">
-            <a href="/rss" target="_blank" title="RSS feeds">
+            <a href="/feed?type=rss" target="_blank" title="RSS feeds">
                 <div class="icon"></div>
             </a>
         </div>

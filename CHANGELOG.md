@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+**Added**
+
+- Added Atom feeds under `/feed?type=atom`.
+
+**Changed**
+
+- Feed generation migrated to the new `feedgen` library.
+- Default RSS route changed from `/rss` to `/feed?type=rss` for consistency with Atom feed.
+
 ## 0.3.2
 
 **Added**

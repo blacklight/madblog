@@ -168,13 +168,17 @@ c^2 = a^2 + b^2
 $$
 ```
 
-## RSS syndacation
+## RSS syndication
 
-RSS feeds for the blog are provided under the `/rss` URL.
+Feeds for the blog are provided under the `/feed` URL.
 
-By default, the whole HTML-rendered content of an article is returned under `rss.channel.item.description`.
+The feed format can be selected with `?type=rss` or `?type=atom`.
 
-If you only want to include the short description of an article in the feed, use `/rss?short` instead.
+By default, the whole HTML-rendered content of an article is returned under the entry content.
+
+If you only want to include the short description of an article in the feed, use `/feed?short` instead.
+
+For backwards compatibility, `/rss` is still available as a shortcut to `/feed?type=rss`.
 
 If you want the short feed (i.e. without the fully rendered article as a
 description) to be always returned, then you can specify `short_feed=true` in
