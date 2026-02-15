@@ -1,18 +1,19 @@
 main .content {
   display: flex;
   flex-direction: column;
-  line-height: 1.5em;
-  font-size: 0.95em;
+  line-height: 1.6;
+  font-size: 16px;
+  color: rgb(58, 58, 58);
 }
 
 main .content p,
 main .content ul,
 main .content ol {
-  font-family: Lora, "Palatino Linotype", "Book Antiqua", "New York", "DejaVu serif", serif;
+  /* font-family: Lora, "Palatino Linotype", "Book Antiqua", "New York", "DejaVu serif", serif; */
+  font-family: Verdana, sans-serif;
   text-align: justify;
   overflow-wrap: break-word;
   word-break: break-word;
-  line-height: 1.5;
 }
 
 main .content code, .codehilite {
@@ -21,7 +22,6 @@ main .content code, .codehilite {
 
 @media screen and (max-width: 767px) {
   main {
-    font-size: 0.95em;
     padding: 0.25em 0.5em;
   }
 
