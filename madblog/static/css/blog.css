@@ -2,7 +2,7 @@ main .content {
   display: flex;
   flex-direction: column;
   line-height: 1.6;
-  font-size: 16px;
+  font-size: 0.85em;
   color: rgb(58, 58, 58);
 }
 
