@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.5
+
+**Fixed**
+
+- Send notifications only on new Webmentions (not edited/deleted ones)
+
 ## 0.4.2
 
 **Changed**
