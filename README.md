@@ -170,15 +170,14 @@ $$
 
 ## RSS syndication
 
-Feeds for the blog are provided under the `/feed` URL.
-
-The feed format can be selected with `?type=rss` or `?type=atom`.
+Feeds for the blog are provided under the `/feed.<type>` URL, with `type` one of `atom` or `rss` (e.g. `/feed.atom` or
+`/feed.rss`).
 
 By default, the whole HTML-rendered content of an article is returned under the entry content.
 
-If you only want to include the short description of an article in the feed, use `/feed?short` instead.
+If you only want to include the short description of an article in the feed, use `/feed.<type>?short` instead.
 
-For backwards compatibility, `/rss` is still available as a shortcut to `/feed?type=rss`.
+For backwards compatibility, `/rss` is still available as a shortcut to `/feed.rss`.
 
 If you want the short feed (i.e. without the fully rendered article as a
 description) to be always returned, then you can specify `short_feed=true` in

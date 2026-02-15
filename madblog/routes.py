@@ -238,9 +238,9 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
     return Response(fg.rss_str(pretty=True), mimetype="application/rss+xml")
 
 
-@app.route("/feed", methods=["GET"])
+@app.route("/feed.<type>", methods=["GET"])
 def feed_route():
-    return _get_feed(request)
+    return _get_feed(request, (request.view_args or {}).get("type"))
 
 
 @app.route("/rss", methods=["GET"])
