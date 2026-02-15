@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.8
+
+**Added**
+
+- Added `limit` parameter to feed routes
+
 ## 0.3.7
 
 **Fixed**

@@ -169,6 +169,10 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
     if feed_type not in {"rss", "atom"}:
         return Response("Invalid feed type", status=400, mimetype="text/plain")
 
+    limit = request.args.get("limit") or config.max_entries_per_feed
+    if limit:
+        limit = int(limit)
+
     short_description = "short" in request.args or config.short_feed
     pages = app.get_pages(
         with_content=not short_description,
@@ -176,7 +180,7 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
         skip_html_head=True,
     )
 
-    pages = pages[: config.max_entries_per_feed]
+    pages = pages[:limit]
 
     fg = FeedGenerator()
     fg.id(config.link)
