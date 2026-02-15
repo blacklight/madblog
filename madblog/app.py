@@ -219,12 +219,12 @@ class BlogApp(Flask):
         else:
             author_photo = config.author_photo
 
-        mentions = self.webmentions_handler.retrieve_stored_webmentions(
-            config.link + metadata.get("uri", ""),
-            direction=WebmentionDirection.IN,
+        mentions = self.webmentions_handler.render_webmentions(
+            self.webmentions_handler.retrieve_stored_webmentions(
+                config.link + metadata.get("uri", ""),
+                direction=WebmentionDirection.IN,
+            )
         )
-
-        rendered_mentions = self.webmentions_handler.render_webmentions(mentions)
 
         with open(os.path.join(self.pages_dir, page), "r") as f:
             html = render_template(
@@ -252,7 +252,6 @@ class BlogApp(Flask):
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
                 mentions=mentions,
-                rendered_mentions=rendered_mentions,
             )
 
         response = make_response(html)

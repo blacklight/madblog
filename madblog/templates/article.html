@@ -65,10 +65,9 @@
 {% if not skip_html_head %}
     </div>
 
-{% if mentions and rendered_mentions %}
-  {% with mentions=mentions, rendered_mentions=rendered_mentions %}
-      {% include 'mentions.html' %}
-  {% endwith %}
+{% if mentions and mentions %}
+  {{ mentions }}
+</div>
 {% endif %}
 
     </div>
