@@ -30,9 +30,9 @@ main .content code, .codehilite {
   }
 }
 
-main .content img,
-main .content video,
-main .content audio {
+main .content p > img,
+main .content p > video,
+main .content p > audio {
   max-width: 100%;
   display: block;
   margin: 0 auto;
