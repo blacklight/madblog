@@ -6,7 +6,7 @@ from email.message import EmailMessage
 from email.utils import format_datetime, make_msgid
 from typing import Callable, Optional
 
-from webmentions import Webmention, WebmentionDirection
+from webmentions import Webmention, WebmentionDirection, WebmentionStatus
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +72,12 @@ def build_webmention_email_notifier(
 
     def _on_mention_processed(mention: Webmention) -> None:
         if mention.direction != WebmentionDirection.IN:
+            return
+
+        if getattr(mention, "status", None) == WebmentionStatus.DELETED:
+            return
+
+        if mention.created_at and mention.updated_at and mention.created_at != mention.updated_at:
             return
 
         subject = f"New Webmention received for {blog_base_url}"
