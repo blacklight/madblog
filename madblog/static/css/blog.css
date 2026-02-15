@@ -30,6 +30,12 @@ main .content code, .codehilite {
   }
 }
 
+img,
+video,
+audio {
+  max-width: 100%;
+}
+
 a:hover {
   opacity: 0.7;
 }
@@ -198,7 +204,6 @@ a:hover {
 #mentions img,
 #mentions video,
 #mentions audio {
-  max-width: 100%;
   max-height: 75vh;
 }
 
