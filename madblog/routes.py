@@ -196,7 +196,7 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
     if icon_url:
         fg.logo(icon_url)
 
-    self_url = _get_absolute_url(f"/feed?type={feed_type}")
+    self_url = _get_absolute_url(f"/feed.{feed_type}")
     fg.link(href=self_url, rel="self")
 
     if pages:

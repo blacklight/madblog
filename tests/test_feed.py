@@ -84,7 +84,7 @@ class FeedRouteTest(unittest.TestCase):
         self.client = self.app.test_client()
 
     def test_rss_feed_ok_and_limited(self):
-        rsp = self.client.get("/feed?type=rss")
+        rsp = self.client.get("/feed.rss")
         self.assertEqual(rsp.status_code, 200)
         self.assertIn("application/rss+xml", rsp.content_type)
 
@@ -97,7 +97,7 @@ class FeedRouteTest(unittest.TestCase):
         self.assertEqual(len(items), 2)
 
     def test_atom_feed_ok_and_limited(self):
-        rsp = self.client.get("/feed?type=atom")
+        rsp = self.client.get("/feed.atom")
         self.assertEqual(rsp.status_code, 200)
         self.assertIn("application/atom+xml", rsp.content_type)
 
@@ -108,7 +108,7 @@ class FeedRouteTest(unittest.TestCase):
         self.assertEqual(len(entries), 2)
 
     def test_short_feed_does_not_error(self):
-        rsp = self.client.get("/feed?type=rss&short")
+        rsp = self.client.get("/feed.rss?short")
         self.assertEqual(rsp.status_code, 200)
         ElementTree.fromstring(rsp.data)
 
