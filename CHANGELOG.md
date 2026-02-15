@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+**Added**
+
+- Support for dark theme (closes #8)
+- sans-serif font instead of serif for articles body
+- Several stylistic improvements
+
 ## 0.3.8
 
 **Added**
