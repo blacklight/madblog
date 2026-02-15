@@ -3,7 +3,7 @@ main .content {
   flex-direction: column;
   line-height: 1.6;
   font-size: 0.85em;
-  color: rgb(58, 58, 58);
+  color: var(--color-fg-primary);
 }
 
 main .content p,
@@ -30,10 +30,16 @@ main .content code, .codehilite {
   }
 }
 
-img,
-video,
-audio {
+main .content img,
+main .content video,
+main .content audio {
   max-width: 100%;
+  display: block;
+  margin: 0 auto;
+}
+
+article .title {
+  color: var(--color-title-fg);
 }
 
 a:hover {
@@ -42,13 +48,13 @@ a:hover {
 
 .description h3 {
   font-weight: normal;
-  opacity: 0.6;
+  color: var(--color-fg-secondary);
   margin: -.5em auto .5em auto;
 }
 
 .meta {
   font-size: 0.75em;
-  opacity: .75;
+  color: var(--color-fg-tertiary);
   margin-bottom: 2em;
   display: inline-flex;
   align-items: center;
@@ -82,7 +88,7 @@ a:hover {
 .codehilite {
   padding: 0 .5em;
   overflow: auto;
-  border: 1px solid #ccc;
+  border: 1px solid var(--color-border);
 }
 
 .main-image-container {
@@ -100,15 +106,15 @@ a:hover {
 
 #mentions {
   margin-top: 1.5em;
-  border-top: 3px solid #ccc;
+  border-top: 3px solid var(--color-border);
 }
 
 #mentions .mention {
   margin-bottom: 1.5em;
   padding: 1em;
-  border: 1px solid #eee;
+  border: 1px solid var(--color-border-tertiary);
   border-radius: 0.6em;
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--color-bg-secondary);
 }
 
 #mentions .mention-header {
@@ -124,8 +130,8 @@ a:hover {
   padding: 0.2em 0.6em;
   border-radius: 999px;
   font-size: 0.8em;
-  background: rgba(0, 0, 0, 0.06);
-  color: rgba(0, 0, 0, 0.75);
+  background: var(--color-bg-tertiary);
+  color: var(--color-fg-tertiary);
   white-space: nowrap;
 }
 
@@ -151,12 +157,12 @@ a:hover {
   height: 28px;
   border-radius: 999px;
   object-fit: cover;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--color-border);
 }
 
 #mentions .mention-author-name {
   font-size: 0.85em;
-  opacity: 0.85;
+  color: var(--color-fg-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -164,7 +170,7 @@ a:hover {
 
 #mentions .mention-published {
   font-size: 0.75em;
-  opacity: 0.6;
+  color: var(--color-fg-tertiary);
   white-space: nowrap;
 }
 
@@ -178,26 +184,25 @@ a:hover {
 
 #mentions .mention-excerpt {
   margin: 0;
-  opacity: 0.9;
   line-height: 1.45em;
 }
 
 #mentions h2 {
+  color: var(--color-fg-secondary);
   margin-top: 0.5em;
   margin-bottom: 1em;
   padding-top: 0.5em;
   font-weight: normal;
-  opacity: 0.8;
 }
 
 #mentions .mention-date {
   font-size: 0.6em;
-  opacity: 0.6;
+  color: var(--color-fg-tertiary);
 }
 
 #mentions .mention-domain {
   font-size: 0.75em;
-  opacity: 0.6;
+  color: var(--color-fg-tertiary);
   margin-left: 0.5em;
 }
 

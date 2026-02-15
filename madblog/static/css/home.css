@@ -20,8 +20,8 @@ main {
 .folder .folder-title {
   width: calc(100% - 0.66em);
   display: flex;
-  background: linear-gradient(45deg, #f0f0f0, #fafaffe0);
-  box-shadow: 1px 1px 1px 1px #e0e0e080;
+  background: var(--color-folder-bg);
+  box-shadow: 1px 1px 1px 1px var(--color-shadow-tertiary);
   font-size: 0.8em;
   padding: 0.33em;
 }
@@ -41,14 +41,14 @@ main {
 .article {
   display: block;
   width: 100%;
-  box-shadow: 0 1px 3px 1px #ccc;
+  box-shadow: 0 1px 3px 1px var(--color-shadow);
   overflow: hidden;
   text-overflow: ellipsis;
-  color: black !important;
+  color: var(--color-fg-primary) !important;
 }
 
 .article:hover {
-   box-shadow: 0 1px 4px 3px #989898;
+   box-shadow: 0 1px 4px 3px var(--color-shadow-accent);
    opacity: 1;
    border-radius: .5em;
 }
@@ -96,9 +96,11 @@ main {
 .image img {
   width: 100%;
   height: 100%;
+  border-radius: 0.75em;
 }
 
 .article .title {
+  color: var(--color-title-fg);
   font-size: 1.2em;
   font-weight: bold;
   margin-top: .4em;
@@ -115,13 +117,13 @@ a:hover {
 }
 
 .description {
-  color: rgba(0, 0, 0, 0.7);
+  color: var(--color-fg-secondary);
   font-size: .8em;
 }
 
 .published-date {
   font-size: .8em;
-  color: rgba(0, 0, 0, 0.4);
+  color: var(--color-fg-tertiary);
   margin: .5em 0 2em 0;
   text-align: center;
 }
