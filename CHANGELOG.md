@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+**Changed**
+
+- Changed format routes: `/feed?format=rss` -> `/feed.rss` and `/feed?format=atom` -> `/feed.atom`
+
 ## 0.4.0
 
 **Added**
