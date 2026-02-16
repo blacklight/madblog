@@ -12,15 +12,15 @@ main {
 .view-mode-select {
   font-size: 0.85em;
   padding: 0.25em 0.5em;
-  border: 1px solid var(--color-shadow-tertiary, #ccc);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
-  background: var(--color-bg, #fff);
-  color: var(--color-fg-primary, #333);
+  background: var(--color-bg-primary);
+  color: var(--color-fg-primary);
   cursor: pointer;
 }
 
 .view-mode-select:hover {
-  border-color: var(--color-shadow-accent, #999);
+  border-color: var(--color-shadow-accent);
 }
 
 .view-mode-select option {
@@ -167,7 +167,7 @@ h3 {
 .article-list {
   width: 100% !important;
   box-shadow: none !important;
-  border-bottom: 1px solid var(--color-shadow-tertiary, #eee);
+  border-bottom: 1px solid var(--color-border) !important;
   padding: 0;
 }
 
