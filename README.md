@@ -112,6 +112,34 @@ You can tweak this either through:
 - **Config file**: `throttle_seconds_on_update`
 - **Environment variable**: `MADBLOG_THROTTLE_SECONDS_ON_UPDATE`
 
+### View mode
+
+The blog home page supports three view modes:
+
+- **`cards`** (default): A responsive grid of article cards with image, title, date and description.
+- **`list`**: A compact list — each entry shows only the title, date and description.
+- **`full`**: A scrollable, WordPress-like view with the full rendered content of each article inline.
+
+You can set the default via config file or environment variable:
+
+```yaml
+# config.yaml
+view_mode: cards  # or "list" or "full"
+```
+
+```shell
+export MADBLOG_VIEW_MODE=list
+```
+
+The view mode can also be overridden at runtime via the `view` query parameter:
+
+```
+https://myblog.example.com/?view=list
+https://myblog.example.com/?view=full
+```
+
+Invalid values are silently ignored and fall back to the configured default.
+
 ## Markdown files
 
 Articles are Markdown files stored under `markdown`. For an article to be correctly rendered,

@@ -1,9 +1,13 @@
-{% with title=title or config.title or 'Blog', url=config.link, description=config.description, type='index', image=None, skip_header=not config.header, styles=['/css/home.css'] %}
+{% set _view_mode = view_mode or config.view_mode or 'cards' %}
+{% set view_styles = ['/css/home.css', '/css/blog.css'] if _view_mode == 'full' else ['/css/home.css'] %}
+{% with title=title or config.title or 'Blog', url=config.link, description=config.description, type='index', image=None, skip_header=not config.header, styles=view_styles %}
   {% include 'common-head.html' %}
 {% endwith %}
 
+{% set view_mode = _view_mode %}
+
 <main>
-  <div class="index">
+  <div class="index view-{{ view_mode }}">
     {% set state = {} %}
     {% for i, page in pages %}
       {% if 'cur_folder' not in state or page.get('folder') != state.get('cur_folder') %}
@@ -19,6 +23,62 @@
         <div class="articles">
       {% endif %}
       {% if state.update({'cur_folder': page.get('folder')}) %}{% endif %}
+
+      {% if view_mode == 'list' %}
+
+          <a class="article article-list" href="{{ page['uri'] }}">
+            <div class="container">
+              <div class="title">
+                {{ page['title'] }}
+              </div>
+
+              {% if page['published'] %}
+                <div class="published-date">
+                  {{ page['published'].strftime('%b %d, %Y') }}
+                </div>
+              {% endif %}
+
+              {% if page['description'] %}
+                <div class="description">
+                  {{ page['description'] }}
+                </div>
+              {% endif %}
+            </div>
+          </a>
+
+      {% elif view_mode == 'full' %}
+
+          <article class="article article-full">
+            <a class="article-full-header" href="{{ page['uri'] }}">
+              <div class="title">
+                {{ page['title'] }}
+              </div>
+
+              {% if page['published'] %}
+                <div class="published-date">
+                  {{ page['published'].strftime('%b %d, %Y') }}
+                </div>
+              {% endif %}
+
+              {% if page['image'] %}
+                <div class="image">
+                  <img src="{{ page['image'] }}" alt="">
+                </div>
+              {% endif %}
+            </a>
+
+            {% if page['content'] %}
+              <div class="article-content content">
+                {{ page['content']|safe }}
+              </div>
+            {% elif page['description'] %}
+              <div class="description">
+                {{ page['description'] }}
+              </div>
+            {% endif %}
+          </article>
+
+      {% else %}
 
           <a class="article" href="{{ page['uri'] }}">
             <div class="container">
@@ -45,6 +105,8 @@
               {% endif %}
             </div>
           </a>
+
+      {% endif %}
 
       {% if i == pages|length - 1 or pages[i+1][1].get('folder') != page.get('folder') %}
         </div>

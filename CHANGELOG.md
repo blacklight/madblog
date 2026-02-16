@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+**Added**
+
+- Support for configurable blog home view modes: `cards` (default), `list`, and
+  `full`. Set via `view_mode` in config, `MADBLOG_VIEW_MODE` env var, or
+  override at runtime with the `?view=` query parameter.
+
 ## 0.4.5
 
 **Fixed**

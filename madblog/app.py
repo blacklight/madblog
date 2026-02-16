@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Optional, List, Tuple, Type
 
-from flask import Flask, abort, make_response, render_template
+from flask import Flask, Response, abort, make_response, render_template
 from markdown import markdown
 from webmentions import WebmentionDirection, WebmentionsHandler
 from webmentions.storage.adapters.file import FileSystemMonitor
@@ -260,6 +260,13 @@ class BlogApp(Flask):
 
         return response
 
+    def _get_page_content(self, page: str, **kwargs) -> str:
+        """Return the HTML content of a page as a string (not a Response)."""
+        result = self.get_page(page, **kwargs)
+        if isinstance(result, Response):
+            return result.get_data(as_text=True)
+        return str(result) if result else ""
+
     def get_pages(
         self,
         *,
@@ -277,7 +284,7 @@ class BlogApp(Flask):
                 "path": os.path.join(root[len(pages_dir) + 1 :], f),
                 "folder": root[len(pages_dir) + 1 :],
                 "content": (
-                    self.get_page(
+                    self._get_page_content(
                         os.path.join(root, f),
                         skip_header=skip_header,
                         skip_html_head=skip_html_head,

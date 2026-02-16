@@ -45,6 +45,7 @@ class Config:
     smtp_starttls: bool = True
     smtp_enable_starttls_auto: bool = True
     smtp_sender: str | None = None
+    view_mode: str = "cards"  # "cards", "list", or "full"
 
     @property
     def templates_dir(self) -> str:
@@ -157,6 +158,8 @@ def _init_config_from_file(config_file: str):
     if cfg.get("smtp_sender"):
         config.smtp_sender = cfg["smtp_sender"]
 
+    if cfg.get("view_mode"):
+        config.view_mode = cfg["view_mode"]
     config.categories = cfg.get("categories", [])
 
 
@@ -201,6 +204,8 @@ def _init_config_from_env():
         )
     if os.getenv("MADBLOG_DEBUG"):
         config.debug = os.environ["MADBLOG_DEBUG"] == "1"
+    if os.getenv("MADBLOG_VIEW_MODE"):
+        config.view_mode = os.environ["MADBLOG_VIEW_MODE"]
     if os.getenv("MADBLOG_CATEGORIES"):
         config.categories = re.split(r"[,\s]+", os.environ["MADBLOG_CATEGORIES"])
     if os.getenv("MADBLOG_AUTHOR"):

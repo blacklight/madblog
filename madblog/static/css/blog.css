@@ -21,10 +21,6 @@ main .content code, .codehilite {
 }
 
 @media screen and (max-width: 767px) {
-  main {
-    padding: 0.25em 0.5em;
-  }
-
   main p {
     padding: 0.25em;
   }

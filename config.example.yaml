@@ -51,6 +51,11 @@ link: https://myblog.example.com
 # Default author photo to be used when no author photo is specified (optional)
 # author_photo: https://myblog.example.com/author.png
 
+# View mode for the blog home page (optional, default: "cards")
+# Supported values: "cards" (grid of article cards), "list" (compact title/date/description),
+# "full" (scrollable WordPress-like view with full article content)
+# view_mode: cards
+
 # Whether to show the blog header in the generated pages (optional, default: true)
 # header: true
 

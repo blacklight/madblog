@@ -33,10 +33,20 @@ def send_from_directory(
 
 @app.route("/", methods=["GET"])
 def home_route():
+    view_mode = request.args.get("view", config.view_mode)
+    if view_mode not in ("cards", "list", "full"):
+        view_mode = config.view_mode
+
     return render_template(
         "index.html",
-        pages=app.get_pages(sorter=PagesSortByTimeGroupedByFolder),
+        pages=app.get_pages(
+            sorter=PagesSortByTimeGroupedByFolder,
+            with_content=(view_mode == "full"),
+            skip_header=True,
+            skip_html_head=True,
+        ),
         config=config,
+        view_mode=view_mode,
     )
 
 
