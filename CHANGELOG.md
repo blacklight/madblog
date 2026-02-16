@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.4.13
+
+**Changed**
+
+- Many stylistic improvements
+
+## 0.4.11
 
 **Added**
 
