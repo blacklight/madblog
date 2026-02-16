@@ -8,6 +8,8 @@
   `full`. Set via `view_mode` in config, `MADBLOG_VIEW_MODE` env var, or
   override at runtime with the `?view=` query parameter.
 
+- Frontend support to toggle view mode on the home page
+
 ## 0.4.5
 
 **Fixed**
