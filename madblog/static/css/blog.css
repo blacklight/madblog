@@ -1,4 +1,11 @@
-main .content {
+main {
+  background: var(--color-bg-tertiary);
+}
+
+article {
+  width: calc(100% - 1.5em);
+  background: var(--color-bg-primary);
+  padding: 0.25em 0.75em;
   display: flex;
   flex-direction: column;
   line-height: 1.6;
@@ -6,9 +13,26 @@ main .content {
   color: var(--color-fg-primary);
 }
 
-main .content p,
-main .content ul,
-main .content ol {
+@media screen and (max-width: 1023px) {
+  main {
+    padding: 0;
+  }
+}
+
+@media screen and (min-width: 1024px) {
+  article {
+    max-width: 50em;
+    box-shadow: 0 1px 4px 3px var(--color-shadow);
+  }
+}
+
+article .p-name {
+  color: var(--color-title-fg);
+}
+
+article p,
+article ul,
+article ol {
   /* font-family: Lora, "Palatino Linotype", "Book Antiqua", "New York", "DejaVu serif", serif; */
   font-family: Verdana, sans-serif;
   text-align: justify;
@@ -16,26 +40,16 @@ main .content ol {
   word-break: break-word;
 }
 
-main .content code, .codehilite {
-  font-size: 0.9em;
-}
-
-@media screen and (max-width: 767px) {
-  main p {
-    padding: 0.25em;
-  }
-}
-
-main .content p > img,
-main .content p > video,
-main .content p > audio {
+article p > img,
+article p > video,
+article p > audio {
   max-width: 100%;
   display: block;
   margin: 0 auto;
 }
 
-article .title {
-  color: var(--color-title-fg);
+article code, .codehilite {
+  font-size: 0.9em;
 }
 
 a:hover {
@@ -67,18 +81,6 @@ a:hover {
   width: 1.25em;
   height: 1.25em;
   border-radius: 50%;
-}
-
-@media screen and (max-width: 1024px) {
-  main .container {
-    width: 100%;
-  }
-}
-
-@media screen and (min-width: 1024px) {
-  main .container {
-    max-width: 40em;
-  }
 }
 
 .codehilite {

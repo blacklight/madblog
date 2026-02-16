@@ -31,16 +31,19 @@ main {
 .index {
   width: 100%;
   height: 100%;
+  font-family: -apple-system, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Open Sans", "Droid Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
   display: flex;
   flex-direction: column;
   align-items: center;
   overflow: auto;
+  background: var(--color-bg-tertiary);
 }
 
 .folder {
   width: 100%;
   display: flex;
   flex-direction: column;
+  background: var(--color-bg-primary);
 }
 
 .folder .folder-title {
@@ -50,6 +53,10 @@ main {
   box-shadow: 1px 1px 1px 1px var(--color-shadow-tertiary);
   font-size: 0.8em;
   padding: 0.33em;
+}
+
+.view-full .folder {
+  background: var(--color-bg-tertiary);
 }
 
 .folder .folder-title a {
@@ -160,8 +167,16 @@ h3 {
 
 /* ── List view ── */
 
+.view-list .folder {
+  max-width: 1024px;
+  margin-top: 1em;
+  border-radius: 0.5em;
+  box-shadow: 0 0 3px 3px var(--color-shadow);
+}
+
 .view-list .articles {
   flex-direction: column;
+  border-radius: 0.5em;
 }
 
 .article-list {
@@ -207,7 +222,8 @@ h3 {
 
 .view-full .articles {
   flex-direction: column;
-  max-width: 50em;
+  align-items: center;
+  max-width: fit-content;
   margin: 0 auto;
 }
 
@@ -216,15 +232,15 @@ h3 {
   margin: 1em 0;
 }
 
-@media screen and (min-width: 640px) {
-  .article.article-full {
+@media screen and (max-width: 1023px) {
+  .article-full {
     width: calc(100% - 1em);
     padding: 0 0.5em;
   }
 }
 
 @media screen and (min-width: 1024px) {
-  .article.article-full {
+  .article-full {
     padding: 0 1em;
     width: calc(100% - 2em);
   }

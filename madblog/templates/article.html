@@ -22,9 +22,7 @@
 
       {% if published or author %}
       <div class="meta">
-        Published
         {% if author %}
-          by
           <span class="p-author h-card">
             {% if author_photo %}
               <img class="u-photo" src="{{ author_photo }}" alt="Author photo" loading="lazy">
@@ -44,7 +42,6 @@
         {% endif %}
 
         {% if published %}
-          on
           <div class="published-date">
             <time class="dt-published" datetime="{{ published_datetime.isoformat() }}">{{ published }}</time>
           </div>
@@ -73,10 +70,9 @@
 {% endif %}
 
     </div>
-
-    {% include 'footer.html' %}
-
   </article>
 </main>
+
+  {% include 'footer.html' %}
   {% include 'common-tail.html' %}
 {% endif %}

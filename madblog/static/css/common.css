@@ -18,7 +18,7 @@
 
   /* Dark theme */
   @media (prefers-color-scheme: dark) {
-    --color-bg-primary: #303030;
+    --color-bg-primary: #282828;
     --color-bg-secondary: #202020;
     --color-bg-tertiary: #101010;
     --color-fg-primary: #ccc;
@@ -26,7 +26,7 @@
     --color-fg-tertiary: #666;
     --color-title-fg: #ddd;
     --color-link-fg: #ccc;
-    --color-border: #666;
+    --color-border: #555;
     --color-border-secondary: #444;
     --color-border-tertiary: #333;
     --color-shadow: #222;
@@ -35,6 +35,12 @@
     --color-shadow-tertiary: #000;
     --color-folder-bg: linear-gradient(45deg, #111, #333);
   }
+
+  /* Elements */
+  --header-height: 3em;
+  --header-margin: 1px;
+  --footer-height: 1em;
+  --footer-margin: 2px;
 }
 
 html {
@@ -55,6 +61,7 @@ body {
   /* mobile viewport bug fix */
   min-height: -webkit-fill-available;
   min-height: -moz-available;
+  background: var(--color-bg-tertiary);
 }
 
 a, a:visited {
@@ -66,7 +73,9 @@ a, a:visited {
 header {
   display: flex;
   align-items: center;
-  height: 3em;
+  height: var(--header-height);
+  background: var(--color-bg-secondary);
+  margin-bottom: var(--header-margin);
   padding: 0 .5em;
   font-size: .9em;
   box-shadow: 1px 3px 3px 0 var(--color-shadow);
@@ -124,7 +133,7 @@ header .left .icon {
 }
 
 main {
-  height: calc(100% - 3em);
+  height: calc(100% - var(--header-height) - var(--header-margin) - var(--footer-height) - var(--footer-margin));
   overflow: auto;
   display: flex;
   flex-direction: column;
@@ -146,18 +155,20 @@ h1, h2, h3, h4, h5, h6 {
   font-family: -apple-system, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Open Sans", "Droid Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
+img.u-featured {
+  border-radius: 0.75em;
+}
+
 footer {
   width: 100%;
+  height: calc(var(--footer-height) + var(--footer-margin));
+  background: var(--color-bg-secondary);
   font-size: .65em;
   color: var(--color-fg-tertiary);
   letter-spacing: .02em;
-  margin-top: .5em;
+  margin-top: var(--footer-margin);
   padding-top: .25em;
   text-align: center;
-  box-shadow: 0 -2px 2px 0 var(--color-shadow);
-  border-radius: 50%;
-}
-
-.index {
-  font-family: -apple-system, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Open Sans", "Droid Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  box-shadow: 0 -5px 2.5px 0 var(--color-shadow);
+  border-radius: 50% 50% 0 0;
 }
