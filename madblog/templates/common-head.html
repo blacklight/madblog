@@ -55,6 +55,7 @@
     <title>{{ title }}</title>
 </head>
 <body>
+    {% set is_home_page = '/'.join((url or config.link or '').rstrip('/').split('/')[3:]).split('?')[0].split('#')[0] == '' %}
     {% if not skip_header %}
     <header>
         <div class="left">
@@ -70,6 +71,16 @@
         </div>
 
         <div class="right">
+            {% if is_home_page %}
+              <div class="view-mode-bar">
+                <select class="view-mode-select" onchange="window.location.search='?view='+this.value">
+                  <option value="cards" {{ 'selected' if view_mode == 'cards' }}><span>&#10697;&nbsp; </span><span>Cards</span></option>
+                  <option value="list" {{ 'selected' if view_mode == 'list' }}><span>☰&nbsp; </span><span>List</span></option>
+                  <option value="full" {{ 'selected' if view_mode == 'full' }}><span>&#128366;&nbsp; </span><span>Full</span></option>
+                </select>
+              </div>
+            {% endif %}
+
             <a href="/feed.atom" target="_blank" title="Feed">
                 <div class="icon">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

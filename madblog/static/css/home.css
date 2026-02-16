@@ -2,6 +2,32 @@ main {
   padding: 0;
 }
 
+.view-mode-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.5em 1em;
+  flex-shrink: 0;
+}
+
+.view-mode-select {
+  font-size: 0.85em;
+  padding: 0.25em 0.5em;
+  border: 1px solid var(--color-shadow-tertiary, #ccc);
+  border-radius: 4px;
+  background: var(--color-bg, #fff);
+  color: var(--color-fg-primary, #333);
+  cursor: pointer;
+}
+
+.view-mode-select:hover {
+  border-color: var(--color-shadow-accent, #999);
+}
+
+.view-mode-select option {
+  display: inline-flex;
+  align-items: center;
+}
+
 .index {
   width: 100%;
   height: 100%;

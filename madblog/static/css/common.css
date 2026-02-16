@@ -105,7 +105,6 @@ header .right {
   display: inline-flex;
   justify-content: right;
   text-align: right;
-  direction: rtl;
   opacity: .8;
 }
 
