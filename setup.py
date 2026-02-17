@@ -33,7 +33,7 @@ setup(
         "Development Status :: 4 - Beta",
     ],
     install_requires=[
-        "feedgen",
+        "feedgen2",
         "flask",
         "markdown",
         "pygments",
