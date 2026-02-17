@@ -73,17 +73,16 @@ class Config:
 
     @property
     def webmention_url(self) -> Optional[str]:
-        from flask import url_for
+        from flask import request
 
-        webmention_url = None
-        if config.enable_webmentions:
-            webmention_url = (
-                f'{config.link.rstrip("/")}/webmentions'
-                if re.match(r"^https?://", config.link)
-                else url_for("webmention_listener_route", _external=True)
-            )
+        if not self.enable_webmentions:
+            return None
 
-        return webmention_url
+        return (
+            f'{self.link.rstrip("/")}/webmentions'
+            if re.match(r"^https?://", self.link)
+            else f'{request.host_url.rstrip("/")} /webmentions'
+        )
 
 
 config = Config()
