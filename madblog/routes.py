@@ -21,6 +21,10 @@ from .config import config
 from ._sorters import PagesSortByTimeGroupedByFolder
 
 logger = logging.getLogger(__name__)
+_author_with_email_regex = re.compile(
+    r"(.*)\s+<([\w\.\-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)>"
+)
+_author_with_url_regex = re.compile(r"(.*)\s+<(https?:\/\/[\w\.\-]+\.[a-z]{2,6}\/?)>")
 
 
 def send_from_directory(
@@ -171,6 +175,29 @@ def _to_feed_text(obj: object) -> str:
     return str(obj)
 
 
+def _parse_author_info(author: str | None, author_url: str | None) -> dict:
+    ret = {}
+    if author_url:
+        if author_url.startswith("mailto:"):
+            ret["email"] = author_url[len("mailto:") :]
+        else:
+            ret["uri"] = author_url
+
+    if author:
+        if author.startswith("mailto:"):
+            ret["email"] = author[len("mailto:") :]
+        elif m := _author_with_email_regex.match(author):
+            ret["name"] = m[1]
+            ret["email"] = m[2]
+        elif m := _author_with_url_regex.match(author):
+            ret["name"] = m[1]
+            ret["uri"] = m[2]
+        else:
+            ret["name"] = author
+
+    return ret
+
+
 def _get_feed(request: Request, feed_type: Optional[str] = None):
     if not feed_type:
         feed_type = request.args.get("type", "rss")
@@ -199,6 +226,10 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
     fg.description(config.description)
     fg.language(config.language)
 
+    fg.author(
+        **_parse_author_info(author=config.author, author_url=config.author_url),
+    )
+
     for category in config.categories:
         fg.category(term=category)
 
@@ -221,7 +252,7 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
         fe = fg.add_entry()
         if entry_url:
             fe.id(entry_url)
-            fe.link(href=entry_url)
+            fe.link(href=entry_url, rel="alternate")
 
         fe.title(_to_feed_text(page.get("title", "[No Title]")))
 
@@ -235,6 +266,12 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
 
         if not short_description:
             fe.content(_to_feed_text(page.get("content", "")), type="html")
+
+        fe.author(
+            **_parse_author_info(
+                author=page.get("author"), author_url=page.get("author_url")
+            ),
+        )
 
         image_url = _get_absolute_url(page.get("image", ""))
         if image_url:
