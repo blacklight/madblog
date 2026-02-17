@@ -2,7 +2,7 @@ import datetime
 import os
 import re
 from pathlib import Path
-from typing import Optional, List, Tuple, Type
+from typing import IO, List, Optional, Tuple, Type
 
 from flask import Flask, Response, abort, make_response, render_template
 from markdown import markdown
@@ -126,7 +126,42 @@ class BlogApp(Flask):
         if config.enable_webmentions:
             self.filesystem_monitor.stop()
 
-    def get_page_metadata(self, page: str) -> dict:
+    @staticmethod
+    def _parse_metadata_from_markdown(handle: IO, page: str) -> dict:
+        metadata: dict = {"uri": "/article/" + page[:-3]}
+        for line in handle:
+            if not line:
+                continue
+
+            if not (m := re.match(r"^\[//]: # \(([^:]+):\s*(.*)\)\s*$", line)):
+                break
+
+            if m.group(1) == "published":
+                metadata[m.group(1)] = datetime.datetime.fromisoformat(
+                    m.group(2)
+                ).date()
+            else:
+                metadata[m.group(1)] = m.group(2)
+
+        return metadata
+
+    @staticmethod
+    def _infer_title_and_url_from_markdown(handle: IO) -> Tuple[str, str]:
+        for line in handle:
+            if not line:
+                continue
+
+            if not (m := re.match(r"^#\s+(\[?([^]]+)\]?(\((.*)\))?)\s*$", line)):
+                break
+
+            return m.group(2), m.group(4)
+
+        return "", ""
+
+    def _parse_page_metadata(self, page: str) -> dict:
+        """
+        Parse the metadata from a Markdown page
+        """
         if not page.endswith(".md"):
             page = page + ".md"
 
@@ -136,37 +171,18 @@ class BlogApp(Flask):
 
         metadata = {}
         with open(md_file, "r") as f:
-            metadata["uri"] = "/article/" + page[:-3]
+            metadata.update(self._parse_metadata_from_markdown(f, page))
 
-            for line in f:
-                if not line:
-                    continue
+        metadata["title_inferred"] = not metadata.get("title")
+        if not metadata.get("title"):
+            with open(md_file, "r") as f:
+                metadata["title"], url = self._infer_title_and_url_from_markdown(f)
 
-                if not (m := re.match(r"^\[//]: # \(([^:]+):\s*(.*)\)\s*$", line)):
-                    break
-
-                if m.group(1) == "published":
-                    metadata[m.group(1)] = datetime.datetime.fromisoformat(
-                        m.group(2)
-                    ).date()
-                else:
-                    metadata[m.group(1)] = m.group(2)
+            if url:
+                metadata["external_url"] = url
 
         if not metadata.get("title"):
-            # If the `title` header isn't available in the file,
-            # infer it from the first line of the file
-            with open(md_file, "r") as f:
-                header = ""
-                for line in f.readlines():
-                    header = line
-                    break
-
-            metadata["title_inferred"] = True
-            m = self._title_header_regex.search(header)
-            if m:
-                metadata["title"] = m.group(3) or m.group(1)
-            else:
-                metadata["title"] = os.path.basename(md_file)
+            metadata["title"] = os.path.splitext(os.path.basename(md_file))[0]
 
         if not metadata.get("published"):
             # If the `published` header isn't available in the file,
@@ -178,28 +194,14 @@ class BlogApp(Flask):
 
         return metadata
 
-    def get_page(
-        self,
-        page: str,
-        title: Optional[str] = None,
-        skip_header: bool = False,
-        skip_html_head: bool = False,
-    ):
-        if not page.endswith(".md"):
-            page = page + ".md"
-
-        metadata = self.get_page_metadata(page)
-
-        # Don't duplicate the page title if it's been inferred
-        if not (title or metadata.get("title_inferred")):
-            title = metadata.get("title", config.title)
-
+    @classmethod
+    def _parse_author(cls, metadata: dict) -> dict:
         author = None
         author_url = None
         author_photo = None
 
         if metadata.get("author"):
-            if match := self._author_regex.match(metadata["author"]):
+            if match := cls._author_regex.match(metadata["author"]):
                 author = match[1]
                 if link := match[2].strip():
                     author_url = link
@@ -209,16 +211,38 @@ class BlogApp(Flask):
             author = config.author
             author_url = config.author_url
 
-        if author_url and self._email_regex.match(author_url):
+        if author_url and cls._email_regex.match(author_url):
             author_url = "mailto:" + author_url
 
         if metadata.get("author_photo"):
             if link := metadata["author_photo"].strip():
-                if self._url_regex.match(link):
+                if cls._url_regex.match(link):
                     author_photo = link
         else:
             author_photo = config.author_photo
 
+        return {
+            "author": author,
+            "author_url": author_url,
+            "author_photo": author_photo,
+        }
+
+    def get_page(
+        self,
+        page: str,
+        title: Optional[str] = None,
+        skip_header: bool = False,
+        skip_html_head: bool = False,
+    ) -> Response:
+        """
+        Get the HTML for a Markdown page
+        """
+        if not page.endswith(".md"):
+            page = page + ".md"
+
+        metadata = self._parse_page_metadata(page)
+        title = title or metadata.get("title") or config.title
+        author_info = self._parse_author(metadata)
         mentions = self.webmentions_handler.render_webmentions(
             self.webmentions_handler.retrieve_stored_webmentions(
                 config.link + metadata.get("uri", ""),
@@ -227,38 +251,52 @@ class BlogApp(Flask):
         )
 
         with open(os.path.join(self.pages_dir, page), "r") as f:
-            html = render_template(
-                "article.html",
-                config=config,
-                title=title,
-                uri=metadata.get("uri"),
-                url=config.link + metadata.get("uri", ""),
-                image=metadata.get("image"),
-                description=metadata.get("description"),
-                author=author,
-                author_url=author_url,
-                author_photo=author_photo,
-                published_datetime=metadata.get("published"),
-                published=(
-                    metadata["published"].strftime("%b %d, %Y")
-                    if metadata.get("published")
-                    and not metadata.get("published_inferred")
-                    else None
-                ),
-                content=markdown(
-                    f.read(),
-                    extensions=["fenced_code", "codehilite", "tables", MarkdownLatex()],
-                ),
-                skip_header=skip_header,
-                skip_html_head=skip_html_head,
-                mentions=mentions,
-            )
+            content = self._parse_content(f)
+
+        html = render_template(
+            "article.html",
+            config=config,
+            title=title,
+            uri=metadata.get("uri"),
+            url=config.link + metadata.get("uri", ""),
+            external_url=metadata.get("external_url"),
+            image=metadata.get("image"),
+            description=metadata.get("description"),
+            published_datetime=metadata.get("published"),
+            published=metadata["published"].strftime("%b %d, %Y"),
+            content=markdown(
+                content,
+                extensions=["fenced_code", "codehilite", "tables", MarkdownLatex()],
+            ),
+            skip_header=skip_header,
+            skip_html_head=skip_html_head,
+            mentions=mentions,
+            **author_info,
+        )
 
         response = make_response(html)
         if config.webmention_url:
             response.headers["Link"] = f'<{config.webmention_url}>; rel="webmention"'
 
         return response
+
+    @staticmethod
+    def _parse_content(handle: IO) -> str:
+        """
+        Prepare content for rendering.
+        """
+        content = ""
+        processed_title = False
+
+        for line in handle:
+            if line.startswith("# "):
+                if not processed_title:
+                    processed_title = True
+                    continue
+
+            content += line
+
+        return content
 
     def _get_page_content(self, page: str, **kwargs) -> str:
         """Return the HTML content of a page as a string (not a Response)."""
@@ -292,7 +330,9 @@ class BlogApp(Flask):
                     if with_content
                     else ""
                 ),
-                **self.get_page_metadata(os.path.join(root[len(pages_dir) + 1 :], f)),
+                **self._parse_page_metadata(
+                    os.path.join(root[len(pages_dir) + 1 :], f)
+                ),
             }
             for root, _, files in os.walk(pages_dir, followlinks=True)
             for f in files

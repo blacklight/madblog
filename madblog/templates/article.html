@@ -8,7 +8,14 @@
     {% if not skip_header %}
       {% if title %}
         <div class="title">
-          <h1 class="p-name">{{ title }}</h1>
+          <h1 class="p-name">
+              {% if external_url %}
+                <a class="u-url" href="{{ external_url }}">{{ title }}</a>
+              {% else %}
+                {{ title }}
+                <a class="u-url" href="{{ url }}" style="display: none;">{{ url }}</a>
+              {% endif %}
+          </h1>
         </div>
       {% endif %}
 
@@ -17,8 +24,6 @@
         <h3 class="p-summary">{{ description }}</h3>
       </div>
       {% endif %}
-
-      <a class="u-url" href="{{ url }}" style="display: none;">{{ url }}</a>
 
       {% if published or author %}
       <div class="meta">
