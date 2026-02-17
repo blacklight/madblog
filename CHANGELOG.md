@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+**Added**
+
+- Added authors information to generated RSS/Atom feeds
+
+## 0.4.14
+
+**Added**
+
+- Added `rel=me` attribute to author URL on articles
+
+**Changed**
+
+- Use `feedgen2` (self-maintained fork of `feedgen`) to generate RSS/Atom feeds,
+  since `feedgen` is no longer maintained and it includes serious bugs in the
+  Atom feed generation.
+
+**Fixed**
+
+- Don't break rendering if `config.link` is not configured
+
 ## 0.4.13
 
 **Changed**
