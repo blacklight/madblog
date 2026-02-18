@@ -34,6 +34,7 @@ setup(
     ],
     install_requires=[
         "feedgen2",
+        "feedparser",
         "flask",
         "markdown",
         "pygments",

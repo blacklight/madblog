@@ -4,6 +4,10 @@
 
 **Added**
 
+- Support for "_aggregator mode_" (see [issue
+  #9](https://git.fabiomanganiello.com/madblog/issues/9)). This allows you to
+  render content from external sources on your Website too, as long as they
+  provide an RSS/Atom feed.
 - Added authors information to generated RSS/Atom feeds
 
 **Changed**

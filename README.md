@@ -1,18 +1,18 @@
 # madblog
 
-This project provides a minimal blogging platform based on Markdown files.
+A minimal but capable blog and Web framework that you can directly run from a Markdown folder.
 
 ## Demos
 
 This project powers the following blogs:
 
 - [Platypush](https://blog.platypush.tech)
-- [My personal blog](https://fabiomanganiello.com)
+- [My personal blog](https://blog.fabiomanganiello.com)
 
 ## Installation
 
 ```shell
-$ python setup.py install
+$ pip install madblog
 ```
 
 ## Usage
@@ -21,15 +21,13 @@ $ python setup.py install
 # The application will listen on port 8000 and it will
 # serve the current folder
 $ madblog
-```
-
-```
 usage: madblog [-h] [--config CONFIG] [--host HOST] [--port PORT] [--debug] [dir]
+```
 
-Serve a Markdown folder as a web blog.
+Recommended setup (for clear separation of content, configuration and static
+files):
 
-The folder should have the following structure:
-
+```
 .
   -> config.yaml [recommended]
   -> markdown
@@ -42,17 +40,10 @@ The folder should have the following structure:
     -> image-1.png
     -> image-2.png
     -> ...
-
-positional arguments:
-  dir              Base path for the blog (default: current directory)
-
-options:
-  -h, --help       show this help message and exit
-  --config CONFIG  Path to a configuration file (default: config.yaml in the blog root directory)
-  --host HOST      Bind host/address
-  --port PORT      Bind port (default: 8000)
-  --debug          Enable debug mode (default: False)
 ```
+
+But the application can run from any folder that contains Markdown files
+(including e.g. your Obsidian vault, Nextcloud Notes folder or a git clone).
 
 ## Configuration
 
@@ -90,27 +81,7 @@ Webmentions configuration options:
   - Inbound Webmentions are stored as Markdown files under:
     `content_dir/mentions/incoming/<post-slug>/`.
 
-Removed Webmentions are handled as follows (for example when the source URL returns
-404/410 or it no longer links to the target).
-
-- **Default**: soft-delete (the stored mention file is kept, but marked as deleted and
-  excluded from rendering).
-- **Hard delete**: the stored mention file is removed.
-
-You can enable hard-deletes with either:
-
-- **Config file**: `webmentions_hard_delete: true`
-- **Environment variable**: `MADBLOG_WEBMENTIONS_HARD_DELETE=1`
-
-Outgoing Webmentions will be automatically processed when the modification time of
-a Markdown file is updated.
-
-By default the throttle for outgoing Webmentions is set to one batch of requests every 10 seconds.
-
-You can tweak this either through:
-
-- **Config file**: `throttle_seconds_on_update`
-- **Environment variable**: `MADBLOG_THROTTLE_SECONDS_ON_UPDATE`
+See the provided [`config.example.yaml`](./config.example.yaml) file for configuration options.
 
 ### View mode
 
@@ -140,10 +111,29 @@ https://myblog.example.com/?view=full
 
 Invalid values are silently ignored and fall back to the configured default.
 
+### Aggregator mode
+
+Madblog can also render external RSS or Atom feeds directly in your blog.
+
+Think of cases like the one where you have multiple blogs over the Web and you
+want to aggregate all of their content in one place. Or where you have
+"affiliated blogs" run by trusted friends or other people in your organization
+and you also want to display their content on your own blog.
+
+Madblog provides a simple way of achieving this by including the
+`external_feeds` section in your config file:
+
+```yaml
+# config.yaml
+external_feeds:
+  - https://friendsblog.example.com/feed.atom
+  - https://colleaguesblog.example.com/feed.atom
+```
+
 ## Markdown files
 
-Articles are Markdown files stored under `markdown`. For an article to be correctly rendered,
-you need to start the Markdown file with the following metadata header:
+For an article to be correctly rendered, you need to start the Markdown file
+with the following metadata header:
 
 ```markdown
 [//]: # (title: Title of the article)
@@ -160,8 +150,12 @@ Or, if you want to pass an email rather than a URL for the author:
 [//]: # (author: Author Name <mailto:email@author.me>)
 ```
 
-If no `markdown` folder exists in the base directory, then the base directory itself will be treated as a root for
-Markdown files.
+If these metadata headers are missing, some of them can be inferred
+from the file itself:
+
+- `title` is either the first main heading or the file name
+- `published` is the creation date of the file
+- `author` is inferred from the configured `author` and `author_email`
 
 ### Folders
 
@@ -204,6 +198,8 @@ Feeds for the blog are provided under the `/feed.<type>` URL, with `type` one of
 By default, the whole HTML-rendered content of an article is returned under the entry content.
 
 If you only want to include the short description of an article in the feed, use `/feed.<type>?short` instead.
+
+You can also specify the `?limit=n` parameter to limit the number of entries returned in the feed.
 
 For backwards compatibility, `/rss` is still available as a shortcut to `/feed.rss`.
 

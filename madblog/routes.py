@@ -18,6 +18,7 @@ from flask import (
 
 from .app import app
 from .config import config
+from .feeds import FeedAuthor
 from ._sorters import PagesSortByTimeGroupedByFolder
 
 logger = logging.getLogger(__name__)
@@ -175,8 +176,15 @@ def _to_feed_text(obj: object) -> str:
     return str(obj)
 
 
-def _parse_author_info(author: str | None, author_url: str | None) -> dict:
+def _parse_author_info(author: str | FeedAuthor | None, author_url: str | None) -> dict:
     ret = {}
+    if isinstance(author, FeedAuthor):
+        return {
+            "name": author.name,
+            "email": author.email,
+            "uri": author.uri,
+        }
+
     if author_url:
         if author_url.startswith("mailto:"):
             ret["email"] = author_url[len("mailto:") :]

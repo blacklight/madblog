@@ -43,6 +43,21 @@
                   {{ page['description'] }}
                 </div>
               {% endif %}
+
+              {% if page['source'] %}
+                <div class="source">
+                  <span class="source-logo">
+                    {% if page['source_logo'] %}
+                      <img class="source-logo" src="{{ page['source_logo'] }}" alt="">
+                    {% else %}
+                      &#128279;
+                    {% endif %}
+                  </span>
+                  <span class="source-name">
+                    {{ page['source'] }}
+                  </span>
+                </div>
+              {% endif %}
             </div>
           </a>
 
@@ -101,6 +116,21 @@
               {% if page['description'] %}
                 <div class="description">
                   {{ page['description'] }}
+                </div>
+              {% endif %}
+
+              {% if page['source'] %}
+                <div class="source">
+                  <span class="source-logo">
+                    {% if page['source_logo'] %}
+                      <img class="source-logo" src="{{ page['source_logo'] }}" alt="">
+                    {% else %}
+                      &#128279;
+                    {% endif %}
+                  </span>
+                  <span class="source-name">
+                    {{ page['source'] }}
+                  </span>
                 </div>
               {% endif %}
             </div>

@@ -3,6 +3,7 @@ import os
 import re
 from pathlib import Path
 from typing import IO, List, Optional, Tuple, Type
+from urllib.parse import urlparse
 
 from flask import Flask, Response, abort, make_response, render_template
 from markdown import markdown
@@ -11,6 +12,7 @@ from webmentions.storage.adapters.file import FileSystemMonitor
 from webmentions.server.adapters.flask import bind_webmentions
 
 from .config import config
+from .feeds import FeedAuthor, FeedParser
 from .latex import MarkdownLatex
 from .notifications import SmtpConfig, build_webmention_email_notifier
 from .storage.mentions import FileWebmentionsStorage
@@ -36,6 +38,7 @@ class BlogApp(Flask):
         self.css_dir = config.default_css_dir
         self.js_dir = config.default_js_dir
         self.fonts_dir = config.default_fonts_dir
+        self._feed_parser = FeedParser(config.external_feeds)
 
         if not os.path.isdir(self.pages_dir):
             # If the `markdown` subfolder does not exist, then the whole
@@ -305,19 +308,17 @@ class BlogApp(Flask):
             return result.get_data(as_text=True)
         return str(result) if result else ""
 
-    def get_pages(
+    def _get_pages_from_files(
         self,
         *,
         with_content: bool = False,
         skip_header: bool = False,
         skip_html_head: bool = False,
-        sorter: Type[PagesSorter] = PagesSortByTime,
-        reverse: bool = True,
-    ) -> List[Tuple[int, dict]]:
+    ):
         pages_dir = getattr(app, "pages_dir", "")
         assert pages_dir  # for mypy
         pages_dir = str(pages_dir).rstrip("/")
-        pages = [
+        return [
             {
                 "path": os.path.join(root[len(pages_dir) + 1 :], f),
                 "folder": root[len(pages_dir) + 1 :],
@@ -339,6 +340,62 @@ class BlogApp(Flask):
             if f.endswith(".md")
         ]
 
+    def _get_pages_from_feeds(self, *, with_content: bool = False):
+        return [
+            {
+                "uri": entry.link,
+                "external_url": entry.link,
+                "folder": "",
+                "source": urlparse(entry.link).netloc,
+                "source_logo": feed.logo,
+                "content": entry.content if with_content else "",
+                "title": entry.title,
+                "description": entry.description,
+                "image": entry.enclosure,
+                "published": entry.published,
+                "author": next(
+                    (
+                        author
+                        for author in (
+                            entry.authors
+                            or feed.authors
+                            or (
+                                [
+                                    FeedAuthor(
+                                        name=config.author,
+                                        uri=config.author_url or "",
+                                        email="",
+                                    )
+                                ]
+                                if config.author
+                                else []
+                            )
+                        )
+                    ),
+                    None,
+                ),
+            }
+            for feed in self._feed_parser.parse_feeds().values()
+            for entry in feed.entries
+        ]
+
+    def get_pages(
+        self,
+        *,
+        with_content: bool = False,
+        skip_header: bool = False,
+        skip_html_head: bool = False,
+        sorter: Type[PagesSorter] = PagesSortByTime,
+        reverse: bool = True,
+    ) -> List[Tuple[int, dict]]:
+        local_pages = self._get_pages_from_files(
+            with_content=with_content,
+            skip_header=skip_header,
+            skip_html_head=skip_html_head,
+        )
+
+        remote_pages = self._get_pages_from_feeds(with_content=with_content)
+        pages = local_pages + remote_pages
         sorter_func = sorter(pages)
         pages.sort(key=sorter_func, reverse=reverse)
         return list(enumerate(pages))

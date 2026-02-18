@@ -87,6 +87,17 @@ link: https://myblog.example.com
 #   - Travel
 #   - Food
 
+#### (Optional) Feed aggregator mode ####
+# A list of external RSS/Atom URLs that should also be rendered in the blog
+# external_feeds:
+#   - https://example.com/atom.xml
+#   - https://example.com/rss.xml
+#
+# How often cached external feeds should be refreshed (in seconds).
+# This prevents frequent requests to the external feed URLs.
+# A value of zero disables the cache.
+# feeds_cache_expiry_secs: 300
+
 #### (Optional) Email Settings ####
 
 # The email address of the author. Mention notifications will be delivered here

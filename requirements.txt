@@ -1,4 +1,5 @@
 feedgen2
+feedparser
 flask
 markdown
 pygments

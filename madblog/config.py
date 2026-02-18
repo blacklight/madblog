@@ -46,6 +46,8 @@ class Config:
     smtp_enable_starttls_auto: bool = True
     smtp_sender: str | None = None
     view_mode: str = "cards"  # "cards", "list", or "full"
+    external_feeds: List[str] = field(default_factory=list)
+    feeds_cache_expiry_secs: int = 300
 
     @property
     def templates_dir(self) -> str:
@@ -157,6 +159,10 @@ def _init_config_from_file(config_file: str):
         config.smtp_sender = cfg["smtp_sender"]
     if cfg.get("view_mode"):
         config.view_mode = cfg["view_mode"]
+    if cfg.get("external_feeds"):
+        config.external_feeds = cfg["external_feeds"]
+    if cfg.get("feeds_cache_expiry_secs"):
+        config.feeds_cache_expiry_secs = int(cfg["feeds_cache_expiry_secs"])
     config.categories = cfg.get("categories", [])
 
 
@@ -233,6 +239,14 @@ def _init_config_from_env():
         )
     if os.getenv("MADBLOG_SMTP_SENDER"):
         config.smtp_sender = os.environ["MADBLOG_SMTP_SENDER"]
+    if os.getenv("MADBLOG_EXTERNAL_FEEDS"):
+        config.external_feeds = re.split(
+            r"[,\s]+", os.environ["MADBLOG_EXTERNAL_FEEDS"].strip()
+        )
+    if os.getenv("MADBLOG_FEEDS_CACHE_EXPIRY_SECS"):
+        config.feeds_cache_expiry_secs = int(
+            os.environ["MADBLOG_FEEDS_CACHE_EXPIRY_SECS"]
+        )
 
 
 def _init_config_from_cli(args: Optional[Namespace]):
