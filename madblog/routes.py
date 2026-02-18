@@ -143,7 +143,7 @@ def _get_absolute_url(url: str) -> str:
     if re.search(r"^https?://", url):
         return url
 
-    return urljoin(config.link, url)
+    return urljoin(config.link or request.host, url)
 
 
 def _to_feed_datetime(dt: object) -> Optional[datetime.datetime]:
@@ -233,7 +233,7 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
     for category in config.categories:
         fg.category(term=category)
 
-    icon_url = _get_absolute_url("/img/icon.png")
+    icon_url = _get_absolute_url(config.logo or "/img/icon.png")
     if icon_url:
         fg.logo(icon_url)
 
