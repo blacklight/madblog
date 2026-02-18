@@ -256,8 +256,8 @@ h3 {
 }
 
 .article-list .published-date {
-  margin: 0;
-  font-size: 0.8em;
+  margin: 0.5em 0 0.25em 0;
+  font-size: 0.68em;
   white-space: nowrap;
 }
 
