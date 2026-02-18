@@ -37,7 +37,7 @@ class Config:
     author_url: str | None = None
     author_photo: str | None = None
     throttle_seconds_on_update: int = 10
-    webmentions_email: str | None = None
+    author_email: str | None = None
     smtp_server: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None
@@ -139,9 +139,8 @@ def _init_config_from_file(config_file: str):
         config.author_photo = cfg["author_photo"]
     if cfg.get("throttle_seconds_on_update"):
         config.throttle_seconds_on_update = int(cfg["throttle_seconds_on_update"])
-
-    if cfg.get("webmentions_email"):
-        config.webmentions_email = cfg["webmentions_email"]
+    if cfg.get("author_email"):
+        config.author_email = cfg["author_email"]
     if cfg.get("smtp_server"):
         config.smtp_server = cfg["smtp_server"]
     if cfg.get("smtp_port"):
@@ -156,7 +155,6 @@ def _init_config_from_file(config_file: str):
         config.smtp_enable_starttls_auto = bool(cfg["smtp_enable_starttls_auto"])
     if cfg.get("smtp_sender"):
         config.smtp_sender = cfg["smtp_sender"]
-
     if cfg.get("view_mode"):
         config.view_mode = cfg["view_mode"]
     config.categories = cfg.get("categories", [])
@@ -217,9 +215,8 @@ def _init_config_from_env():
         config.throttle_seconds_on_update = int(
             os.environ["MADBLOG_THROTTLE_SECONDS_ON_UPDATE"]
         )
-
-    if os.getenv("MADBLOG_WEBMENTIONS_EMAIL"):
-        config.webmentions_email = os.environ["MADBLOG_WEBMENTIONS_EMAIL"]
+    if os.getenv("MADBLOG_AUTHOR_EMAIL"):
+        config.author_email = os.environ["MADBLOG_AUTHOR_EMAIL"]
     if os.getenv("MADBLOG_SMTP_SERVER"):
         config.smtp_server = os.environ["MADBLOG_SMTP_SERVER"]
     if os.getenv("MADBLOG_SMTP_PORT"):

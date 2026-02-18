@@ -6,6 +6,10 @@
 
 - Added authors information to generated RSS/Atom feeds
 
+**Changed**
+
+- `config`: Renamed `webmentions_email` to `author_email`
+
 ## 0.4.14
 
 **Added**

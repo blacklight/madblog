@@ -89,8 +89,8 @@ link: https://myblog.example.com
 
 #### (Optional) Email Settings ####
 
-# The email address to which webmentions will be sent (optional)
-# webmentions_email: 0q9aA@example.com
+# The email address of the author. Mention notifications will be delivered here
+# author_email: 0q9aA@example.com
 # Outgoing mail server configuration (optional)
 # smtp_server: smtp.example.com
 # smtp_port: 587

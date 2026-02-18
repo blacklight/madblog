@@ -81,9 +81,9 @@ class BlogApp(Flask):
         )
 
         on_mention_processed = None
-        if config.webmentions_email and config.smtp_server:
+        if config.author_email and config.smtp_server:
             on_mention_processed = build_webmention_email_notifier(
-                recipient=config.webmentions_email,
+                recipient=config.author_email,
                 blog_base_url=config.link,
                 smtp=SmtpConfig(
                     server=config.smtp_server,
