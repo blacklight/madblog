@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.2
+
+**Changed**
+
+- Minor stylistic improvements on the homepage view
+
+## 0.5.0
 
 **Added**
 
