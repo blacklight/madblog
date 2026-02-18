@@ -168,7 +168,7 @@ a:hover {
 .description {
   color: var(--color-fg-tertiary);
   font-size: .75em;
-  max-height: 3em;
+  max-height: 4em;
   overflow: hidden;
   text-overflow: ellipsis;
   /* Blur the bottom */
