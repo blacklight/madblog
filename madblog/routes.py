@@ -16,6 +16,12 @@ from flask import (
     render_template,
 )
 
+from .activitypub import (
+    article_to_note,
+    create_activity,
+    get_actor,
+    get_webfinger_response,
+)
 from .app import app
 from .config import config
 from .feeds import FeedAuthor
@@ -306,6 +312,106 @@ def rss_route():
     It redirects to the /feed route with the appropriate query parameter to generate an RSS feed.
     """
     return _get_feed(request, "rss")
+
+
+@app.route("/.well-known/webfinger", methods=["GET"])
+def webfinger_route():
+    resource = request.args.get("resource")
+    if not resource:
+        return Response("Missing resource parameter", status=400, mimetype="text/plain")
+
+    response_data = get_webfinger_response(resource)
+    if not response_data:
+        return Response("Resource not found", status=404, mimetype="text/plain")
+
+    return jsonify(response_data)
+
+
+@app.route("/activitypub/actor", methods=["GET"])
+def activitypub_actor_route():
+    actor = get_actor()
+    return Response(
+        jsonify(actor).get_data(as_text=True),
+        mimetype="application/activity+json",
+    )
+
+
+@app.route("/activitypub/outbox", methods=["GET"])
+def activitypub_outbox_route():
+    base_url = config.link.rstrip("/")
+    limit = request.args.get("limit", 20)
+    if limit:
+        limit = int(limit)
+
+    pages = app.get_pages(
+        with_content=True,
+        skip_header=True,
+        skip_html_head=True,
+    )
+
+    pages = pages[:limit]
+
+    items = []
+    for _, page in pages:
+        note = article_to_note(page, page.get("content", ""))
+        activity = create_activity(note)
+        items.append(activity)
+
+    outbox = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OrderedCollection",
+        "id": f"{base_url}/activitypub/outbox",
+        "totalItems": len(items),
+        "orderedItems": items,
+    }
+
+    return Response(
+        jsonify(outbox).get_data(as_text=True),
+        mimetype="application/activity+json",
+    )
+
+
+@app.route("/activitypub/inbox", methods=["POST"])
+def activitypub_inbox_route():
+    return Response(
+        jsonify({"status": "accepted"}).get_data(as_text=True),
+        status=202,
+        mimetype="application/activity+json",
+    )
+
+
+@app.route("/activitypub/followers", methods=["GET"])
+def activitypub_followers_route():
+    base_url = config.link.rstrip("/")
+    followers = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OrderedCollection",
+        "id": f"{base_url}/activitypub/followers",
+        "totalItems": 0,
+        "orderedItems": [],
+    }
+
+    return Response(
+        jsonify(followers).get_data(as_text=True),
+        mimetype="application/activity+json",
+    )
+
+
+@app.route("/activitypub/following", methods=["GET"])
+def activitypub_following_route():
+    base_url = config.link.rstrip("/")
+    following = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OrderedCollection",
+        "id": f"{base_url}/activitypub/following",
+        "totalItems": 0,
+        "orderedItems": [],
+    }
+
+    return Response(
+        jsonify(following).get_data(as_text=True),
+        mimetype="application/activity+json",
+    )
 
 
 # vim:sw=4:ts=4:et:
