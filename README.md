@@ -11,8 +11,18 @@ This project powers the following blogs:
 
 ## Installation
 
+Local installation:
+
 ```shell
-$ pip install madblog
+pip install madblog
+```
+
+Docker installation:
+
+```shell
+git clone https://git.fabiomanganiello.com/madblog
+cd madblog
+docker build -t madblog .
 ```
 
 ## Usage
@@ -44,6 +54,16 @@ files):
 
 But the application can run from any folder that contains Markdown files
 (including e.g. your Obsidian vault, Nextcloud Notes folder or a git clone).
+
+To run it from Docker:
+
+```shell
+docker run -it \
+  -p 8000:8000 \
+  -v "/path/to/your/config.yaml:/etc/madblog/config.yaml" \
+  -v "/path/to/your/content:/data" \
+  madblog
+```
 
 ## Configuration
 

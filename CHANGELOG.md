@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.3
+
+**Added**
+
+- Added Docker support
+
 ## 0.5.2
 
 **Changed**
