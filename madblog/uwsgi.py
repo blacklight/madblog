@@ -3,7 +3,6 @@ import sys
 import logging
 import fcntl
 
-from .cli import get_args
 from .config import init_config
 
 # When running under gunicorn/uWSGI, sys.argv usually belongs to the process
@@ -15,25 +14,15 @@ opts = None
 blog_dir = env_blog_dir
 config_file = env_config_file
 
-if not blog_dir and not config_file:
-    try:
-        parsed, _ = get_args(sys.argv[1:])
-        # Gunicorn/uWSGI may pass arguments like `-w 8` - `8` would otherwise be
-        # interpreted as the positional blog dir and override config.content_dir.
-        if parsed.dir and not os.path.isdir(parsed.dir):
-            parsed.dir = None
-
-        # Only trust the positional dir if it's a real directory.
-        if parsed.dir and os.path.isdir(parsed.dir):
-            opts = parsed
-            blog_dir = parsed.dir
-
-        # Only trust the config path if it points to an actual file.
-        if parsed.config and os.path.isfile(os.path.expanduser(parsed.config)):
-            opts = parsed
-            config_file = os.path.expanduser(parsed.config)
-    except Exception:
-        pass
+if not blog_dir or not config_file:
+    # Under gunicorn/uWSGI, sys.argv contains the process manager's arguments.
+    # --config in particular conflicts with gunicorn's own --config flag, so we
+    # only inspect positional args (potential blog dir) from the raw argv, and
+    # skip argparse entirely to avoid misinterpreting process-manager flags.
+    for arg in reversed(sys.argv[1:]):
+        if not arg.startswith("-") and os.path.isdir(arg):
+            blog_dir = blog_dir or arg
+            break
 
 if not config_file:
     blog_dir = blog_dir or "."

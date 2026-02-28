@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+**Fixed**
+
+- Fixed undetermined behaviour where both `madblog` and `uwsgi` or `gunicorn`
+  try and parse `sys.argv`
+
 ## 0.5.3
 
 **Added**
