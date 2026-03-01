@@ -67,9 +67,9 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
     _latex_re = re.compile(
         r"(\$\$.+?\$\$)"  # $$...$$ (block)
         r"|(\\\[.+?\\\])"  # \[...\] (block)
-        r"|(\\\(.+?\\\))"  # \(...\) (inline)
-        r"|(^\s*\$.+?\$\s*$)"  # $...$ alone on a line (block)
-        r"|(?<!\$)(\$.+?\$)(?!\$)",  # $...$ with surrounding text (inline)
+        r"|(\\\(.+?\\\))",  # \(...\) (inline)
+        # r"|(^\s*\$.+?\$\s*$)"  # $...$ alone on a line (block)
+        # r"|(?<!\$)(\$.+?\$)(?!\$)",  # $...$ with surrounding text (inline)
         re.DOTALL | re.MULTILINE,
     )
 
