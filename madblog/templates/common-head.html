@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+{% set is_home_page = '/'.join((url or config.link or '').rstrip('/').split('/')[3:]).split('?')[0].split('#')[0] == '' %}
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -38,6 +39,10 @@
     {% endif %}
     <!-- PWA builder -->
     <script type="module" src="/pwabuilder-sw-register.js"></script>
+    <!-- Articles utilities -->
+    {% if not is_home_page %}
+    <script type="module" src="/js/article.js"></script>
+    {% endif %}
 
     <!--Preview card metadata -->
     <meta property="og:title" content="{{ title }}">
@@ -55,7 +60,6 @@
     <title>{{ title }}</title>
 </head>
 <body>
-    {% set is_home_page = '/'.join((url or config.link or '').rstrip('/').split('/')[3:]).split('?')[0].split('#')[0] == '' %}
     {% if not skip_header %}
     <header>
         <div class="left">

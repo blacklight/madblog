@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.6
+
+**Added**
+
+- Added copy to clipboard button for code blocks
+
 ## 0.6.4
 
 **Fixed**

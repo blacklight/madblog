@@ -93,9 +93,29 @@ a:hover {
 }
 
 .codehilite {
+  position: relative;
   padding: 0 .5em;
   overflow: auto;
+  background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
+  border-radius: 4px;
+  margin: 1em 0;
+}
+
+.codehilite .copy-button {
+  position: absolute;
+  right: 0.5em;
+  top: 0.5em;
+  font-size: 0.9em;
+  color: var(--color-fg-tertiary);
+  border: none;
+  background: none;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.codehilite .copy-button:hover {
+  opacity: 1;
 }
 
 .main-image-container {
