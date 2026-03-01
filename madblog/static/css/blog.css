@@ -117,7 +117,29 @@ a:hover {
   height: auto;
 }
 
+/* LaTeX images */
 @media (prefers-color-scheme: dark) {
-    .mermaid-wrapper .mermaid-dark { display: block; }
-    .mermaid-wrapper .mermaid-light { display: none; }
+  .mermaid-wrapper .mermaid-dark { display: block; }
+  .mermaid-wrapper .mermaid-light { display: none; }
+
+  img.latex {
+      filter: invert(1) hue-rotate(180deg);
+  }
+}
+
+.latex-block {
+  width: 100%;
+  text-align: center;
+  margin: 1em 0;
+}
+
+img.latex.block {
+  max-width: 90%;
+}
+
+img.latex.inline {
+  display: inline-block;
+  height: 1.5em;
+  vertical-align: text-bottom;
+  margin: 0 .25em;
 }

@@ -9,6 +9,8 @@ multiline equations/text.
 The actual image generation is done via LaTeX/DVI output.
 It encodes data as base64 so there is no need for images directly.
 All the work is done in the preprocessor.
+
+Adapted by Fabio Manganiello <info@fabiomanganiello.com>
 """
 
 import base64
@@ -32,33 +34,15 @@ def call(*args, **kwargs):
 
 
 # Defines our basic inline image
-img_expr = '<img class="latex inline math-%s" id="%s" src="data:image/png;base64,%s">'
+img_expr = '<img class="latex inline" id="%s" src="data:image/png;base64,%s">'
 
-# Defines multiline expression image
-multiline_img_expr = """<div class="multiline-wrapper">
-<img class="latex multiline math-%s" id="%s" src="data:image/png;base64,%s"></div>"""
-
-# Base CSS template
-img_css = """<style scoped>
-.multiline-wrapper {
-    width: 100%;
-    text-align: center;
-}
-
-img.latex.multiline {
-    height: 65%;
-}
-
-img.latex.inline {
-    height: .9em;
-    vertical-align: middle;
-}
-</style>"""
+# Defines block/display expression image
+block_img_expr = '<div class="latex-block"><img class="latex block" id="%s" src="data:image/png;base64,%s"></div>'
 
 
 class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
     # Basic LaTex Setup as well as our list of expressions to parse
-    tex_preamble = r"""\documentclass[14pt]{article}
+    tex_preamble = r"""\documentclass[10pt]{article}
 \usepackage{amsmath}
 \usepackage{amsthm}
 \usepackage{amssymb}
@@ -68,14 +52,16 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
 \pagestyle{empty}
 """
 
-    # Math TeX extraction regex
-    math_extract_regex = re.compile(
-        r"(.+?)((\\\(.+?\\\))|(\$\$\n.+?\n\$\$\n))(.*)", re.MULTILINE | re.DOTALL
-    )
-
-    # Math TeX matching regex
-    math_match_regex = re.compile(
-        r"\s*(\\\(.+?\\\))|(\$\$\n.+?\n\$\$\n)\s*", re.MULTILINE | re.DOTALL
+    # Matches all common LaTeX delimiters:
+    #   Block/display: $$...$$ or \[...\] or $...$ alone on a line
+    #   Inline: $...$ (within other text) or \(...\)
+    _latex_re = re.compile(
+        r"(\$\$.+?\$\$)"  # $$...$$ (block)
+        r"|(\\\[.+?\\\])"  # \[...\] (block)
+        r"|(\\\(.+?\\\))"  # \(...\) (inline)
+        r"|(^\s*\$.+?\$\s*$)"  # $...$ alone on a line (block)
+        r"|(?<!\$)(\$.+?\$)(?!\$)",  # $...$ with surrounding text (inline)
+        re.DOTALL | re.MULTILINE,
     )
 
     def __init__(self, *_, **__):
@@ -83,7 +69,7 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
 
         self.config = {
             ("general", "preamble"): "",
-            ("dvipng", "args"): "-q -T tight -bg Transparent -z 9 -D 200",
+            ("dvipng", "args"): "-q -T tight -bg Transparent -z 9 -D 150",
             ("delimiters", "text"): "%",
             ("delimiters", "math"): "$",
             ("delimiters", "preamble"): "%%",
@@ -158,69 +144,39 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
 
     def run(self, lines):
         """Parses the actual page"""
-        # Checks for the LaTeX header
-        use_latex = any(line == "[//]: # (latex: 1)" for line in lines)
-        if not use_latex:
-            return lines
-
-        # Re-creates the entire page so we can parse in a multiline env.
         page = "\n".join(lines)
+
+        # Auto-detect: only proceed if the page contains LaTeX delimiters
+        if not self._latex_re.search(page):
+            return lines
 
         # Adds a preamble mode
         self.tex_preamble += (
             self.config[("general", "preamble")] + "\n\\begin{document}\n"
         )
 
-        # Figure out our text strings and math-mode strings
-        tex_expr = self.math_extract_regex.findall(page)
+        def _replace(m):
+            # Groups: 1=$$..$$, 2=\[..\], 3=\(..\), 4=$..$ alone on line, 5=$..$ inline
+            is_block = (
+                m.group(1) is not None
+                or m.group(2) is not None
+                or m.group(4) is not None
+            )
+            expr = m.group(0)
 
-        # No sense in doing the extra work
-        if not len(tex_expr):
-            return page.split("\n")
-
-        # Parse the expressions
-        new_page = ""
-        n_multiline_expressions = 0
-
-        while page:
-            m = self.math_extract_regex.match(page)
-            if not m:
-                new_page += page
-                break
-
-            new_page += m.group(1)
-            math_match = self.math_match_regex.match(m.group(2))
-            if not math_match:
-                new_page += m.group(2)
+            tex_hash = self.cache.hash(expr)
+            cached = self.cache.get(tex_hash)
+            if cached is not None:
+                data = cached
             else:
-                expr = m.group(2)
-                is_multiline = math_match.group(2) is not None
-                tex_hash = self.cache.hash(expr)
-                cached = self.cache.get(tex_hash)
-                if cached is not None:
-                    data = cached
-                else:
-                    data = self._latex_to_base64(expr).decode()
-                    self.cache.put(tex_hash, data)
+                data = self._latex_to_base64(expr).decode()
+                self.cache.put(tex_hash, data)
 
-                if is_multiline and n_multiline_expressions > 0:
-                    new_page += "</p>"
-                new_page += (multiline_img_expr if is_multiline else img_expr) % (
-                    "true",
-                    tex_hash,
-                    data,
-                )
+            if is_block:
+                return block_img_expr % (tex_hash, data)
+            return img_expr % (tex_hash, data)
 
-                if is_multiline:
-                    new_page += "<p>"
-                    n_multiline_expressions += 1
-
-            page = m.group(5)
-
-        if n_multiline_expressions > 0:
-            new_page += "</p>"
-
-        # Make sure to re-split the lines
+        new_page = self._latex_re.sub(_replace, page)
         return new_page.split("\n")
 
 

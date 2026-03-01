@@ -202,7 +202,7 @@ LaTeX support requires the following executables available in the `PATH`:
 Syntax for inline LaTeX:
 
 ```markdown
-And we can therefore prove that \( c^2 = a^2 + b^2 \)
+And we can therefore prove that $c^2 = a^2 + b^2$
 ```
 
 Syntax for LaTeX expression on a new line:
