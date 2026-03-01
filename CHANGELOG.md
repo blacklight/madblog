@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.7
+
+**Fixed**
+
+- Fixed regression in the installation of static JS resources
+
 ## 0.6.6
 
 **Added**
