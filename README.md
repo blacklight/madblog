@@ -194,7 +194,10 @@ You can also drop your `favicon.ico` under this folder.
 
 ## LaTeX support
 
-LaTeX support is built-in as long as you have the `latex` executable installed on your server.
+LaTeX support requires the following executables available in the `PATH`:
+
+- `latex`
+- `dvipng`
 
 Syntax for inline LaTeX:
 
