@@ -1,11 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 **Added**
 
 - Support for Mermaid diagrams (see [issue
   #12](https://git.fabiomanganiello.com/madblog/issues/12))
+
+- Support for [[TOC]] markers in Markdown files (see [issue
+  #13](https://git.fabiomanganiello.com/madblog/issues/13))
 
 **Fixed**
 
