@@ -12,14 +12,14 @@ All the work is done in the preprocessor.
 """
 
 import base64
-import hashlib
-import json
 import os
 import re
 import tempfile
 from subprocess import call as rawcall, PIPE
 
 import markdown
+
+from .cache import RenderCache
 
 
 def call(*args, **kwargs):
@@ -54,15 +54,8 @@ img.latex.inline {
 }
 </style>"""
 
-# Cache and temp file paths
-tmpdir = tempfile.gettempdir() + "/markdown-latex"
-cache_file = tmpdir + "/latex.cache"
-
 
 class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
-    # These are our cached expressions that are stored in latex.cache
-    cached = {}
-
     # Basic LaTex Setup as well as our list of expressions to parse
     tex_preamble = r"""\documentclass[14pt]{article}
 \usepackage{amsmath}
@@ -85,13 +78,7 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
     )
 
     def __init__(self, *_, **__):
-        if not os.path.isdir(tmpdir):
-            os.makedirs(tmpdir)
-        try:
-            with open(cache_file, "r") as f:
-                self.cached = json.load(f)
-        except (IOError, json.JSONDecodeError):
-            self.cached = {}
+        self.cache = RenderCache("latex")
 
         self.config = {
             ("general", "preamble"): "",
@@ -103,6 +90,7 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
 
     def _latex_to_base64(self, tex):
         """Generates a base64 representation of TeX string"""
+        tmpdir = str(self.cache.tmpdir)
 
         # Generate the temporary file
         tmp_file_fd, path = tempfile.mkstemp(dir=tmpdir)
@@ -190,7 +178,6 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
             return page.split("\n")
 
         # Parse the expressions
-        new_cache = {}
         new_page = ""
         n_multiline_expressions = 0
 
@@ -207,12 +194,13 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
             else:
                 expr = m.group(2)
                 is_multiline = math_match.group(2) is not None
-                tex_hash = self.hash(expr)
-                if tex_hash in self.cached:
-                    data = self.cached[tex_hash]
+                tex_hash = self.cache.hash(expr)
+                cached = self.cache.get(tex_hash)
+                if cached is not None:
+                    data = cached
                 else:
                     data = self._latex_to_base64(expr).decode()
-                    new_cache[tex_hash] = data
+                    self.cache.put(tex_hash, data)
 
                 if is_multiline and n_multiline_expressions > 0:
                     new_page += "</p>"
@@ -231,17 +219,8 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
         if n_multiline_expressions > 0:
             new_page += "</p>"
 
-        # Cache our data
-        self.cached.update(new_cache)
-        with open(cache_file, "w") as f:
-            json.dump(self.cached, f)
-
         # Make sure to re-split the lines
         return new_page.split("\n")
-
-    @staticmethod
-    def hash(tex: str) -> str:
-        return hashlib.sha1(tex.encode()).hexdigest()
 
 
 class MarkdownLatex(markdown.Extension):

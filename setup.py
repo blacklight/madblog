@@ -32,6 +32,9 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Development Status :: 4 - Beta",
     ],
+    extras_require={
+        "mermaid": ["nodejs-wheel"],
+    },
     install_requires=[
         "feedgen2",
         "feedparser",

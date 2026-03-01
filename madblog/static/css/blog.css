@@ -99,3 +99,25 @@ a:hover {
 .main-image-container img {
   width: 80%;
 }
+
+/* Mermaid diagrams */
+.mermaid-wrapper {
+  width: 100%;
+  margin: 1.5em 0;
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+}
+
+.mermaid-wrapper .mermaid-dark { display: none; }
+.mermaid-wrapper .mermaid-light { display: block; }
+
+.mermaid-wrapper svg {
+  max-width: 100%;
+  height: auto;
+}
+
+@media (prefers-color-scheme: dark) {
+    .mermaid-wrapper .mermaid-dark { display: block; }
+    .mermaid-wrapper .mermaid-light { display: none; }
+}

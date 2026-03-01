@@ -14,6 +14,7 @@ from webmentions.server.adapters.flask import bind_webmentions
 from .config import config
 from .feeds import FeedAuthor, FeedParser
 from .latex import MarkdownLatex
+from .mermaid import MarkdownMermaid
 from .notifications import SmtpConfig, build_webmention_email_notifier
 from .storage.mentions import FileWebmentionsStorage
 from ._sorters import PagesSorter, PagesSortByTime
@@ -269,7 +270,7 @@ class BlogApp(Flask):
             published=metadata["published"].strftime("%b %d, %Y"),
             content=markdown(
                 content,
-                extensions=["fenced_code", "codehilite", "tables", MarkdownLatex()],
+                extensions=["fenced_code", "codehilite", "tables", MarkdownLatex(), MarkdownMermaid()],
             ),
             skip_header=skip_header,
             skip_html_head=skip_html_head,

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+**Added**
+
+- Support for Mermaid diagrams (see [issue
+  #12](https://git.fabiomanganiello.com/madblog/issues/12))
+
 **Fixed**
 
 - Fixed undetermined behaviour where both `madblog` and `uwsgi` or `gunicorn`

@@ -210,6 +210,50 @@ c^2 = a^2 + b^2
 $$
 ```
 
+## Mermaid diagrams
+
+Madblog supports server-side rendering of [Mermaid](https://mermaid.js.org/)
+diagrams. Both light and dark theme variants are rendered at build time and
+automatically switch based on the reader's system color scheme preference.
+
+### Installation
+
+#### Option A: pip extra (recommended)
+
+No pre-existing system dependencies required beyond what pip provides:
+
+```shell
+pip install madblog[mermaid]
+```
+
+This installs a bundled Node.js runtime via
+[`nodejs-wheel`](https://pypi.org/project/nodejs-wheel/). The Mermaid CLI is
+downloaded automatically on first use via `npx`. The first render of a Mermaid
+block will be slower; subsequent renders are cached.
+
+#### Option B: System Node.js
+
+If you already have Node.js installed:
+
+```shell
+npm install -g @mermaid-js/mermaid-cli
+pip install madblog
+```
+
+If neither `mmdc` nor `npx` are available at runtime, Mermaid blocks are
+rendered as syntax-highlighted code instead.
+
+### Usage
+
+Use standard fenced code blocks with the `mermaid` language tag:
+
+````markdown
+```mermaid
+graph LR
+    A --> B --> C
+```
+````
+
 ## RSS syndication
 
 Feeds for the blog are provided under the `/feed.<type>` URL, with `type` one of `atom` or `rss` (e.g. `/feed.atom` or
