@@ -15,6 +15,7 @@ from .config import config
 from .feeds import FeedAuthor, FeedParser
 from .latex import MarkdownLatex
 from .mermaid import MarkdownMermaid
+from .tasklist import MarkdownTaskList
 from .toc import MarkdownTocMarkers
 from .notifications import SmtpConfig, build_webmention_email_notifier
 from .storage.mentions import FileWebmentionsStorage
@@ -278,6 +279,7 @@ class BlogApp(Flask):
                     "toc",
                     "attr_list",
                     "sane_lists",
+                    MarkdownTaskList(),
                     MarkdownTocMarkers(),
                     MarkdownLatex(),
                     MarkdownMermaid(),

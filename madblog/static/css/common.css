@@ -159,6 +159,10 @@ img.u-featured {
   border-radius: 0.75em;
 }
 
+li.task-list-item {
+  list-style: none;
+}
+
 footer {
   width: 100%;
   height: calc(var(--footer-height) + var(--footer-margin));
