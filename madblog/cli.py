@@ -39,7 +39,7 @@ The folder should have the following structure:
     parser.add_argument(
         "--config",
         dest="config",
-        default="config.yaml",
+        default=None,
         required=False,
         help="Path to a configuration file (default: config.yaml in the blog root directory)",
     )
@@ -47,15 +47,15 @@ The folder should have the following structure:
         "--host",
         dest="host",
         required=False,
-        default="0.0.0.0",
-        help="Bind host/address",
+        default=None,
+        help="Bind host/address (default: 0.0.0.0)",
     )
     parser.add_argument(
         "--port",
         dest="port",
         required=False,
         type=int,
-        default=8000,
+        default=None,
         help="Bind port (default: 8000)",
     )
     parser.add_argument(
@@ -63,7 +63,7 @@ The folder should have the following structure:
         dest="debug",
         required=False,
         action="store_true",
-        default=False,
+        default=None,
         help="Enable debug mode (default: False)",
     )
 
@@ -79,7 +79,11 @@ def run():
 
     opts, _ = get_args(sys.argv[1:])
     blog_dir = opts.dir or "."
-    config_file = opts.config if opts.config else os.path.join(blog_dir, "config.yaml")
+    config_file = (
+        opts.config
+        or os.environ.get("MADBLOG_CONFIG")
+        or os.path.join(blog_dir, "config.yaml")
+    )
     config = init_config(config_file=config_file, args=opts)
     logging.basicConfig(
         level=logging.DEBUG if config.debug else logging.INFO,
