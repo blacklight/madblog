@@ -6,6 +6,7 @@ article {
   width: calc(100% - 1.5em);
   background: var(--color-bg-primary);
   padding: 0.25em 0.75em;
+  position: relative;
   display: flex;
   flex-direction: column;
   line-height: 1.6;
@@ -50,6 +51,14 @@ article p > audio {
 
 article code, .codehilite {
   font-size: 0.9em;
+}
+
+article .raw-md-btn-container {
+  position: absolute;
+  right: 0.5em;
+  top: 0.5em;
+  font-size: 0.9em;
+  color: var(--color-fg-tertiary);
 }
 
 a:hover {

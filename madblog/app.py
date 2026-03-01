@@ -171,11 +171,14 @@ class BlogApp(Flask):
         if not page.endswith(".md"):
             page = page + ".md"
 
-        md_file = os.path.join(self.pages_dir, page)
-        if not os.path.isfile(md_file):
+        md_file = os.path.realpath(os.path.join(self.pages_dir, page))
+        if not os.path.isfile(md_file) or not md_file.startswith(str(self.pages_dir)):
             abort(404)
 
-        metadata = {}
+        if not os.access(md_file, os.R_OK):
+            abort(403)
+
+        metadata: dict = {"md_file": md_file}
         with open(md_file, "r") as f:
             metadata.update(self._parse_metadata_from_markdown(f, page))
 
@@ -237,16 +240,26 @@ class BlogApp(Flask):
         self,
         page: str,
         title: Optional[str] = None,
+        as_markdown: bool = False,
         skip_header: bool = False,
         skip_html_head: bool = False,
     ) -> Response:
         """
         Get the HTML for a Markdown page
+
+        :param page: The identifier/slug of the page to get
+        :param title: The title of the page to get (overrides the title in the
+            Markdown file metadata)
+        :param as_markdown: Return the page content as Markdown, without rendering
+            it as HTML (default: False)
+        :param skip_header: Don't render the header (default: False)
+        :param skip_html_head: Don't render the HTML head (default: False)
         """
         if not page.endswith(".md"):
             page = page + ".md"
 
         metadata = self._parse_page_metadata(page)
+        md_file = metadata.pop("md_file")
         title = title or metadata.get("title") or config.title
         author_info = self._parse_author(metadata)
         mentions = self.webmentions_handler.render_webmentions(
@@ -256,44 +269,50 @@ class BlogApp(Flask):
             )
         )
 
-        with open(os.path.join(self.pages_dir, page), "r") as f:
+        with open(md_file, "r") as f:
             content = self._parse_content(f)
 
-        html = render_template(
-            "article.html",
-            config=config,
-            title=title,
-            uri=metadata.get("uri"),
-            url=config.link + metadata.get("uri", ""),
-            external_url=metadata.get("external_url"),
-            image=metadata.get("image"),
-            description=metadata.get("description"),
-            published_datetime=metadata.get("published"),
-            published=metadata["published"].strftime("%b %d, %Y"),
-            content=markdown(
-                content,
-                extensions=[
-                    "fenced_code",
-                    "codehilite",
-                    "tables",
-                    "toc",
-                    "attr_list",
-                    "sane_lists",
-                    MarkdownTaskList(),
-                    MarkdownTocMarkers(),
-                    MarkdownLatex(),
-                    MarkdownMermaid(),
-                ],
-            ),
-            skip_header=skip_header,
-            skip_html_head=skip_html_head,
-            mentions=mentions,
-            **author_info,
+        output = (
+            f"# {title}\n\n{content}"
+            if as_markdown
+            else render_template(
+                "article.html",
+                config=config,
+                title=title,
+                uri=metadata.get("uri"),
+                url=config.link + metadata.get("uri", ""),
+                external_url=metadata.get("external_url"),
+                image=metadata.get("image"),
+                description=metadata.get("description"),
+                published_datetime=metadata.get("published"),
+                published=metadata["published"].strftime("%b %d, %Y"),
+                content=markdown(
+                    content,
+                    extensions=[
+                        "fenced_code",
+                        "codehilite",
+                        "tables",
+                        "toc",
+                        "attr_list",
+                        "sane_lists",
+                        MarkdownTaskList(),
+                        MarkdownTocMarkers(),
+                        MarkdownLatex(),
+                        MarkdownMermaid(),
+                    ],
+                ),
+                skip_header=skip_header,
+                skip_html_head=skip_html_head,
+                mentions=mentions,
+                **author_info,
+            )
         )
 
-        response = make_response(html)
+        response = make_response(output)
         if config.webmention_url:
             response.headers["Link"] = f'<{config.webmention_url}>; rel="webmention"'
+        if as_markdown:
+            response.mimetype = "text/markdown"
 
         return response
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.3
+
+**Added**
+
+- Added raw Markdown page viewer (see [issue
+  #15](https://git.fabiomanganiello.com/madblog/issues/15))
+
 ## 0.6.2
 
 **Changed**

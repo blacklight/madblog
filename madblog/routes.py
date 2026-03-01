@@ -132,9 +132,19 @@ def article_with_path_route(path: str, article: str):
     return app.get_page(os.path.join(path, article))
 
 
+@app.route("/article/<path:path>/<article>.md", methods=["GET"])
+def raw_article_with_path_route(path: str, article: str):
+    return app.get_page(os.path.join(path, article), as_markdown=True)
+
+
 @app.route("/article/<article>", methods=["GET"])
 def article_route(article: str):
     return article_with_path_route("", article)
+
+
+@app.route("/article/<article>.md", methods=["GET"])
+def raw_article_route(article: str):
+    return raw_article_with_path_route("", article)
 
 
 def _get_absolute_url(url: str) -> str:
