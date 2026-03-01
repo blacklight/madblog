@@ -14,8 +14,10 @@ Adapted by Fabio Manganiello <info@fabiomanganiello.com>
 """
 
 import base64
+import logging
 import os
 import re
+import shutil
 import tempfile
 from subprocess import call as rawcall, PIPE
 
@@ -24,6 +26,8 @@ import markdown.preprocessors
 
 from .cache import RenderCache
 
+logger = logging.getLogger(__name__)
+
 
 def call(*args, **kwargs):
     """
@@ -31,6 +35,11 @@ def call(*args, **kwargs):
     Python2 because that was only implemented in Python3.
     """
     return rawcall(*args, **kwargs)
+
+
+def _latex_available():
+    """Check whether both latex and dvipng are on PATH."""
+    return shutil.which("latex") is not None and shutil.which("dvipng") is not None
 
 
 # Defines our basic inline image
@@ -98,10 +107,10 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
         # clean up if the above failed
         if status:
             self._cleanup(path, err=True)
-            raise Exception(
-                "Couldn't compile LaTeX document."
-                + "Please read '%s.log' for more detail." % path
+            logger.warning(
+                "Couldn't compile LaTeX document. See '%s.log' for detail.", path
             )
+            return None
 
         # Run dvipng on the generated DVI file. Use tight bounding box.
         # Magnification is set to 1200
@@ -115,10 +124,10 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
         # clean up if we couldn't make the above work
         if status:
             self._cleanup(path, err=True)
-            raise Exception(
-                "Couldn't convert LaTeX to image."
-                + "Please read '%s.log' for more detail." % path
+            logger.warning(
+                "Couldn't convert DVI to PNG. See '%s.log' for detail.", path
             )
+            return None
 
         # Read the png and encode the data
         try:
@@ -150,6 +159,11 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
         if not self._latex_re.search(page):
             return lines
 
+        # Skip rendering entirely if latex/dvipng aren't installed
+        if not _latex_available():
+            logger.debug("latex or dvipng not found on PATH; skipping LaTeX rendering")
+            return lines
+
         # Adds a preamble mode
         self.tex_preamble += (
             self.config[("general", "preamble")] + "\n\\begin{document}\n"
@@ -169,7 +183,16 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
             if cached is not None:
                 data = cached
             else:
-                data = self._latex_to_base64(expr).decode()
+                try:
+                    result = self._latex_to_base64(expr)
+                except Exception as e:
+                    logger.warning("LaTeX rendering failed for expression: %s", e)
+                    return expr
+
+                if result is None:
+                    return expr
+
+                data = result.decode()
                 self.cache.put(tex_hash, data)
 
             if is_block:

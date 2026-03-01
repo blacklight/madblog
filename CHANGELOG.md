@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.4
+
+**Fixed**
+
+- Don't break page rendering if a Markdown contains LaTeX block but either
+  `latex` is missing on the system or the blocks content is wrong.
+
 ## 0.6.3
 
 **Added**
@@ -21,6 +28,8 @@
 - Moved LaTeX CSS to `blog.css` and fixed inline expression vertical alignment.
 
 ## 0.6.1
+
+**Added**
 
 - Added support for tasklists in Markdown files
 
