@@ -1,6 +1,7 @@
 import re
 
 import markdown
+import markdown.preprocessors
 
 
 _TOC_MARKER_RE = re.compile(

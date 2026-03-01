@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 import markdown
+import markdown.preprocessors
 
 from .cache import RenderCache
 

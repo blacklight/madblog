@@ -18,6 +18,7 @@ import tempfile
 from subprocess import call as rawcall, PIPE
 
 import markdown
+import markdown.preprocessors
 
 from .cache import RenderCache
 
