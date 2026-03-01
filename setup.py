@@ -14,7 +14,7 @@ setup(
     author="Fabio Manganiello",
     author_email="info@fabiomanganiello.com",
     description="A minimal platform for Markdown-based blogs",
-    license="MIT",
+    license="AGPL-3.0-only",
     python_requires=">= 3.8",
     keywords="blog markdown",
     url="https://git.fabiomanganiello.com/madblog",
@@ -29,7 +29,7 @@ setup(
     long_description_content_type="text/markdown",
     classifiers=[
         "Topic :: Utilities",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: GNU Affero General Public License v3",
         "Development Status :: 4 - Beta",
     ],
     extras_require={

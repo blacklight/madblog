@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.2
+
+**Changed**
+
+- **Changed project license from MIT to AGPL-3.0-only.**
+- LaTeX support is now auto-detected from content delimiters (`$$`, `$`,
+  `\(...\)`, `\[...\]`) — the `latex: 1` metadata header is no longer
+  required.
+- Rewrote LaTeX delimiter parsing with proper block vs inline classification.
+- Reduced default LaTeX font size by ~25%.
+- Added dark mode support for rendered LaTeX expressions.
+- Moved LaTeX CSS to `blog.css` and fixed inline expression vertical alignment.
+
 ## 0.6.1
 
 - Added support for tasklists in Markdown files

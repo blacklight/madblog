@@ -8,7 +8,7 @@ authors = [
 
 classifiers=[
     "Topic :: Utilities",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Development Status :: 4 - Beta",
 ]
 
