@@ -51,6 +51,13 @@ article audio {
   margin: 0 auto;
 }
 
+article blockquote {
+  font-style: italic;
+  margin: 1em 0;
+  border-left: 1px solid var(--color-border);
+  padding: 0 1em;
+}
+
 article code, .codehilite {
   font-size: 0.9em;
 }
