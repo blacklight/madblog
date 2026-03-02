@@ -42,9 +42,9 @@ article ol {
   word-break: break-word;
 }
 
-article p > img,
-article p > video,
-article p > audio {
+article img,
+article video,
+article audio {
   max-width: 100%;
   display: block;
   margin: 0 auto;
