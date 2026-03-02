@@ -13,6 +13,7 @@ from webmentions.server.adapters.flask import bind_webmentions
 
 from .config import config
 from .feeds import FeedAuthor, FeedParser
+from .autolink import MarkdownAutolink
 from .latex import MarkdownLatex
 from .mermaid import MarkdownMermaid
 from .tasklist import MarkdownTaskList
@@ -295,6 +296,7 @@ class BlogApp(Flask):
                         "toc",
                         "attr_list",
                         "sane_lists",
+                        MarkdownAutolink(),
                         MarkdownTaskList(),
                         MarkdownTocMarkers(),
                         MarkdownLatex(),
