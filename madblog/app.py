@@ -137,7 +137,7 @@ class BlogApp(Flask):
     def _parse_metadata_from_markdown(handle: IO, page: str) -> dict:
         metadata: dict = {"uri": "/article/" + page[:-3]}
         for line in handle:
-            if not line:
+            if not line.strip() or re.match(r"(^---\s*$)|(^#\s+.*)", line):
                 continue
 
             if not (m := re.match(r"^\[//]: # \(([^:]+):\s*(.*)\)\s*$", line)):
