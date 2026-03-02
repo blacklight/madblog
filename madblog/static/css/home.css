@@ -290,7 +290,7 @@ h3 {
 
 @media screen and (min-width: 1024px) {
   .article-full {
-    padding: 0 1em;
+    padding: 0 1.25em;
     width: calc(100% - 2em);
   }
 }
