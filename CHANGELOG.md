@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.8
+
+**Fixed**
+
+- Fixed Markdown metadata parser to be more robust — it now correctly skips
+  blank lines, YAML front-matter delimiters (`---`), and heading lines instead
+  of silently breaking on them.
+
+**Changed**
+
+- Media elements (`img`, `video`, `audio`) now always have `max-width: 100%`
+  regardless of nesting depth (not just direct children of `<p>`), and are
+  capped at `max-height: 75vh` to prevent oversized embeds.
+- Blockquotes are now styled with italic text, a left border, and padding for
+  better visual distinction.
+
 ## 0.6.7
 
 **Fixed**
