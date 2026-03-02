@@ -171,10 +171,11 @@ class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
 
         def _replace(m):
             # Groups: 1=$$..$$, 2=\[..\], 3=\(..\), 4=$..$ alone on line, 5=$..$ inline
+            num_groups = len(m.groups())
             is_block = (
                 m.group(1) is not None
                 or m.group(2) is not None
-                or m.group(4) is not None
+                or (num_groups >= 4 and m.group(4) is not None)
             )
             expr = m.group(0)
 
