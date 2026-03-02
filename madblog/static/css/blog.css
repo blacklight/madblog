@@ -46,6 +46,7 @@ article img,
 article video,
 article audio {
   max-width: 100%;
+  max-height: 75vh;
   display: block;
   margin: 0 auto;
 }
