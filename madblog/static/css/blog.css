@@ -23,7 +23,7 @@ article {
 @media screen and (min-width: 1024px) {
   article {
     max-width: 50em;
-    padding: 0.25em 1.5em;
+    padding: 0.25em 1.1em;
     box-shadow: 0 1px 4px 3px var(--color-shadow);
   }
 }
