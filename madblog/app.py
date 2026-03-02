@@ -1,11 +1,14 @@
 import datetime
+import email.utils
 import os
 import re
+
 from pathlib import Path
 from typing import IO, List, Optional, Tuple, Type
 from urllib.parse import urlparse
+from email.utils import formatdate
 
-from flask import Flask, Response, abort, make_response, render_template
+from flask import Flask, Response, abort, make_response, render_template, request
 from markdown import markdown
 from webmentions import WebmentionDirection, WebmentionsHandler
 from webmentions.storage.adapters.file import FileSystemMonitor
@@ -240,6 +243,7 @@ class BlogApp(Flask):
     def get_page(
         self,
         page: str,
+        *,
         title: Optional[str] = None,
         as_markdown: bool = False,
         skip_header: bool = False,
@@ -261,6 +265,31 @@ class BlogApp(Flask):
 
         metadata = self._parse_page_metadata(page)
         md_file = metadata.pop("md_file")
+
+        # Get file modification time for cache headers
+        file_stat = os.stat(md_file)
+        file_mtime = file_stat.st_mtime
+        last_modified = formatdate(file_mtime, usegmt=True)
+
+        # Check if the client has a cached version that's still valid
+        if_modified_since = request.headers.get("If-Modified-Since")
+        if if_modified_since:
+            try:
+                parsed_date = email.utils.parsedate_tz(if_modified_since)
+                if not parsed_date:
+                    # Invalid If-Modified-Since header, ignore it
+                    pass
+
+                cached_timestamp = email.utils.mktime_tz(parsed_date)  # type: ignore
+                if cached_timestamp is not None and cached_timestamp >= file_mtime:
+                    # Client's cached version is still valid
+                    response = make_response("", 304)
+                    response.headers["Last-Modified"] = last_modified
+                    return response
+            except (ValueError, TypeError, OverflowError):
+                # Invalid If-Modified-Since header, ignore it
+                pass
+
         title = title or metadata.get("title") or config.title
         author_info = self._parse_author(metadata)
         mentions = self.webmentions_handler.render_webmentions(
@@ -311,6 +340,11 @@ class BlogApp(Flask):
         )
 
         response = make_response(output)
+
+        # Set cache headers based on file modification time
+        response.headers["Last-Modified"] = last_modified
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+
         if config.webmention_url:
             response.headers["Link"] = f'<{config.webmention_url}>; rel="webmention"'
         if as_markdown:

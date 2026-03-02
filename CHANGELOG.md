@@ -2,6 +2,10 @@
 
 ## 0.6.8
 
+**Added**
+
+- Added proper cache headers
+
 **Fixed**
 
 - Fixed Markdown metadata parser to be more robust — it now correctly skips
