@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.6.14
+
+**Added**
+
+- Added `Language` headers for articles and pages with support for
+  article-level language metadata (`[//]: # (language: xx-XX)`) and global
+  configuration fallback
+- Added `ETag` headers for robust cache validation based on file modification
+  times with support for `If-None-Match` header validation
+- Extended cache headers (`Last-Modified`, `Cache-Control`, `ETag`, `Language`)
+  to home page/index and RSS/Atom feeds
+- Added comprehensive conditional request handling supporting both
+  `If-Modified-Since` and `If-None-Match` headers
+- Added test suites for cache validation, language headers, and ETag
+  functionality
+
+**Changed**
+
+- Enhanced cache implementation to avoid redundant file system traversal by reusing modification times from page metadata parsing
+- Improved metadata parsing to include file modification times (`file_mtime`) for optimized cache header generation
+- Cache validation now supports multiple validation methods (timestamp-based and ETag-based) for maximum browser compatibility
+
+**Fixed**
+
+- Fixed cache invalidation to properly detect when markdown files are modified and serve fresh content immediately
+- Fixed browser caching behavior to eliminate need for force refresh (Ctrl+F5) when content changes
+
 ## 0.6.13
 
 **Added**
