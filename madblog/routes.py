@@ -249,10 +249,19 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
         else None
     )
 
+    # Generate ETag based on most recent modification time
+    etag = app._generate_etag(most_recent_mtime) if most_recent_mtime > 0 else None
+
     # Check if the client has a cached version that's still valid
-    if last_modified:
+    # Check both If-Modified-Since and If-None-Match headers
+    cache_valid = False
+
+    if last_modified and most_recent_mtime > 0:
         if_modified_since = request.headers.get("If-Modified-Since")
-        if if_modified_since:
+        if_none_match = request.headers.get("If-None-Match")
+
+        # Check If-Modified-Since
+        if if_modified_since and not cache_valid:
             try:
                 cached_timestamp = email.utils.mktime_tz(
                     email.utils.parsedate_tz(if_modified_since)  # type: ignore
@@ -261,20 +270,31 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
                     cached_timestamp is not None
                     and cached_timestamp >= most_recent_mtime
                 ):
-                    # Client's cached version is still valid
-                    from flask import make_response
-
-                    response = make_response("", 304)
-                    response.headers["Last-Modified"] = last_modified
-
-                    # Set Language header for 304 responses too
-                    if config.language:
-                        response.headers["Language"] = config.language
-
-                    return response
+                    cache_valid = True
             except (ValueError, TypeError, OverflowError):
                 # Invalid If-Modified-Since header, ignore it
                 pass
+
+        # Check If-None-Match (ETag)
+        if if_none_match and etag and not cache_valid:
+            client_etags = [tag.strip() for tag in if_none_match.split(",")]
+            if etag in client_etags or "*" in client_etags:
+                cache_valid = True
+
+        # Return 304 if cache is valid
+        if cache_valid:
+            from flask import make_response
+
+            response = make_response("", 304)
+            response.headers["Last-Modified"] = last_modified
+            if etag:
+                response.headers["ETag"] = etag
+
+            # Set Language header for 304 responses too
+            if config.language:
+                response.headers["Language"] = config.language
+
+            return response
 
     fg = FeedGenerator()
     fg.id(config.link)
@@ -347,6 +367,9 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
     if last_modified:
         response.headers["Last-Modified"] = last_modified
         response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+
+    if etag:
+        response.headers["ETag"] = etag
 
     # Set Language header from global config for feeds
     if config.language:

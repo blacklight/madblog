@@ -1,5 +1,6 @@
 import datetime
 import email.utils
+import hashlib
 import os
 import re
 
@@ -135,6 +136,18 @@ class BlogApp(Flask):
     def stop(self) -> None:
         if config.enable_webmentions:
             self.filesystem_monitor.stop()
+
+    @staticmethod
+    def _generate_etag(mtime: float) -> str:
+        """
+        Generate an ETag based on modification time.
+
+        :param mtime: File modification timestamp
+        :return: ETag string (quoted)
+        """
+        # Use hash of timestamp for more compact ETag
+        etag_hash = hashlib.md5(str(mtime).encode()).hexdigest()[:16]
+        return f'"{etag_hash}"'
 
     @staticmethod
     def _parse_metadata_from_markdown(handle: IO, page: str) -> dict:
@@ -273,33 +286,47 @@ class BlogApp(Flask):
         file_stat = os.stat(md_file)
         file_mtime = file_stat.st_mtime
         last_modified = formatdate(file_mtime, usegmt=True)
+        etag = self._generate_etag(file_mtime)
 
         # Check if the client has a cached version that's still valid
+        # Check both If-Modified-Since and If-None-Match headers
         if_modified_since = request.headers.get("If-Modified-Since")
-        if if_modified_since:
+        if_none_match = request.headers.get("If-None-Match")
+        cache_valid = False
+
+        # Check If-Modified-Since
+        if if_modified_since and not cache_valid:
             try:
                 parsed_date = email.utils.parsedate_tz(if_modified_since)
-                if not parsed_date:
-                    # Invalid If-Modified-Since header, ignore it
-                    pass
-
-                cached_timestamp = email.utils.mktime_tz(parsed_date)  # type: ignore
-                if cached_timestamp is not None and cached_timestamp >= file_mtime:
-                    # Client's cached version is still valid
-                    response = make_response("", 304)
-                    response.headers["Last-Modified"] = last_modified
-
-                    # Set Language header for 304 responses too
-                    article_language = metadata.get("language")
-                    if article_language:
-                        response.headers["Language"] = article_language
-                    elif config.language:
-                        response.headers["Language"] = config.language
-
-                    return response
+                if parsed_date:
+                    cached_timestamp = email.utils.mktime_tz(parsed_date)  # type: ignore
+                    if cached_timestamp is not None and cached_timestamp >= file_mtime:
+                        cache_valid = True
             except (ValueError, TypeError, OverflowError):
                 # Invalid If-Modified-Since header, ignore it
                 pass
+
+        # Check If-None-Match (ETag)
+        if if_none_match and not cache_valid:
+            # Handle both single ETags and comma-separated lists
+            client_etags = [tag.strip() for tag in if_none_match.split(",")]
+            if etag in client_etags or "*" in client_etags:
+                cache_valid = True
+
+        # Return 304 if cache is valid
+        if cache_valid:
+            response = make_response("", 304)
+            response.headers["Last-Modified"] = last_modified
+            response.headers["ETag"] = etag
+
+            # Set Language header for 304 responses too
+            article_language = metadata.get("language")
+            if article_language:
+                response.headers["Language"] = article_language
+            elif config.language:
+                response.headers["Language"] = config.language
+
+            return response
 
         title = title or metadata.get("title") or config.title
         author_info = self._parse_author(metadata)
@@ -354,6 +381,7 @@ class BlogApp(Flask):
 
         # Set cache headers based on file modification time
         response.headers["Last-Modified"] = last_modified
+        response.headers["ETag"] = etag
         response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
 
         # Set Language header based on article metadata or global config
@@ -533,10 +561,19 @@ class BlogApp(Flask):
             else None
         )
 
+        # Generate ETag based on most recent modification time
+        etag = self._generate_etag(most_recent_mtime) if most_recent_mtime > 0 else None
+
         # Check if the client has a cached version that's still valid
-        if last_modified:
+        # Check both If-Modified-Since and If-None-Match headers
+        cache_valid = False
+
+        if last_modified and most_recent_mtime > 0:
             if_modified_since = request.headers.get("If-Modified-Since")
-            if if_modified_since:
+            if_none_match = request.headers.get("If-None-Match")
+
+            # Check If-Modified-Since
+            if if_modified_since and not cache_valid:
                 try:
                     cached_timestamp = email.utils.mktime_tz(
                         email.utils.parsedate_tz(if_modified_since)  # type: ignore
@@ -545,18 +582,29 @@ class BlogApp(Flask):
                         cached_timestamp is not None
                         and cached_timestamp >= most_recent_mtime
                     ):
-                        # Client's cached version is still valid
-                        response = make_response("", 304)
-                        response.headers["Last-Modified"] = last_modified
-
-                        # Set Language header for 304 responses too
-                        if config.language:
-                            response.headers["Language"] = config.language
-
-                        return response
+                        cache_valid = True
                 except (ValueError, TypeError, OverflowError):
                     # Invalid If-Modified-Since header, ignore it
                     pass
+
+            # Check If-None-Match (ETag)
+            if if_none_match and etag and not cache_valid:
+                client_etags = [tag.strip() for tag in if_none_match.split(",")]
+                if etag in client_etags or "*" in client_etags:
+                    cache_valid = True
+
+            # Return 304 if cache is valid
+            if cache_valid:
+                response = make_response("", 304)
+                response.headers["Last-Modified"] = last_modified
+                if etag:
+                    response.headers["ETag"] = etag
+
+                # Set Language header for 304 responses too
+                if config.language:
+                    response.headers["Language"] = config.language
+
+                return response
 
         # Render the template
         output = render_template(
@@ -572,6 +620,9 @@ class BlogApp(Flask):
         if last_modified:
             response.headers["Last-Modified"] = last_modified
             response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+
+        if etag:
+            response.headers["ETag"] = etag
 
         # Set Language header from global config for home page
         if config.language:
