@@ -288,6 +288,14 @@ class BlogApp(Flask):
                     # Client's cached version is still valid
                     response = make_response("", 304)
                     response.headers["Last-Modified"] = last_modified
+
+                    # Set Language header for 304 responses too
+                    article_language = metadata.get("language")
+                    if article_language:
+                        response.headers["Language"] = article_language
+                    elif config.language:
+                        response.headers["Language"] = config.language
+
                     return response
             except (ValueError, TypeError, OverflowError):
                 # Invalid If-Modified-Since header, ignore it
@@ -347,6 +355,13 @@ class BlogApp(Flask):
         # Set cache headers based on file modification time
         response.headers["Last-Modified"] = last_modified
         response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+
+        # Set Language header based on article metadata or global config
+        article_language = metadata.get("language")
+        if article_language:
+            response.headers["Language"] = article_language
+        elif config.language:
+            response.headers["Language"] = config.language
 
         if config.webmention_url:
             response.headers["Link"] = f'<{config.webmention_url}>; rel="webmention"'
@@ -533,6 +548,11 @@ class BlogApp(Flask):
                         # Client's cached version is still valid
                         response = make_response("", 304)
                         response.headers["Last-Modified"] = last_modified
+
+                        # Set Language header for 304 responses too
+                        if config.language:
+                            response.headers["Language"] = config.language
+
                         return response
                 except (ValueError, TypeError, OverflowError):
                     # Invalid If-Modified-Since header, ignore it
@@ -552,6 +572,10 @@ class BlogApp(Flask):
         if last_modified:
             response.headers["Last-Modified"] = last_modified
             response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+
+        # Set Language header from global config for home page
+        if config.language:
+            response.headers["Language"] = config.language
 
         return response
 

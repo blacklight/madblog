@@ -39,6 +39,8 @@ link: https://myblog.example.com
 # logo: https://myblog.example.com/logo.png
 
 # The language of the blog (optional, default: "en-US")
+# NOTE: The language can also be overridden on a per-article basis by
+# specifying e.g. `[//]: # (language: en-US)` in the Markdown file
 # language: en-US
 
 # Default author name to be used when no author is specified (optional)

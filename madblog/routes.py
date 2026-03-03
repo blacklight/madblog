@@ -266,6 +266,11 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
 
                     response = make_response("", 304)
                     response.headers["Last-Modified"] = last_modified
+
+                    # Set Language header for 304 responses too
+                    if config.language:
+                        response.headers["Language"] = config.language
+
                     return response
             except (ValueError, TypeError, OverflowError):
                 # Invalid If-Modified-Since header, ignore it
@@ -342,6 +347,10 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
     if last_modified:
         response.headers["Last-Modified"] = last_modified
         response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+
+    # Set Language header from global config for feeds
+    if config.language:
+        response.headers["Language"] = config.language
 
     return response
 

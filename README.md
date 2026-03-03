@@ -161,6 +161,7 @@ with the following metadata header:
 [//]: # (image: /img/some-header-image.png)
 [//]: # (author: Author Name <https://author.me>)
 [//]: # (author_photo: https://author.me/avatar.png)
+[//]: # (language: en-US)
 [//]: # (published: 2022-01-01)
 ```
 
