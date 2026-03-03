@@ -1,5 +1,6 @@
 import logging
 import datetime
+import email.utils
 import mimetypes
 import os
 import re
@@ -13,7 +14,6 @@ from flask import (
     request,
     Response,
     send_from_directory as send_from_directory_,
-    render_template,
 )
 
 from .app import app
@@ -42,15 +42,12 @@ def home_route():
     if view_mode not in ("cards", "list", "full"):
         view_mode = config.view_mode
 
-    return render_template(
-        "index.html",
-        pages=app.get_pages(
-            sorter=PagesSortByTimeGroupedByFolder,
-            with_content=(view_mode == "full"),
-            skip_header=True,
-            skip_html_head=True,
-        ),
-        config=config,
+    return app.get_pages_response(
+        sorter=PagesSortByTimeGroupedByFolder,
+        with_content=(view_mode == "full"),
+        skip_header=True,
+        skip_html_head=True,
+        template_name="index.html",
         view_mode=view_mode,
     )
 
@@ -229,6 +226,8 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
         limit = int(limit)
 
     short_description = "short" in request.args or config.short_feed
+
+    # Get pages data first (includes file_mtime for cache headers)
     pages = app.get_pages(
         with_content=not short_description,
         skip_header=True,
@@ -236,6 +235,41 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
     )
 
     pages = pages[:limit]
+
+    most_recent_mtime = 0.0
+    for _, page_data in pages:
+        # Only consider local files (those with file_mtime), not external feeds
+        if "file_mtime" in page_data:
+            most_recent_mtime = max(most_recent_mtime, page_data["file_mtime"])
+
+    # Format the most recent modification time for HTTP headers
+    last_modified = (
+        email.utils.formatdate(most_recent_mtime, usegmt=True)
+        if most_recent_mtime > 0
+        else None
+    )
+
+    # Check if the client has a cached version that's still valid
+    if last_modified:
+        if_modified_since = request.headers.get("If-Modified-Since")
+        if if_modified_since:
+            try:
+                cached_timestamp = email.utils.mktime_tz(
+                    email.utils.parsedate_tz(if_modified_since)  # type: ignore
+                )
+                if (
+                    cached_timestamp is not None
+                    and cached_timestamp >= most_recent_mtime
+                ):
+                    # Client's cached version is still valid
+                    from flask import make_response
+
+                    response = make_response("", 304)
+                    response.headers["Last-Modified"] = last_modified
+                    return response
+            except (ValueError, TypeError, OverflowError):
+                # Invalid If-Modified-Since header, ignore it
+                pass
 
     fg = FeedGenerator()
     fg.id(config.link)
@@ -297,10 +331,19 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
             if mime_type:
                 fe.enclosure(image_url, 0, mime_type)
 
-    if feed_type == "atom":
-        return Response(fg.atom_str(pretty=True), mimetype="application/atom+xml")
+    # Create response with appropriate content type
+    response = (
+        Response(fg.atom_str(pretty=True), mimetype="application/atom+xml")
+        if feed_type == "atom"
+        else Response(fg.rss_str(pretty=True), mimetype="application/rss+xml")
+    )
 
-    return Response(fg.rss_str(pretty=True), mimetype="application/rss+xml")
+    # Add cache headers
+    if last_modified:
+        response.headers["Last-Modified"] = last_modified
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+
+    return response
 
 
 @app.route("/feed.<type>", methods=["GET"])

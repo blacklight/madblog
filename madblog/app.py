@@ -183,6 +183,11 @@ class BlogApp(Flask):
             abort(403)
 
         metadata: dict = {"md_file": md_file}
+
+        # Get file stats for both published date and cache headers
+        file_stat = os.stat(md_file)
+        metadata["file_mtime"] = file_stat.st_mtime
+
         with open(md_file, "r") as f:
             metadata.update(self._parse_metadata_from_markdown(f, page))
 
@@ -200,9 +205,7 @@ class BlogApp(Flask):
         if not metadata.get("published"):
             # If the `published` header isn't available in the file,
             # infer it from the file's creation date
-            metadata["published"] = datetime.date.fromtimestamp(
-                os.stat(md_file).st_ctime
-            )
+            metadata["published"] = datetime.date.fromtimestamp(file_stat.st_ctime)
             metadata["published_inferred"] = True
 
         return metadata
@@ -465,9 +468,92 @@ class BlogApp(Flask):
 
         remote_pages = self._get_pages_from_feeds(with_content=with_content)
         pages = local_pages + remote_pages
-        sorter_func = sorter(pages)
-        pages.sort(key=sorter_func, reverse=reverse)
+        pages.sort(key=sorter(pages), reverse=reverse)
         return list(enumerate(pages))
+
+    def get_pages_response(
+        self,
+        *,
+        with_content: bool = False,
+        skip_header: bool = False,
+        skip_html_head: bool = False,
+        sorter: Type[PagesSorter] = PagesSortByTime,
+        reverse: bool = True,
+        template_name: str = "index.html",
+        view_mode: str = "cards",
+    ) -> Response:
+        """
+        Get a Response for the pages list with proper cache headers.
+
+        :param with_content: Include full content for each page
+        :param skip_header: Skip header in rendered content
+        :param skip_html_head: Skip HTML head in rendered content
+        :param sorter: Sorter class to use for page ordering
+        :param reverse: Reverse sort order
+        :param template_name: Template name to render
+        :param view_mode: View mode for the template
+        """
+        # Get the most recent modification time from the pages data
+        most_recent_mtime = 0.0
+
+        # Get the pages data first (this includes file_mtime for each local page)
+        pages = self.get_pages(
+            with_content=with_content,
+            skip_header=skip_header,
+            skip_html_head=skip_html_head,
+            sorter=sorter,
+            reverse=reverse,
+        )
+
+        # Find the most recent modification time from the pages data
+        for _, page_data in pages:
+            # Only consider local files (those with file_mtime), not external feeds
+            if "file_mtime" in page_data:
+                most_recent_mtime = max(most_recent_mtime, page_data["file_mtime"])
+
+        # Format the most recent modification time for HTTP headers
+        last_modified = (
+            formatdate(most_recent_mtime, usegmt=True)
+            if most_recent_mtime > 0
+            else None
+        )
+
+        # Check if the client has a cached version that's still valid
+        if last_modified:
+            if_modified_since = request.headers.get("If-Modified-Since")
+            if if_modified_since:
+                try:
+                    cached_timestamp = email.utils.mktime_tz(
+                        email.utils.parsedate_tz(if_modified_since)  # type: ignore
+                    )
+                    if (
+                        cached_timestamp is not None
+                        and cached_timestamp >= most_recent_mtime
+                    ):
+                        # Client's cached version is still valid
+                        response = make_response("", 304)
+                        response.headers["Last-Modified"] = last_modified
+                        return response
+                except (ValueError, TypeError, OverflowError):
+                    # Invalid If-Modified-Since header, ignore it
+                    pass
+
+        # Render the template
+        output = render_template(
+            template_name,
+            pages=pages,
+            config=config,
+            view_mode=view_mode,
+        )
+
+        # Create response with cache headers
+        response = make_response(output)
+
+        if last_modified:
+            response.headers["Last-Modified"] = last_modified
+            response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+
+        return response
 
 
 app = BlogApp(__name__)
