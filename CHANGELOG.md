@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+**Added**
+
+- Added Drone CI integration for automated testing and deployment
+- Added ASCII-art splash logo displayed at application start
+
+**Changed**
+
+- Always display splash logo at start instead of conditionally showing it
+- Updated Docker installation approach with new Dockerfiles for minimal and
+  full installations using quay.io base image
+- Enhanced installation documentation in README.md with clearer minimal and
+  full installation sections and recommended pre-built image commands
+
 ## 0.6.14
 
 **Added**
