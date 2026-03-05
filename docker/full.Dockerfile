@@ -1,0 +1,23 @@
+INCLUDE+ docker/minimal.Dockerfile
+
+RUN apk add --no-cache \
+    chromium \
+    fontconfig \
+    npm \
+    nss \
+    texlive \
+    texlive-dvi \
+    ttf-dejavu \
+    && rm -rf /var/cache/apk/*
+
+RUN npm install -g @mermaid-js/mermaid-cli
+
+# Tell puppeteer/mermaid where chromium is and to not download its own
+ENV PUPPETEER_SKIP_DOWNLOAD=1
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# --- chromium wrapper to force no-sandbox in restricted containers ---
+COPY docker/chromium-browser-wrapper.sh /usr/local/bin
+RUN set -eux; \
+    mv /usr/bin/chromium-browser /usr/bin/chromium-browser.real; \
+    mv /usr/local/bin/chromium-browser-wrapper.sh /usr/bin/chromium-browser
