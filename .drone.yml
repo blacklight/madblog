@@ -7,8 +7,7 @@ services:
   - name: docker
     image: docker:dind
     privileged: true
-    environment:
-      DOCKER_TLS_CERTDIR: ""
+    command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock", "--tls=false"]
     when:
       event:
         - tag
