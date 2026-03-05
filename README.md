@@ -19,7 +19,19 @@ pip install madblog
 
 ### Docker installation
 
-Minimal installation (no optional plugins, &lt; 100 MB in size):
+#### Minimal installation
+
+A minimal installation doesn't include extra plugins, and it should be about 50
+MB in size.
+
+##### Pre-built image (recommended)
+
+```bash
+docker pull quay.io/blacklight/madblog
+docker tag quay.io/blacklight/madblog madblog
+```
+
+##### Build from source
 
 ```shell
 git clone https://git.fabiomanganiello.com/madblog
@@ -27,7 +39,9 @@ cd madblog
 docker build -f docker/minimal.Dockerfile -t madblog .
 ```
 
-Full installation (all plugins, including LaTeX and Mermaid, &gt; 2 GB in size):
+#### Full installation
+
+Includes all plugins - including LaTeX and Mermaid; &gt; 2 GB in size.
 
 ```shell
 git clone https://git.fabiomanganiello.com/madblog

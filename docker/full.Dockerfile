@@ -1,4 +1,6 @@
-INCLUDE+ docker/minimal.Dockerfile
+FROM quay.io/blacklight/madblog
+
+USER root
 
 RUN apk add --no-cache \
     chromium \
@@ -21,3 +23,5 @@ COPY docker/chromium-browser-wrapper.sh /usr/local/bin
 RUN set -eux; \
     mv /usr/bin/chromium-browser /usr/bin/chromium-browser.real; \
     mv /usr/local/bin/chromium-browser-wrapper.sh /usr/bin/chromium-browser
+
+USER madblog
