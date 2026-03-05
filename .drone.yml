@@ -9,6 +9,9 @@ services:
     privileged: true
     environment:
       DOCKER_TLS_CERTDIR: ""
+    when:
+      event:
+        - tag
 
 steps:
 
