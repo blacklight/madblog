@@ -41,17 +41,14 @@ from .app import app
 application = app
 
 _monitor_lock_f = None
+lock_path = os.path.join(
+    getattr(config, "content_dir", "."), ".madblog-webmentions-monitor.lock"
+)
 
 
 def _start_monitor_once() -> None:
-    if not getattr(config, "enable_webmentions", False):
-        return
-
     global _monitor_lock_f
 
-    lock_path = os.path.join(
-        getattr(config, "content_dir", "."), ".madblog-webmentions-monitor.lock"
-    )
     try:
         _monitor_lock_f = open(lock_path, "w")
         fcntl.flock(_monitor_lock_f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -60,7 +57,6 @@ def _start_monitor_once() -> None:
 
     try:
         app.start()
-        logging.getLogger(__name__).info("Started webmentions filesystem monitor")
     except Exception:
         logging.getLogger(__name__).exception(
             "Failed to start webmentions filesystem monitor"

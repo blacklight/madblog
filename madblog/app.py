@@ -132,7 +132,7 @@ class BlogApp(Flask):
     def start(self) -> None:
         from . import __version__
 
-        print(
+        self.logger.info(
             f"""
 ╭──────────────────────────────────────────────────────────────────╮
 │                                                                  │
