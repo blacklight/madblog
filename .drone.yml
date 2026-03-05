@@ -1,0 +1,62 @@
+---
+kind: pipeline
+type: docker
+name: default
+
+steps:
+
+###
+### Run the tests
+###
+
+- name: tests
+  image: python:3.14-alpine
+  commands:
+    - . .drone/run-tests.sh
+
+###
+### Build and push the PyPI package
+###
+
+- name: update-pip-package
+  image: alpine
+  environment:
+    TWINE_USERNAME:
+      from_secret: pypi_user
+    TWINE_PASSWORD:
+      from_secret: pypi_pass
+
+  when:
+    event:
+      - tag
+
+  depends_on:
+    - tests
+
+  commands:
+    - . .drone/update-pip-package.sh
+
+###
+### Build and push the Docker image
+###
+
+- name: update-docker-image
+  image: docker
+  privileged: true
+  environment:
+    DOCKER_USER:
+      from_secret: docker_user
+    DOCKER_PASS:
+      from_secret: registry_token
+    REGISTRY_ENDPOINT: quay.io
+    REGISTRY_REPO: blacklight/madblog
+
+  when:
+    event:
+      - tag
+
+  depends_on:
+    - tests
+
+  commands:
+    - . .drone/update-image-registry.sh
