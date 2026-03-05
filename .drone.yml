@@ -3,6 +3,11 @@ kind: pipeline
 type: docker
 name: default
 
+services:
+  - name: docker
+    image: docker:dind
+    privileged: true
+
 steps:
 
 ###
@@ -42,8 +47,9 @@ steps:
 
 - name: update-docker-image
   image: docker
-  privileged: true
   environment:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_VERIFY: "0"
     DOCKER_USER:
       from_secret: docker_user
     DOCKER_PASS:
