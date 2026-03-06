@@ -107,6 +107,10 @@ a:hover {
   border-radius: 50%;
 }
 
+.meta .tags {
+  font-size: 1.25em;
+}
+
 .codehilite {
   position: relative;
   padding: 0 .5em;
@@ -186,4 +190,16 @@ img.latex.inline {
   height: 1.5em;
   vertical-align: text-bottom;
   margin: 0 .25em;
+}
+
+/* Tags */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  margin-bottom: 1.5em;
+}
+
+a.tag {
+  color: var(--color-link-fg);
 }
