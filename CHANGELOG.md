@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+**Added**
+
+- Support for **tags** (closes #16)
+
 ## 0.6.15
 
 **Added**
