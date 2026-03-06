@@ -42,7 +42,7 @@ application = app
 
 _monitor_lock_f = None
 lock_path = os.path.join(
-    getattr(config, "content_dir", "."), ".madblog-webmentions-monitor.lock"
+    getattr(config, "content_dir", "."), ".madblog-content-monitor.lock"
 )
 
 
@@ -59,7 +59,7 @@ def _start_monitor_once() -> None:
         app.start()
     except Exception:
         logging.getLogger(__name__).exception(
-            "Failed to start webmentions filesystem monitor"
+            "Failed to start content monitor"
         )
 
 

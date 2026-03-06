@@ -12,8 +12,9 @@ from email.utils import formatdate
 from flask import Flask, Response, abort, make_response, render_template, request
 from markdown import markdown
 from webmentions import WebmentionDirection, WebmentionsHandler
-from webmentions.storage.adapters.file import FileSystemMonitor
 from webmentions.server.adapters.flask import bind_webmentions
+
+from .monitor import ChangeType, ContentMonitor
 
 from .config import config
 from .feeds import FeedAuthor, FeedParser
@@ -114,15 +115,16 @@ class BlogApp(Flask):
             on_mention_processed=on_mention_processed,
         )
 
-        self.filesystem_monitor = FileSystemMonitor(
+        self.content_monitor = ContentMonitor(
             root_dir=str(self.pages_dir),
-            handler=self.webmentions_handler,
-            file_to_url_mapper=self._file_to_url,
             throttle_seconds=config.throttle_seconds_on_update,
         )
 
+        self.webmentions_storage.set_handler(self.webmentions_handler)
+
         if config.enable_webmentions:
             bind_webmentions(self, self.webmentions_handler)
+            self.content_monitor.register(self.webmentions_storage.on_content_change)
 
     def _file_to_url(self, f: str) -> str:
         # Return the path relative to self.pages_dir and strip the extension
@@ -148,12 +150,10 @@ class BlogApp(Flask):
               """
         )
 
-        if config.enable_webmentions:
-            self.filesystem_monitor.start()
+        self.content_monitor.start()
 
     def stop(self) -> None:
-        if config.enable_webmentions:
-            self.filesystem_monitor.stop()
+        self.content_monitor.stop()
 
     @staticmethod
     def _generate_etag(mtime: float) -> str:
