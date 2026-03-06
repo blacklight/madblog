@@ -25,6 +25,8 @@ from .tasklist import MarkdownTaskList
 from .toc import MarkdownTocMarkers
 from .notifications import SmtpConfig, build_webmention_email_notifier
 from .storage.mentions import FileWebmentionsStorage
+from .storage.tags import TagIndex
+from .tags import MarkdownTags, parse_metadata_tags
 from ._sorters import PagesSorter, PagesSortByTime
 
 
@@ -77,6 +79,11 @@ class BlogApp(Flask):
             self.template_folder = os.path.abspath(templates_dir)
 
         self._init_webmentions()
+        self.tag_index = TagIndex(
+            content_dir=config.content_dir,
+            pages_dir=str(self.pages_dir),
+            mentions_dir=str(self.mentions_dir),
+        )
 
     def _init_webmentions(self):
         from . import __version__
@@ -126,10 +133,9 @@ class BlogApp(Flask):
             bind_webmentions(self, self.webmentions_handler)
             self.content_monitor.register(self.webmentions_storage.on_content_change)
 
-    def _file_to_url(self, f: str) -> str:
-        # Return the path relative to self.pages_dir and strip the extension
-        f = os.path.relpath(f, self.pages_dir).rsplit(".", 1)[0]
-        return f"{config.link}/article/{f}"
+    def _on_content_change_tags(self, _: ChangeType, filepath: str) -> None:
+        """Bridge: forward content changes to the tag indexer."""
+        self.tag_index.reindex_file(filepath)
 
     def start(self) -> None:
         from . import __version__
@@ -150,6 +156,8 @@ class BlogApp(Flask):
               """
         )
 
+        self.tag_index.build()
+        self.content_monitor.register(self._on_content_change_tags)
         self.content_monitor.start()
 
     def stop(self) -> None:
@@ -358,6 +366,8 @@ class BlogApp(Flask):
         with open(md_file, "r") as f:
             content = self._parse_content(f)
 
+        tags = parse_metadata_tags(metadata.get("tags", ""))
+
         output = (
             f"# {title}\n\n{content}"
             if as_markdown
@@ -386,8 +396,10 @@ class BlogApp(Flask):
                         MarkdownTocMarkers(),
                         MarkdownLatex(),
                         MarkdownMermaid(),
+                        MarkdownTags(),
                     ],
                 ),
+                tags=tags,
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
                 mentions=mentions,
