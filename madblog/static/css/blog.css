@@ -84,15 +84,21 @@ a:hover {
   font-size: 0.75em;
   color: var(--color-fg-tertiary);
   margin-bottom: 2em;
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   gap: 0.25em;
+}
+
+.meta .meta-row {
+  display: inline-flex;
 }
 
 .meta .p-author {
   display: inline-flex;
   align-items: center;
   gap: 0.25em;
+  margin-right: 0.5em;
 }
 
 .meta .p-author img.u-photo {
