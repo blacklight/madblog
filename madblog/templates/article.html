@@ -29,34 +29,44 @@
       </div>
       {% endif %}
 
-      {% if published or author %}
+      {% if published or author or tags %}
       <div class="meta">
-        {% if author %}
-          <span class="p-author h-card">
-            {% if author_photo %}
-              <img class="u-photo" src="{{ author_photo }}" alt="Author photo" loading="lazy">
-            {% endif %}
-            {% if author_url %}
-              <a class="p-url" rel="me" href="{{ author_url }}">
-            {% endif %}
+        {% if published or author %}
+          <div class="meta-row">
+            <span class="p-author h-card">
+              {% if author_photo %}
+                <img class="u-photo" src="{{ author_photo }}" alt="Author photo" loading="lazy">
+              {% endif %}
+              {% if author_url %}
+                <a class="p-url" rel="me" href="{{ author_url }}">
+              {% endif %}
 
-            <span class="p-name">
-              {{ author }}
+              <span class="p-name">
+                {{ author }}
+              </span>
             </span>
-          </span>
 
-          {% if author_url %}
-            </a>
+            {% if author_url %}
+              </a>
+            {% endif %}
+          {% endif %}
+
+          {% if published %}
+            <div class="published-date">
+              <time class="dt-published" datetime="{{ published_datetime.isoformat() }}">{{ published }}</time>
+            </div>
+          </div>
           {% endif %}
         {% endif %}
 
-        {% if published %}
-          <div class="published-date">
-            <time class="dt-published" datetime="{{ published_datetime.isoformat() }}">{{ published }}</time>
-          </div>
+        {% if tags %}
+        <div class="tags meta-row">
+          {% for tag in tags %}
+            <a class="tag" href="/tags/{{ tag }}">#{{ tag }}</a>
+          {% endfor %}
+        </div>
         {% endif %}
       </div>
-      {% endif %}
     {% endif %}
 
     {% if image %}

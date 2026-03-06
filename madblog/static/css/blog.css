@@ -84,21 +84,31 @@ a:hover {
   font-size: 0.75em;
   color: var(--color-fg-tertiary);
   margin-bottom: 2em;
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   gap: 0.25em;
+}
+
+.meta .meta-row {
+  display: inline-flex;
 }
 
 .meta .p-author {
   display: inline-flex;
   align-items: center;
   gap: 0.25em;
+  margin-right: 0.5em;
 }
 
 .meta .p-author img.u-photo {
   width: 1.25em;
   height: 1.25em;
   border-radius: 50%;
+}
+
+.meta .tags {
+  font-size: 1.25em;
 }
 
 .codehilite {
@@ -180,4 +190,16 @@ img.latex.inline {
   height: 1.5em;
   vertical-align: text-bottom;
   margin: 0 .25em;
+}
+
+/* Tags */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  margin-bottom: 1.5em;
+}
+
+a.tag {
+  color: var(--color-link-fg);
 }

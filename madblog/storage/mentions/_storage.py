@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import os
 import re
 
 from collections import defaultdict
@@ -18,6 +19,7 @@ from webmentions import (
     WebmentionStatus,
     WebmentionsStorage,
 )
+from webmentions.storage.adapters.file._watcher import ContentTextFormat
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,14 @@ class FileWebmentionsStorage(WebmentionsStorage):
 
     Stores each Webmention as a Markdown file with metadata in comments.
     """
+
+    _EXT_FORMAT_MAP = {
+        ".md": ContentTextFormat.MARKDOWN,
+        ".markdown": ContentTextFormat.MARKDOWN,
+        ".html": ContentTextFormat.HTML,
+        ".htm": ContentTextFormat.HTML,
+        ".txt": ContentTextFormat.TEXT,
+    }
 
     def __init__(
         self,
@@ -46,6 +56,43 @@ class FileWebmentionsStorage(WebmentionsStorage):
         self._resource_locks = defaultdict(RLock)
         self._watcher_lock = RLock()
         self._webmentions_handler: WebmentionsHandler | None = None
+
+    def set_handler(self, handler: WebmentionsHandler) -> None:
+        """Wire the :class:`WebmentionsHandler` used for outgoing mentions."""
+        self._webmentions_handler = handler
+
+    def _file_to_url(self, filepath: str) -> str:
+        """Convert a local file path to its public article URL."""
+        rel = os.path.relpath(filepath, self.content_dir).rsplit(".", 1)[0]
+        return f"{self.base_url}/article/{rel}"
+
+    def on_content_change(self, change_type, filepath: str) -> None:
+        """Callback for :class:`ContentMonitor`: forward file changes to the
+        webmentions handler so that outgoing mentions are (re-)processed."""
+        if self._webmentions_handler is None:
+            return
+
+        source_url = self._file_to_url(filepath)
+        ext = os.path.splitext(filepath)[1].lower()
+        text_format = self._EXT_FORMAT_MAP.get(ext, ContentTextFormat.MARKDOWN)
+
+        if change_type.value == "deleted":
+            self._webmentions_handler.process_outgoing_webmentions(
+                source_url,
+                text="",
+                text_format=text_format,
+            )
+        else:
+            try:
+                with open(filepath, "r", encoding="utf-8") as fh:
+                    text = fh.read()
+            except OSError:
+                return
+            self._webmentions_handler.process_outgoing_webmentions(
+                source_url,
+                text=text,
+                text_format=text_format,
+            )
 
     def store_webmention(self, mention: Webmention):
         """

@@ -393,4 +393,34 @@ def rss_route():
     return _get_feed(request, "rss")
 
 
+@app.route("/tags", methods=["GET"])
+def tags_route():
+    from flask import make_response, render_template
+
+    tags = app.tag_index.get_all_tags()
+    response = make_response(render_template("tags.html", tags=tags, config=config))
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/tags/<tag>", methods=["GET"])
+def tag_posts_route(tag: str):
+    from flask import make_response, render_template
+
+    from .tags import normalize_tag as _normalize_tag
+
+    canonical = _normalize_tag(tag)
+    posts = app.tag_index.get_posts_for_tag(canonical)
+    response = make_response(
+        render_template(
+            "tag_posts.html",
+            tag=canonical,
+            posts=posts,
+            config=config,
+        )
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 # vim:sw=4:ts=4:et:

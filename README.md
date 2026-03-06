@@ -197,6 +197,17 @@ Or, if you want to pass an email rather than a URL for the author:
 [//]: # (author: Author Name <mailto:email@author.me>)
 ```
 
+You can also tag your articles:
+
+```markdown
+[//]: # (tags: #python, #webdev, #tutorial)
+```
+
+Tags declared in the metadata header are shown in the article header as links and
+contribute to the tag index available at `/tags`. Hashtags written directly in the
+article body (e.g. `#python`) are also detected and rendered as links to the
+corresponding tag page.
+
 If these metadata headers are missing, some of them can be inferred
 from the file itself:
 

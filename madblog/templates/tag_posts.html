@@ -1,0 +1,44 @@
+{% with title='#' + tag, url=config.link + '/tags/' + tag, description='Posts tagged #' + tag, type='index', image=None, skip_header=not config.header, styles=['/css/home.css'] %}
+  {% include 'common-head.html' %}
+{% endwith %}
+
+<main>
+  <div class="container tag-posts">
+    <h1 class="tag"><a href="/tags">Tags</a> › #{{ tag }}</h1>
+
+    {% if posts %}
+    <div class="index view-list">
+      <div class="folder">
+        <div class="articles">
+          {% for post in posts %}
+            <a class="article article-list" href="/article/{{ post['path'].rsplit('.', 1)[0] }}">
+              <div class="container">
+                <div class="title">
+                  {{ post['title'] or post['path'] }}
+                </div>
+
+                {% if post['published'] %}
+                  <div class="published-date">
+                    {{ post['published'] }}
+                  </div>
+                {% endif %}
+
+                {% if post['description'] %}
+                  <div class="description">
+                    {{ post['description'] }}
+                  </div>
+                {% endif %}
+              </div>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <p>No posts found for this tag.</p>
+    {% endif %}
+  </div>
+</main>
+
+{% include 'footer.html' %}
+{% include 'common-tail.html' %}

@@ -37,6 +37,28 @@
     <link rel="me" href="{{ external_link }}">
     {% endfor %}
     {% endif %}
+    
+    <!-- Semantic tag/category links -->
+    {% if is_home_page and config.categories %}
+    <!-- Categories for home page -->
+    {% for category in config.categories %}
+    <link rel="tag" href="/tags/{{ category|lower|replace(' ', '-') }}" title="{{ category }}">
+    {% endfor %}
+    {% endif %}
+    
+    {% if not is_home_page and (tags or config.categories) %}
+    <!-- Tags and categories for article pages -->
+    {% if config.categories %}
+    {% for category in config.categories %}
+    <link rel="tag" href="/tags/{{ category|lower|replace(' ', '-') }}" title="{{ category }}">
+    {% endfor %}
+    {% endif %}
+    {% if tags %}
+    {% for tag in tags %}
+    <link rel="tag" href="/tags/{{ tag }}" title="{{ tag }}">
+    {% endfor %}
+    {% endif %}
+    {% endif %}
     <!-- PWA builder -->
     <script type="module" src="/pwabuilder-sw-register.js"></script>
     <!-- Articles utilities -->
