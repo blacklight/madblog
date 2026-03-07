@@ -240,6 +240,7 @@ class BlogApp(Flask):
             base_url=config.link,
         )
         self.content_monitor.register(self._ap_integration.on_content_change)
+        self._ap_integration.sync_on_startup()
 
     def _on_content_change_tags(self, _: ChangeType, filepath: str) -> None:
         """Bridge: forward content changes to the tag indexer."""
