@@ -503,6 +503,7 @@ class BlogApp(Flask):
                         MarkdownLatex(),
                         MarkdownMermaid(),
                         MarkdownTags(),
+                        MarkdownActivityPubMentions(),
                     ],
                 ),
                 tags=tags,
