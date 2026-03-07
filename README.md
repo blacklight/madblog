@@ -2,6 +2,8 @@
 
 [![Build Status](https://ci-cd.platypush.tech/api/badges/blacklight/madblog/status.svg)](https://ci-cd.platypush.tech/blacklight/madblog)
 
+[[TOC]]
+
 A minimal but capable blog and Web framework that you can directly run from a Markdown folder.
 
 ## Demos
