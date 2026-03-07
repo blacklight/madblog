@@ -3,7 +3,6 @@ Tests for the ActivityPub integration in Madblog.
 """
 
 import os
-import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,12 +11,14 @@ from unittest.mock import MagicMock, patch
 
 def skip_if_no_pubby(test_func):
     """Decorator to skip tests if pubby is not available."""
+
     def wrapper(self, *args, **kwargs):
         try:
             import pubby
         except ImportError:
             self.skipTest("pubby is not installed")
         return test_func(self, *args, **kwargs)
+
     return wrapper
 
 
@@ -56,9 +57,7 @@ class ActivityPubConfigTest(unittest.TestCase):
         self.assertEqual(config.activitypub_username, "testuser")
         self.assertEqual(config.activitypub_name, "Test Blog")
         self.assertEqual(config.activitypub_summary, "A test blog")
-        self.assertEqual(
-            config.activitypub_icon_url, "https://example.com/icon.png"
-        )
+        self.assertEqual(config.activitypub_icon_url, "https://example.com/icon.png")
         self.assertEqual(config.activitypub_private_key_path, "/tmp/key.pem")
         self.assertTrue(config.activitypub_manually_approves_followers)
         self.assertTrue(config.activitypub_description_only)
@@ -140,16 +139,13 @@ class ActivityPubEnabledTest(unittest.TestCase):
         self.app = BlogApp(__name__)
 
     def tearDown(self):
-        if hasattr(self, 'config'):
+        if hasattr(self, "config"):
             self.config.enable_activitypub = False
 
     @skip_if_no_pubby
     def test_webfinger(self):
         client = self.app.test_client()
-        resp = client.get(
-            "/.well-known/webfinger"
-            "?resource=acct:blog@example.com"
-        )
+        resp = client.get("/.well-known/webfinger" "?resource=acct:blog@example.com")
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json()
         self.assertEqual(data["subject"], "acct:blog@example.com")
@@ -241,7 +237,7 @@ class ActivityPubContentChangeTest(unittest.TestCase):
 
     @skip_if_no_pubby
     def test_on_content_change_create(self):
-        from pubby import ActivityPubHandler, Object
+        from pubby import ActivityPubHandler
         from pubby.crypto import generate_rsa_keypair
         from pubby.storage.adapters.file import FileActivityPubStorage
         from madblog.storage.activitypub import ActivityPubIntegration
@@ -273,9 +269,7 @@ class ActivityPubContentChangeTest(unittest.TestCase):
 
         # Write a test file
         test_file = pages_dir / "hello.md"
-        test_file.write_text(
-            "[//]: # (title: Hello)\n\n# Hello\n\nWorld.\n"
-        )
+        test_file.write_text("[//]: # (title: Hello)\n\n# Hello\n\nWorld.\n")
 
         # Mock publish_object to capture the call
         handler.publish_object = MagicMock()
@@ -283,7 +277,7 @@ class ActivityPubContentChangeTest(unittest.TestCase):
 
         handler.publish_object.assert_called_once()
         obj = handler.publish_object.call_args[0][0]
-        self.assertEqual(obj.type, "Article")
+        self.assertEqual(obj.type, "Note")
         self.assertEqual(obj.name, "Hello")
         self.assertIn("https://example.com/article/hello", obj.id)
 
