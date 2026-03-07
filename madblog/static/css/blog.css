@@ -199,7 +199,3 @@ img.latex.inline {
   gap: 0.4em;
   margin-bottom: 1.5em;
 }
-
-a.tag {
-  color: var(--color-link-fg);
-}

@@ -420,27 +420,6 @@ h3 {
   margin: 2em 0;
 }
 
-a.tag {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75em 1em;
-  font-size: 1em;
-  color: var(--color-fg-primary);
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  text-decoration: none;
-  transition: all 0.2s ease;
-}
-
-a.tag:hover {
-  background: var(--color-bg-tertiary);
-  border-color: var(--color-shadow-accent);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px var(--color-shadow);
-}
-
 .tag-count {
   font-size: 0.9em;
   color: var(--color-fg-tertiary);
