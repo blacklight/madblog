@@ -1,0 +1,360 @@
+"""
+ActivityPub integration for Madblog.
+
+Wraps pubby's file-based storage and provides a content-change callback
+that publishes Article objects to followers.
+"""
+
+import logging
+import os
+import re
+import json
+
+from datetime import datetime, timezone
+from pathlib import Path
+
+from pubby import ActivityPubHandler, Object
+
+from ...config import config
+
+logger = logging.getLogger(__name__)
+
+
+class ActivityPubIntegration:
+    """
+    Bridges Madblog's content monitor to the pubby ActivityPub handler.
+
+    :param handler: The pubby ``ActivityPubHandler``.
+    :param pages_dir: Absolute path to the markdown pages directory.
+    :param base_url: Public base URL (e.g. ``https://example.com``).
+    """
+
+    _metadata_regex = re.compile(r"^\[//]: # \(([^:]+):\s*(.*)\)\s*$")
+
+    def __init__(
+        self,
+        handler: ActivityPubHandler,
+        pages_dir: str | Path,
+        base_url: str,
+    ):
+        self.handler = handler
+        self.pages_dir = str(Path(pages_dir).resolve())
+        self.base_url = base_url.rstrip("/")
+        self.published_objects_file = Path(pages_dir).parent / ".published_objects.json"
+        self.deleted_urls_file = Path(pages_dir).parent / ".deleted_urls.json"
+        self.file_urls_file = Path(pages_dir).parent / ".file_urls.json"
+
+    def _load_published_objects(self) -> set:
+        """Load set of previously published object URLs."""
+        try:
+            if self.published_objects_file.exists():
+                with open(self.published_objects_file, "r") as f:
+                    data = json.load(f)
+                    return set(data.get("published", []))
+        except Exception:
+            logger.warning("Failed to load published objects cache")
+        return set()
+
+    def _save_published_objects(self, published: set) -> None:
+        """Save set of published object URLs."""
+        try:
+            data = {"published": list(published)}
+            with open(self.published_objects_file, "w") as f:
+                json.dump(data, f, indent=2)
+        except Exception:
+            logger.warning("Failed to save published objects cache")
+
+    def _mark_as_published(self, url: str) -> None:
+        """Mark an object URL as published."""
+        published = self._load_published_objects()
+        published.add(url)
+        self._save_published_objects(published)
+
+    def _is_published(self, url: str) -> bool:
+        """Check if an object URL has been published before."""
+        published = self._load_published_objects()
+        return url in published
+
+    def debug_published_cache(self) -> dict:
+        """Debug helper: return current published objects cache."""
+        return {
+            "cache_file": str(self.published_objects_file),
+            "cache_exists": self.published_objects_file.exists(),
+            "published_urls": list(self._load_published_objects()),
+        }
+
+    def reset_published_cache(self) -> None:
+        """Reset the published objects cache (for debugging/recovery)."""
+        self._save_published_objects(set())
+        logger.info("Reset published objects cache")
+
+    def _load_recently_deleted_urls(self) -> dict:
+        """Load recently deleted URLs with timestamps."""
+        try:
+            if self.deleted_urls_file.exists():
+                with open(self.deleted_urls_file, "r") as f:
+                    return json.load(f)
+        except Exception:
+            logger.warning("Failed to load deleted URLs cache")
+        return {}
+
+    def _save_recently_deleted_urls(self, deleted: dict) -> None:
+        """Save recently deleted URLs with timestamps."""
+        try:
+            with open(self.deleted_urls_file, "w") as f:
+                json.dump(deleted, f, indent=2)
+        except Exception:
+            logger.warning("Failed to save deleted URLs cache")
+
+    def _mark_as_deleted(self, url: str) -> None:
+        """Mark a URL as recently deleted."""
+        deleted = self._load_recently_deleted_urls()
+        deleted[url] = int(datetime.now(timezone.utc).timestamp())
+        self._save_recently_deleted_urls(deleted)
+
+    def _get_recently_deleted_urls(self, max_age_hours: int = 24) -> set:
+        """Get URLs deleted within the last N hours (default 24)."""
+        deleted = self._load_recently_deleted_urls()
+        current_time = int(datetime.now(timezone.utc).timestamp())
+        cutoff_time = current_time - (max_age_hours * 3600)
+
+        # Filter out old entries and return recent ones
+        recent = {url for url, timestamp in deleted.items() if timestamp > cutoff_time}
+
+        # Clean up old entries
+        if len(recent) != len(deleted):
+            fresh_deleted = {url: ts for url, ts in deleted.items() if ts > cutoff_time}
+            self._save_recently_deleted_urls(fresh_deleted)
+
+        return recent
+
+    def _load_file_urls(self) -> dict:
+        """Load file path -> URL mappings."""
+        try:
+            if self.file_urls_file.exists():
+                with open(self.file_urls_file, "r") as f:
+                    return json.load(f)
+        except Exception:
+            logger.warning("Failed to load file URLs cache")
+        return {}
+
+    def _save_file_urls(self, file_urls: dict) -> None:
+        """Save file path -> URL mappings."""
+        try:
+            with open(self.file_urls_file, "w") as f:
+                json.dump(file_urls, f, indent=2)
+        except Exception:
+            logger.warning("Failed to save file URLs cache")
+
+    def _set_file_url(self, filepath: str, url: str) -> None:
+        """Set the URL for a specific file path."""
+        file_urls = self._load_file_urls()
+        rel_path = os.path.relpath(filepath, self.pages_dir)
+        file_urls[rel_path] = url
+        self._save_file_urls(file_urls)
+
+    def _get_file_url(self, filepath: str) -> str | None:
+        """Get the stored URL for a file path, if any."""
+        file_urls = self._load_file_urls()
+        rel_path = os.path.relpath(filepath, self.pages_dir)
+        return file_urls.get(rel_path)
+
+    def _remove_file_url(self, filepath: str) -> None:
+        """Remove the URL mapping for a deleted file."""
+        file_urls = self._load_file_urls()
+        rel_path = os.path.relpath(filepath, self.pages_dir)
+        file_urls.pop(rel_path, None)
+        self._save_file_urls(file_urls)
+
+    def _file_to_url(self, filepath: str) -> str:
+        # Check if we already have a stored URL for this file
+        stored_url = self._get_file_url(filepath)
+        if stored_url:
+            return stored_url
+
+        # Generate the base URL
+        rel = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
+        base_url = f"{self.base_url}/article/{rel}"
+
+        # If this URL was recently deleted, append timestamp to avoid collisions
+        if base_url in self._get_recently_deleted_urls():
+            timestamp = int(datetime.now(timezone.utc).timestamp())
+            collision_url = f"{base_url}?v={timestamp}"
+            # Store this collision-avoiding URL for future edits
+            self._set_file_url(filepath, collision_url)
+            logger.info(
+                "Generated collision-avoiding URL for restored content: %s",
+                collision_url,
+            )
+            return collision_url
+
+        # Store the normal URL for future edits
+        self._set_file_url(filepath, base_url)
+        return base_url
+
+    def _parse_metadata(self, filepath: str) -> dict:
+        """Extract metadata headers from a Markdown file."""
+        metadata: dict = {}
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip() or re.match(r"(^---\s*$)|(^#\s+.*)", line):
+                        continue
+
+                    m = self._metadata_regex.match(line)
+                    if not m:
+                        break
+
+                    key, value = m.group(1), m.group(2)
+                    if key == "published":
+                        try:
+                            metadata[key] = datetime.fromisoformat(
+                                value.replace("Z", "+00:00")
+                            )
+                        except ValueError:
+                            metadata[key] = value
+                    else:
+                        metadata[key] = value
+        except OSError:
+            pass
+
+        return metadata
+
+    def _extract_title(self, filepath: str) -> str:
+        """Extract the first H1 title from a Markdown file."""
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                for line in f:
+                    m = re.match(r"^#\s+\[?([^\]]+)\]?", line)
+                    if m:
+                        return m.group(1).strip()
+        except OSError:
+            pass
+
+        return os.path.splitext(os.path.basename(filepath))[0]
+
+    def _read_content(self, filepath: str) -> str:
+        """Read the raw text content of a file."""
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                return f.read()
+        except OSError:
+            return ""
+
+    def _clean_content_for_activitypub(self, filepath: str) -> str:
+        """Read and clean content for ActivityPub, removing metadata headers."""
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+            cleaned_lines = []
+            skip_metadata = True
+
+            for line in lines:
+                # Skip metadata headers at the start
+                if skip_metadata:
+                    if (
+                        line.strip()
+                        and not line.startswith("[//]: #")
+                        and not line.startswith("---")
+                        and not re.match(r"^#\s+", line.strip())
+                    ):  # Stop skipping after first real content
+                        skip_metadata = False
+                        cleaned_lines.append(line)
+                    elif re.match(r"^#\s+", line.strip()):  # Include title
+                        skip_metadata = False
+                        cleaned_lines.append(line)
+                else:
+                    cleaned_lines.append(line)
+
+            return "".join(cleaned_lines).strip()
+        except OSError:
+            return ""
+
+    def on_content_change(self, change_type, filepath: str) -> None:
+        """
+        Callback for :class:`ContentMonitor`.
+
+        On create/edit: publish an Article to followers.
+        On delete: send a Delete activity.
+        """
+        url = self._file_to_url(filepath)
+        actor_url = f"{self.base_url}{self.handler.actor_path}"
+
+        if change_type.value == "deleted":
+            # Mark base URL as recently deleted to avoid collisions
+            base_url = f"{self.base_url}/article/{os.path.relpath(filepath, self.pages_dir).rsplit('.', 1)[0]}"
+            self._mark_as_deleted(base_url)
+
+            # Remove the file URL mapping since the file is being deleted
+            self._remove_file_url(filepath)
+
+            obj = Object(
+                id=url,
+                type="Article",
+                attributed_to=actor_url,
+                to=["https://www.w3.org/ns/activitystreams#Public"],  # Public timeline
+                cc=[self.handler.followers_url],  # Send to followers
+            )
+
+            # Always remove from cache, even if delete fails
+            published = self._load_published_objects()
+            published.discard(url)
+            self._save_published_objects(published)
+
+            try:
+                self.handler.publish_object(obj, activity_type="Delete")
+                logger.info("Published Delete for %s", url)
+            except Exception:
+                logger.exception("Failed to publish Delete for %s", url)
+            return
+
+        metadata = self._parse_metadata(filepath)
+        title = metadata.get("title") or self._extract_title(filepath)
+        description = metadata.get("description", "")
+        published = metadata.get("published")
+        if isinstance(published, str):
+            try:
+                published = datetime.fromisoformat(published.replace("Z", "+00:00"))
+            except ValueError:
+                published = None
+
+        # Choose content based on config setting
+        if config.activitypub_description_only:
+            # Use description as main content, with a snippet as summary
+            post_content = (
+                description
+                or self._clean_content_for_activitypub(filepath)[:500] + "..."
+            )
+            post_summary = (
+                description[:200] + "..." if len(description) > 200 else description
+            )
+        else:
+            # Use full article content (default behavior)
+            post_content = self._clean_content_for_activitypub(filepath)
+            post_summary = description  # Keep description as summary for previews
+
+        # More efficient update detection using local tracking
+        activity_type = "Update" if self._is_published(url) else "Create"
+
+        obj = Object(
+            id=url,
+            type="Article",
+            name=title,
+            content=post_content,
+            url=url,
+            attributed_to=actor_url,
+            published=published or datetime.now(timezone.utc),
+            updated=datetime.now(timezone.utc),  # Required for Update activities
+            summary=post_summary,
+            to=["https://www.w3.org/ns/activitystreams#Public"],  # Public timeline
+            cc=[self.handler.followers_url],  # Send to followers
+        )
+
+        try:
+            self.handler.publish_object(obj, activity_type=activity_type)
+            # Mark as published for future update detection
+            self._mark_as_published(url)
+            logger.info("Published %s for %s", activity_type, url)
+        except Exception:
+            logger.exception("Failed to publish %s for %s", activity_type, url)
