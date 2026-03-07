@@ -43,7 +43,7 @@ docker build -f docker/minimal.Dockerfile -t madblog .
 
 #### Full installation
 
-Includes all plugins - including LaTeX and Mermaid; &gt; 2 GB in size.
+Includes all plugins - including ActivityPub, LaTeX and Mermaid; &gt; 2 GB in size.
 
 ```shell
 git clone https://git.fabiomanganiello.com/madblog
