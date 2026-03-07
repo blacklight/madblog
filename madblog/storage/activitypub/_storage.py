@@ -13,6 +13,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import requests
 from pubby import ActivityPubHandler, Object
 from markdown import markdown
 
@@ -290,6 +291,34 @@ class ActivityPubIntegration(StartupSyncMixin):
             logger.warning(f"Failed to render markdown to HTML: {e}")
             return content  # Return original content as fallback
 
+    def _resolve_actor_url(self, username: str, domain: str) -> str:
+        """
+        Resolve the ActivityPub actor URL for ``@username@domain`` via
+        WebFinger.  Falls back to ``https://domain/@username`` on failure.
+        """
+        fallback = f"https://{domain}/@{username}"
+        try:
+            resp = requests.get(
+                f"https://{domain}/.well-known/webfinger",
+                params={"resource": f"acct:{username}@{domain}"},
+                headers={"Accept": "application/jrd+json"},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            for link in data.get("links", []):
+                if (
+                    link.get("rel") == "self"
+                    and link.get("type", "").startswith("application/")
+                ):
+                    return link["href"]
+        except Exception:
+            logger.warning(
+                "WebFinger lookup failed for @%s@%s, using fallback",
+                username, domain,
+            )
+        return fallback
+
     def on_content_change(self, change_type, filepath: str) -> None:
         """
         Callback for :class:`ContentMonitor`.
@@ -362,16 +391,15 @@ class ActivityPubIntegration(StartupSyncMixin):
         mention_tags = []
         mention_actor_urls = []
         for username, domain in mentions:
-            actor_url_mention = f"https://{domain}/@{username}"
-            # Use webfinger-style href for the tag
+            actor_href = self._resolve_actor_url(username, domain)
             mention_tags.append(
                 {
                     "type": "Mention",
-                    "href": actor_url_mention,
+                    "href": actor_href,
                     "name": f"@{username}@{domain}",
                 }
             )
-            mention_actor_urls.append(actor_url_mention)
+            mention_actor_urls.append(actor_href)
 
         # More efficient update detection using local tracking
         activity_type = "Update" if self._is_published(url) else "Create"
