@@ -143,3 +143,18 @@ link: https://myblog.example.com
 # new ActivityPub activities occur, if ActivityPub is enabled, an email
 # address is provided, and an SMTP server is configured (optional, default: true)
 # activitypub_email_notifications: true
+
+# ActivityPub object type: "Note" (default) renders content inline on
+# Mastodon/Pleroma. "Article" only shows as a link preview card.
+# activitypub_object_type: Note
+
+# If true, only send the article description (not the full body) in
+# ActivityPub posts (default: false).
+# activitypub_description_only: false
+
+# If true, the article title is sent as the ActivityPub "summary" field,
+# which Mastodon/Pleroma render as a Content Warning / spoiler header
+# that must be clicked to reveal the body. The description is kept as
+# bold text at the top of the body. When false (default), title and
+# description are both rendered inline in the post body with no CW.
+# activitypub_posts_content_wrapped: false

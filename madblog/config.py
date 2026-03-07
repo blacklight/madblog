@@ -59,6 +59,7 @@ class Config:
     activitypub_manually_approves_followers: bool = False
     activitypub_description_only: bool = False
     activitypub_object_type: str = "Note"
+    activitypub_posts_content_wrapped: bool = False
     activitypub_email_notifications: bool = True
 
     @property
@@ -198,6 +199,8 @@ def _init_config_from_file(config_file: str):
         config.activitypub_description_only = bool(cfg["activitypub_description_only"])
     if cfg.get("activitypub_object_type"):
         config.activitypub_object_type = cfg["activitypub_object_type"]
+    if cfg.get("activitypub_posts_content_wrapped") is not None:
+        config.activitypub_posts_content_wrapped = bool(cfg["activitypub_posts_content_wrapped"])
     if cfg.get("activitypub_email_notifications") is not None:
         config.activitypub_email_notifications = bool(
             cfg["activitypub_email_notifications"]
@@ -312,6 +315,10 @@ def _init_config_from_env():
         )
     if os.getenv("MADBLOG_ACTIVITYPUB_OBJECT_TYPE"):
         config.activitypub_object_type = os.environ["MADBLOG_ACTIVITYPUB_OBJECT_TYPE"]
+    if os.getenv("MADBLOG_ACTIVITYPUB_POSTS_CONTENT_WRAPPED"):
+        config.activitypub_posts_content_wrapped = (
+            os.environ["MADBLOG_ACTIVITYPUB_POSTS_CONTENT_WRAPPED"] == "1"
+        )
     if os.getenv("MADBLOG_ACTIVITYPUB_EMAIL_NOTIFICATIONS"):
         config.activitypub_email_notifications = (
             os.environ["MADBLOG_ACTIVITYPUB_EMAIL_NOTIFICATIONS"] == "1"
