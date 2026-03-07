@@ -91,6 +91,34 @@ docker run -it \
   madblog
 ```
 
+If you have ActivityPub federation enabled, mount your private key and
+(optionally) the ActivityPub data directory for persistence:
+
+```shell
+docker run -it \
+  -p 8000:8000 \
+  -v "/path/to/your/config.yaml:/etc/madblog/config.yaml" \
+  -v "/path/to/your/content:/data" \
+  -v "/path/to/your/private_key.pem:/etc/madblog/ap_key.pem:ro" \
+  -v "/path/to/your/activitypub-data:/data/activitypub" \
+  madblog
+```
+
+Or pass the configuration directory where `config.yaml` lives as a volume
+to let Madblog create a key there on the first start:
+
+```shell
+docker run -it \
+  -p 8000:8000 \
+  -v "/path/to/your/config:/etc/madblog" \
+  -v "/path/to/your/content:/data" \
+  -v "/path/to/your/activitypub-data:/data/activitypub" \
+  madblog
+```
+
+Set `activitypub_private_key_path: /etc/madblog/ap_key.pem` in your
+`config.yaml`. The key file must be readable only by the owner (`chmod 600`).
+
 ## Configuration
 
 See [config.example.yaml](./config.example.yaml) for an example configuration
