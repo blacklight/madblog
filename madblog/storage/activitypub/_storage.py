@@ -14,8 +14,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from pubby import ActivityPubHandler, Object
+from markdown import markdown
 
 from ...config import config
+from ...activitypub import MarkdownActivityPubMentions
+from ...autolink import MarkdownAutolink
+from ...latex import MarkdownLatex
+from ...mermaid import MarkdownMermaid
+from ...tasklist import MarkdownTaskList
+from ...toc import MarkdownTocMarkers
+from ...tags import MarkdownTags
 
 logger = logging.getLogger(__name__)
 
@@ -248,28 +256,47 @@ class ActivityPubIntegration:
                 lines = f.readlines()
 
             cleaned_lines = []
-            skip_metadata = True
 
             for line in lines:
-                # Skip metadata headers at the start
-                if skip_metadata:
-                    if (
-                        line.strip()
-                        and not line.startswith("[//]: #")
-                        and not line.startswith("---")
-                        and not re.match(r"^#\s+", line.strip())
-                    ):  # Stop skipping after first real content
-                        skip_metadata = False
-                        cleaned_lines.append(line)
-                    elif re.match(r"^#\s+", line.strip()):  # Include title
-                        skip_metadata = False
-                        cleaned_lines.append(line)
-                else:
-                    cleaned_lines.append(line)
+                # Always skip metadata headers, regardless of position
+                if (
+                    line.startswith("[//]: #")
+                    or line.startswith("---")
+                    or (line.strip().startswith("---") and line.strip().endswith("---"))
+                ):
+                    continue
+
+                # Include everything else (including titles, content, etc.)
+                cleaned_lines.append(line)
 
             return "".join(cleaned_lines).strip()
         except OSError:
             return ""
+
+    def _render_markdown_to_html(self, content: str) -> str:
+        """Convert markdown content to HTML using Madblog's extensions."""
+        try:
+            return markdown(
+                content,
+                extensions=[
+                    "fenced_code",
+                    "codehilite",
+                    "tables",
+                    "toc",
+                    "attr_list",
+                    "sane_lists",
+                    MarkdownAutolink(),
+                    MarkdownTaskList(),
+                    MarkdownTocMarkers(),
+                    MarkdownLatex(),
+                    MarkdownMermaid(),
+                    MarkdownTags(),
+                    MarkdownActivityPubMentions(),
+                ],
+            )
+        except Exception as e:
+            logger.warning(f"Failed to render markdown to HTML: {e}")
+            return content  # Return original content as fallback
 
     def on_content_change(self, change_type, filepath: str) -> None:
         """
@@ -291,7 +318,7 @@ class ActivityPubIntegration:
 
             obj = Object(
                 id=url,
-                type="Article",
+                type=config.activitypub_object_type,
                 attributed_to=actor_url,
                 to=["https://www.w3.org/ns/activitystreams#Public"],  # Public timeline
                 cc=[self.handler.followers_url],  # Send to followers
@@ -330,8 +357,9 @@ class ActivityPubIntegration:
                 description[:200] + "..." if len(description) > 200 else description
             )
         else:
-            # Use full article content (default behavior)
-            post_content = self._clean_content_for_activitypub(filepath)
+            # Use full article content (default behavior) - render as HTML
+            cleaned_content = self._clean_content_for_activitypub(filepath)
+            post_content = self._render_markdown_to_html(cleaned_content)
             post_summary = description  # Keep description as summary for previews
 
         # More efficient update detection using local tracking
@@ -339,7 +367,7 @@ class ActivityPubIntegration:
 
         obj = Object(
             id=url,
-            type="Article",
+            type=config.activitypub_object_type,
             name=title,
             content=post_content,
             url=url,
@@ -350,6 +378,10 @@ class ActivityPubIntegration:
             to=["https://www.w3.org/ns/activitystreams#Public"],  # Public timeline
             cc=[self.handler.followers_url],  # Send to followers
         )
+
+        # Add media type for HTML content (ActivityPub standard)
+        if not config.activitypub_description_only:
+            obj.media_type = "text/html"
 
         try:
             self.handler.publish_object(obj, activity_type=activity_type)
