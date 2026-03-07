@@ -185,8 +185,9 @@ class BlogApp(Flask):
         os.makedirs(ap_dir, exist_ok=True)
 
         # Key management
-        key_path = config.activitypub_private_key_path or os.path.join(
-            ap_dir, "private_key.pem"
+        key_path = os.path.expanduser(
+            config.activitypub_private_key_path
+            or os.path.join(ap_dir, "private_key.pem")
         )
 
         self._generate_or_check_key(key_path)
