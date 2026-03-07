@@ -13,9 +13,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-import requests
-from pubby import ActivityPubHandler, Object
 from markdown import markdown
+from pubby import ActivityPubHandler, Object, extract_mentions
 
 from ...config import config
 from ...activitypub import MarkdownActivityPubMentions
@@ -42,6 +41,15 @@ class ActivityPubIntegration(StartupSyncMixin):
 
     _metadata_regex = re.compile(r"^\[//]: # \(([^:]+):\s*(.*)\)\s*$")
 
+    _MARKDOWN_EXTENSIONS = [
+        "fenced_code",
+        "codehilite",
+        "tables",
+        "toc",
+        "attr_list",
+        "sane_lists",
+    ]
+
     def __init__(
         self,
         handler: ActivityPubHandler,
@@ -61,7 +69,9 @@ class ActivityPubIntegration(StartupSyncMixin):
         self._sync_cache_file = self.workdir / "published_objects.json"
         self._sync_pages_dir = self.pages_dir
 
-    # -- StartupSyncMixin hooks --
+    # -----------------------------------------------------------------
+    # StartupSyncMixin hooks
+    # -----------------------------------------------------------------
 
     def _sync_file_to_url(self, filepath: str) -> str:
         return self._file_to_url(filepath)
@@ -70,7 +80,9 @@ class ActivityPubIntegration(StartupSyncMixin):
         change = ChangeType.ADDED if is_new else ChangeType.EDITED
         self.on_content_change(change, filepath)
 
-    # -- Convenience aliases (keep existing call-sites working) --
+    # -----------------------------------------------------------------
+    # Published-objects helpers (delegate to mixin)
+    # -----------------------------------------------------------------
 
     def _is_published(self, url: str) -> bool:
         return self._sync_is_tracked(url)
@@ -87,6 +99,10 @@ class ActivityPubIntegration(StartupSyncMixin):
 
     def reset_published_cache(self) -> None:
         self._sync_reset()
+
+    # -----------------------------------------------------------------
+    # Deleted-URL tracking (collision avoidance)
+    # -----------------------------------------------------------------
 
     def _load_recently_deleted_urls(self) -> dict:
         """Load recently deleted URLs with timestamps."""
@@ -115,18 +131,17 @@ class ActivityPubIntegration(StartupSyncMixin):
     def _get_recently_deleted_urls(self, max_age_hours: int = 24) -> set:
         """Get URLs deleted within the last N hours (default 24)."""
         deleted = self._load_recently_deleted_urls()
-        current_time = int(datetime.now(timezone.utc).timestamp())
-        cutoff_time = current_time - (max_age_hours * 3600)
-
-        # Filter out old entries and return recent ones
-        recent = {url for url, timestamp in deleted.items() if timestamp > cutoff_time}
-
-        # Clean up old entries
+        cutoff = int(datetime.now(timezone.utc).timestamp()) - (max_age_hours * 3600)
+        recent = {url for url, ts in deleted.items() if ts > cutoff}
         if len(recent) != len(deleted):
-            fresh_deleted = {url: ts for url, ts in deleted.items() if ts > cutoff_time}
-            self._save_recently_deleted_urls(fresh_deleted)
-
+            self._save_recently_deleted_urls(
+                {url: ts for url, ts in deleted.items() if ts > cutoff}
+            )
         return recent
+
+    # -----------------------------------------------------------------
+    # File ↔ URL mapping (persistent across edits)
+    # -----------------------------------------------------------------
 
     def _load_file_urls(self) -> dict:
         """Load file path -> URL mappings."""
@@ -149,28 +164,23 @@ class ActivityPubIntegration(StartupSyncMixin):
     def _set_file_url(self, filepath: str, url: str) -> None:
         """Set the URL for a specific file path."""
         file_urls = self._load_file_urls()
-        rel_path = os.path.relpath(filepath, self.pages_dir)
-        file_urls[rel_path] = url
+        file_urls[os.path.relpath(filepath, self.pages_dir)] = url
         self._save_file_urls(file_urls)
 
     def _get_file_url(self, filepath: str) -> str | None:
-        """Get the stored URL for a file path, if any."""
-        file_urls = self._load_file_urls()
-        rel_path = os.path.relpath(filepath, self.pages_dir)
-        return file_urls.get(rel_path)
+        """Get the URL for a specific file path."""
+        return self._load_file_urls().get(os.path.relpath(filepath, self.pages_dir))
 
     def _remove_file_url(self, filepath: str) -> None:
         """Remove the URL mapping for a deleted file."""
         file_urls = self._load_file_urls()
-        rel_path = os.path.relpath(filepath, self.pages_dir)
-        file_urls.pop(rel_path, None)
+        file_urls.pop(os.path.relpath(filepath, self.pages_dir), None)
         self._save_file_urls(file_urls)
 
     def _file_to_url(self, filepath: str) -> str:
-        # Check if we already have a stored URL for this file
-        stored_url = self._get_file_url(filepath)
-        if stored_url:
-            return stored_url
+        stored = self._get_file_url(filepath)
+        if stored:
+            return stored
 
         # Generate the base URL
         rel = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
@@ -178,19 +188,20 @@ class ActivityPubIntegration(StartupSyncMixin):
 
         # If this URL was recently deleted, append timestamp to avoid collisions
         if base_url in self._get_recently_deleted_urls():
-            timestamp = int(datetime.now(timezone.utc).timestamp())
-            collision_url = f"{base_url}?v={timestamp}"
-            # Store this collision-avoiding URL for future edits
+            ts = int(datetime.now(timezone.utc).timestamp())
+            collision_url = f"{base_url}?v={ts}"
+            # Store this collision-avoiding URL to prevent future edits from
+            # being treated as different posts
             self._set_file_url(filepath, collision_url)
-            logger.info(
-                "Generated collision-avoiding URL for restored content: %s",
-                collision_url,
-            )
+            logger.info("Collision-avoiding URL: %s", collision_url)
             return collision_url
 
-        # Store the normal URL for future edits
         self._set_file_url(filepath, base_url)
         return base_url
+
+    # -----------------------------------------------------------------
+    # Markdown / metadata helpers
+    # -----------------------------------------------------------------
 
     def _parse_metadata(self, filepath: str) -> dict:
         """Extract metadata headers from a Markdown file."""
@@ -233,54 +244,34 @@ class ActivityPubIntegration(StartupSyncMixin):
 
         return os.path.splitext(os.path.basename(filepath))[0]
 
-    def _read_content(self, filepath: str) -> str:
-        """Read the raw text content of a file."""
-        try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                return f.read()
-        except OSError:
-            return ""
-
-    def _clean_content_for_activitypub(self, filepath: str) -> str:
-        """Read and clean content for ActivityPub, removing metadata headers."""
+    def _clean_content(self, filepath: str) -> str:
+        """Read markdown, strip metadata headers and the top-level heading."""
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 lines = f.readlines()
-
-            cleaned_lines = []
-
-            for line in lines:
-                # Always skip metadata headers, regardless of position
-                if (
-                    line.startswith("[//]: #")
-                    or line.startswith("---")
-                    or (line.strip().startswith("---") and line.strip().endswith("---"))
-                ):
-                    continue
-
-                # Skip top-level heading — added separately as linked title
-                if re.match(r"^#\s+", line) and not cleaned_lines:
-                    continue
-
-                # Include everything else
-                cleaned_lines.append(line)
-
-            return "".join(cleaned_lines).strip()
         except OSError:
             return ""
 
-    def _render_markdown_to_html(self, content: str) -> str:
-        """Convert markdown content to HTML using Madblog's extensions."""
+        cleaned: list[str] = []
+        for line in lines:
+            if (
+                line.startswith("[//]: #")
+                or line.startswith("---")
+                or (line.strip().startswith("---") and line.strip().endswith("---"))
+            ):
+                continue
+            if re.match(r"^#\s+", line) and not cleaned:
+                continue
+            cleaned.append(line)
+        return "".join(cleaned).strip()
+
+    def _render_html(self, md_text: str) -> str:
+        """Convert markdown to HTML using Madblog's full extension pipeline."""
         try:
             return markdown(
-                content,
+                md_text,
                 extensions=[
-                    "fenced_code",
-                    "codehilite",
-                    "tables",
-                    "toc",
-                    "attr_list",
-                    "sane_lists",
+                    *self._MARKDOWN_EXTENSIONS,
                     MarkdownAutolink(),
                     MarkdownTaskList(),
                     MarkdownTocMarkers(),
@@ -291,76 +282,62 @@ class ActivityPubIntegration(StartupSyncMixin):
                 ],
             )
         except Exception as e:
-            logger.warning(f"Failed to render markdown to HTML: {e}")
-            return content  # Return original content as fallback
+            logger.warning("Markdown → HTML failed: %s", e)
+            return md_text
 
-    def _resolve_actor_url(self, username: str, domain: str) -> str:
+    # -----------------------------------------------------------------
+    # Object builders
+    # -----------------------------------------------------------------
+
+    def _build_post_content(
+        self,
+        filepath: str,
+        url: str,
+        title: str,
+        description: str,
+    ) -> tuple[str, str | None]:
         """
-        Resolve the ActivityPub actor URL for ``@username@domain`` via
-        WebFinger.  Falls back to ``https://domain/@username`` on failure.
+        Build the HTML content and optional summary for a post.
+
+        Returns ``(html_content, summary_or_none)``.
         """
-        fallback = f"https://{domain}/@{username}"
-        try:
-            resp = requests.get(
-                f"https://{domain}/.well-known/webfinger",
-                params={"resource": f"acct:{username}@{domain}"},
-                headers={"Accept": "application/jrd+json"},
-                timeout=10,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            for link in data.get("links", []):
-                if link.get("rel") == "self" and link.get("type", "").startswith(
-                    "application/"
-                ):
-                    return link["href"]
-        except Exception:
-            logger.warning(
-                "WebFinger lookup failed for @%s@%s, using fallback",
-                username,
-                domain,
-            )
-        return fallback
+        cleaned = self._clean_content(filepath)
+        summary: str | None = None
 
-    def on_content_change(self, change_type: ChangeType, filepath: str) -> None:
+        if config.activitypub_description_only:
+            cleaned = description or cleaned[:500] + "..."
+        else:
+            if description:
+                cleaned = f"**{description}**\n\n{cleaned}"
+
+        html = self._render_html(cleaned)
+
+        if (
+            config.activitypub_posts_content_wrapped
+            and not config.activitypub_description_only
+        ):
+            # CW mode: title as spoiler, description+body in content
+            summary = title
+        else:
+            # Default: linked title prepended to body
+            html = f'<p><strong><a href="{url}">{title}</a></strong></p>\n{html}'
+
+        return html, summary
+
+    def _build_object(
+        self,
+        filepath: str,
+        url: str,
+        actor_url: str,
+    ) -> tuple[Object, str]:
         """
-        Callback for :class:`ContentMonitor`.
-
-        On create/edit: publish an Article to followers.
-        On delete: send a Delete activity.
+        Parse a markdown file and return a fully-populated
+        ``(Object, activity_type)`` pair ready for publishing.
         """
-        url = self._file_to_url(filepath)
-        actor_url = f"{self.base_url}{self.handler.actor_path}"
-
-        if change_type.value == "deleted":
-            # Mark base URL as recently deleted to avoid collisions
-            base_url = f"{self.base_url}/article/{os.path.relpath(filepath, self.pages_dir).rsplit('.', 1)[0]}"
-            self._mark_as_deleted(base_url)
-
-            # Remove the file URL mapping since the file is being deleted
-            self._remove_file_url(filepath)
-
-            obj = Object(
-                id=url,
-                type=config.activitypub_object_type,
-                attributed_to=actor_url,
-                to=["https://www.w3.org/ns/activitystreams#Public"],  # Public timeline
-                cc=[self.handler.followers_url],  # Send to followers
-            )
-
-            # Always remove from cache, even if delete fails
-            self._sync_unmark(url)
-
-            try:
-                self.handler.publish_object(obj, activity_type="Delete")
-                logger.info("Published Delete for %s", url)
-            except Exception:
-                logger.exception("Failed to publish Delete for %s", url)
-            return
-
         metadata = self._parse_metadata(filepath)
         title = metadata.get("title") or self._extract_title(filepath)
         description = metadata.get("description", "")
+
         published = metadata.get("published")
         if isinstance(published, str):
             try:
@@ -368,90 +345,72 @@ class ActivityPubIntegration(StartupSyncMixin):
             except ValueError:
                 published = None
 
-        cleaned_content = self._clean_content_for_activitypub(filepath)
-        post_summary = None
-
-        # Choose content based on config setting
-        if config.activitypub_description_only:
-            # Use description as main content, with a 500 character snippet
-            cleaned_content = description or cleaned_content[:500] + "..."
-        else:
-            # Prepend description if present
-            if description:
-                cleaned_content = f"**{description}**\n\n{cleaned_content}"
-
-            post_summary = (
-                # Use full article content as HTML, wrapped in a summary with the title
-                title
-                if config.activitypub_posts_content_wrapped
-                # Use full article content (default behavior) - render as HTML
-                else None
-            )
-
-        post_content = self._render_markdown_to_html(cleaned_content)
-
-        # Prepend a linked title so the article URL is always visible
-        post_content = (
-            f'<p><strong><a href="{url}">{title}</a></strong></p>\n{post_content}'
+        content, summary = self._build_post_content(
+            filepath,
+            url,
+            title,
+            description,
         )
 
-        # Content-wrapped mode: use title as summary (CW header on Mastodon/Pleroma)
-        # and keep description + content in the body
-        if (
-            config.activitypub_posts_content_wrapped
-            and not config.activitypub_description_only
-        ):
-            post_summary = title
-            # Rebuild body without the linked title (it's now in summary)
-            post_content = (
-                f"<strong>{description}</strong>\n\n" if description else ""
-            ) + self._render_markdown_to_html(cleaned_content)
+        # Resolve @user@domain mentions via WebFinger (Pubby utility)
+        raw_text = self._clean_content(filepath)
+        mentions = extract_mentions(raw_text)
+        mention_tags = [m.to_tag() for m in mentions]
+        mention_cc = [m.actor_url for m in mentions]
 
-        # Extract @user@domain mentions for ActivityPub tags + cc
-        mention_pattern = re.compile(
-            r"(?<!\w)@([a-zA-Z0-9_.-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"
-        )
-        raw_content = self._clean_content_for_activitypub(filepath)
-        mentions = mention_pattern.findall(raw_content)  # [(user, domain), ...]
-
-        mention_tags = []
-        mention_actor_urls = []
-        for username, domain in mentions:
-            actor_href = self._resolve_actor_url(username, domain)
-            mention_tags.append(
-                {
-                    "type": "Mention",
-                    "href": actor_href,
-                    "name": f"@{username}@{domain}",
-                }
-            )
-            mention_actor_urls.append(actor_href)
-
-        # More efficient update detection using local tracking
         activity_type = "Update" if self._is_published(url) else "Create"
 
         obj = Object(
             id=url,
             type=config.activitypub_object_type,
             name=title,
-            content=post_content,
+            content=content,
             url=url,
             attributed_to=actor_url,
             published=published or datetime.now(timezone.utc),
             updated=datetime.now(timezone.utc),
-            summary=post_summary,
-            to=["https://www.w3.org/ns/activitystreams#Public"],  # Public timeline
-            cc=[self.handler.followers_url] + mention_actor_urls,
+            summary=summary,
+            to=["https://www.w3.org/ns/activitystreams#Public"],
+            cc=[self.handler.followers_url] + mention_cc,
             tag=mention_tags,
         )
 
-        # Add media type for HTML content (ActivityPub standard)
         if not config.activitypub_description_only:
             obj.media_type = "text/html"
 
+        return obj, activity_type
+
+    # -----------------------------------------------------------------
+    # Content-change handlers
+    # -----------------------------------------------------------------
+
+    def _handle_delete(self, filepath: str, url: str, actor_url: str) -> None:
+        """Publish a Delete activity and clean up caches."""
+        base_rel = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
+        self._mark_as_deleted(f"{self.base_url}/article/{base_rel}")
+        self._remove_file_url(filepath)
+        self._sync_unmark(url)
+
+        obj = Object(
+            id=url,
+            type=config.activitypub_object_type,
+            attributed_to=actor_url,
+            to=["https://www.w3.org/ns/activitystreams#Public"],
+            cc=[self.handler.followers_url],
+        )
+
+        try:
+            self.handler.publish_object(obj, activity_type="Delete")
+            logger.info("Published Delete for %s", url)
+        except Exception:
+            logger.exception("Failed to publish Delete for %s", url)
+
+    def _handle_publish(self, filepath: str, url: str, actor_url: str) -> None:
+        """Build and publish a Create or Update activity."""
+        obj, activity_type = self._build_object(filepath, url, actor_url)
+
         try:
             self.handler.publish_object(obj, activity_type=activity_type)
-            # Mark as published with current file mtime
             try:
                 mtime = os.path.getmtime(filepath)
             except OSError:
@@ -460,3 +419,18 @@ class ActivityPubIntegration(StartupSyncMixin):
             logger.info("Published %s for %s", activity_type, url)
         except Exception:
             logger.exception("Failed to publish %s for %s", activity_type, url)
+
+    def on_content_change(self, change_type: ChangeType, filepath: str) -> None:
+        """
+        Callback for :class:`ContentMonitor`.
+
+        On create/edit: publish a Note/Article to followers.
+        On delete: send a Delete activity.
+        """
+        url = self._file_to_url(filepath)
+        actor_url = f"{self.base_url}{self.handler.actor_path}"
+
+        if change_type.value == "deleted":
+            self._handle_delete(filepath, url, actor_url)
+        else:
+            self._handle_publish(filepath, url, actor_url)
