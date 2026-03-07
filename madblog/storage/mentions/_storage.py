@@ -21,10 +21,13 @@ from webmentions import (
 )
 from webmentions.storage.adapters.file._watcher import ContentTextFormat
 
+from ...monitor import ChangeType
+from .._sync import StartupSyncMixin
+
 logger = logging.getLogger(__name__)
 
 
-class FileWebmentionsStorage(WebmentionsStorage):
+class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
     """
     File-based storage for Webmentions.
 
@@ -57,9 +60,23 @@ class FileWebmentionsStorage(WebmentionsStorage):
         self._watcher_lock = RLock()
         self._webmentions_handler: WebmentionsHandler | None = None
 
+        # StartupSyncMixin configuration
+        self._sync_cache_file = self.content_dir / ".madblog" / "webmentions_sync.json"
+        self._sync_cache_file.parent.mkdir(exist_ok=True, parents=True)
+        self._sync_pages_dir = str(self.content_dir)
+
     def set_handler(self, handler: WebmentionsHandler) -> None:
         """Wire the :class:`WebmentionsHandler` used for outgoing mentions."""
         self._webmentions_handler = handler
+
+    # -- StartupSyncMixin hooks --
+
+    def _sync_file_to_url(self, filepath: str) -> str:
+        return self._file_to_url(filepath)
+
+    def _sync_notify(self, filepath: str, is_new: bool) -> None:
+        change = ChangeType.ADDED if is_new else ChangeType.EDITED
+        self.on_content_change(change, filepath)
 
     def _file_to_url(self, filepath: str) -> str:
         """Convert a local file path to its public article URL."""
@@ -77,6 +94,7 @@ class FileWebmentionsStorage(WebmentionsStorage):
         text_format = self._EXT_FORMAT_MAP.get(ext, ContentTextFormat.MARKDOWN)
 
         if change_type.value == "deleted":
+            self._sync_unmark(source_url)
             self._webmentions_handler.process_outgoing_webmentions(
                 source_url,
                 text="",
@@ -93,6 +111,11 @@ class FileWebmentionsStorage(WebmentionsStorage):
                 text=text,
                 text_format=text_format,
             )
+            try:
+                mtime = os.path.getmtime(filepath)
+            except OSError:
+                mtime = 0
+            self._sync_mark(source_url, mtime)
 
     def store_webmention(self, mention: Webmention):
         """

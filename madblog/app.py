@@ -138,6 +138,7 @@ class BlogApp(Flask):
         if config.enable_webmentions:
             bind_webmentions(self, self.webmentions_handler)
             self.content_monitor.register(self.webmentions_storage.on_content_change)
+            self.webmentions_storage.sync_on_startup()
 
     def _generate_or_check_key(self, key_path: str) -> str:
         from pubby.crypto import generate_rsa_keypair, export_private_key_pem
