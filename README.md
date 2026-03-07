@@ -325,6 +325,52 @@ graph LR
 ```
 ````
 
+## ActivityPub federation
+
+Madblog supports [ActivityPub](https://www.w3.org/TR/activitypub/) federation,
+allowing your blog posts to appear on Mastodon, Pleroma, and other fediverse
+platforms. Followers receive new and updated articles directly in their timelines.
+
+Install with the ActivityPub extra:
+
+```shell
+pip install 'madblog[activitypub]'
+```
+
+Enable it in your `config.yaml`:
+
+```yaml
+enable_activitypub: true
+# It will be created if it doesn't exist
+activitypub_private_key_path: /path/to/private_key.pem
+```
+
+Or via environment variables:
+
+```shell
+export MADBLOG_ENABLE_ACTIVITYPUB=1
+export MADBLOG_ACTIVITYPUB_PRIVATE_KEY_PATH=/path/to/private_key.pem
+```
+
+### Mentions
+
+You can mention fediverse users in your articles using the `@user@domain`
+syntax. Mentions are rendered as links and delivered as proper ActivityPub
+mentions — the mentioned user will receive a notification on their instance.
+
+```markdown
+Great article by @alice@mastodon.social about federation!
+```
+
+### Configuration options
+
+| Option | Env var | Default | Description |
+|--------|---------|---------|-------------|
+| `activitypub_object_type` | `MADBLOG_ACTIVITYPUB_OBJECT_TYPE` | `Note` | ActivityPub object type (`Note` or `Article`). `Note` renders inline on Mastodon; `Article` shows as a link preview. |
+| `activitypub_description_only` | `MADBLOG_ACTIVITYPUB_DESCRIPTION_ONLY` | `false` | Only send the article description instead of the full rendered content. |
+| `activitypub_username` | `MADBLOG_ACTIVITYPUB_USERNAME` | `blog` | Fediverse username for the blog actor. |
+| `activitypub_manually_approves_followers` | `MADBLOG_ACTIVITYPUB_MANUALLY_APPROVES_FOLLOWERS` | `false` | Require manual approval for new followers. |
+
 ## RSS syndication
 
 Feeds for the blog are provided under the `/feed.<type>` URL, with `type` one of `atom` or `rss` (e.g. `/feed.atom` or
