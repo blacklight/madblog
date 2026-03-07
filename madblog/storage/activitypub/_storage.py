@@ -29,7 +29,7 @@ from ...tags import MarkdownTags
 logger = logging.getLogger(__name__)
 
 
-class ActivityPubIntegration:
+class ActivityPubIntegration(StartupSyncMixin):
     """
     Bridges Madblog's content monitor to the pubby ActivityPub handler.
 
@@ -49,53 +49,44 @@ class ActivityPubIntegration:
         self.handler = handler
         self.pages_dir = str(Path(pages_dir).resolve())
         self.base_url = base_url.rstrip("/")
-        self.published_objects_file = Path(pages_dir).parent / ".published_objects.json"
-        self.deleted_urls_file = Path(pages_dir).parent / ".deleted_urls.json"
-        self.file_urls_file = Path(pages_dir).parent / ".file_urls.json"
+        self.workdir = Path(config.content_dir) / ".madblog" / "activitypub"
+        self.workdir.mkdir(parents=True, exist_ok=True)
 
-    def _load_published_objects(self) -> set:
-        """Load set of previously published object URLs."""
-        try:
-            if self.published_objects_file.exists():
-                with open(self.published_objects_file, "r") as f:
-                    data = json.load(f)
-                    return set(data.get("published", []))
-        except Exception:
-            logger.warning("Failed to load published objects cache")
-        return set()
+        self.deleted_urls_file = self.workdir / "deleted_urls.json"
+        self.file_urls_file = self.workdir / "file_urls.json"
 
-    def _save_published_objects(self, published: set) -> None:
-        """Save set of published object URLs."""
-        try:
-            data = {"published": list(published)}
-            with open(self.published_objects_file, "w") as f:
-                json.dump(data, f, indent=2)
-        except Exception:
-            logger.warning("Failed to save published objects cache")
+        # StartupSyncMixin configuration
+        self._sync_cache_file = self.workdir / "published_objects.json"
+        self._sync_pages_dir = self.pages_dir
 
-    def _mark_as_published(self, url: str) -> None:
-        """Mark an object URL as published."""
-        published = self._load_published_objects()
-        published.add(url)
-        self._save_published_objects(published)
+    # -- StartupSyncMixin hooks --
+
+    def _sync_file_to_url(self, filepath: str) -> str:
+        return self._file_to_url(filepath)
+
+    def _sync_notify(self, filepath: str, is_new: bool) -> None:
+        from madblog.monitor import ChangeType
+
+        change = ChangeType.ADDED if is_new else ChangeType.EDITED
+        self.on_content_change(change, filepath)
+
+    # -- Convenience aliases (keep existing call-sites working) --
 
     def _is_published(self, url: str) -> bool:
-        """Check if an object URL has been published before."""
-        published = self._load_published_objects()
-        return url in published
+        return self._sync_is_tracked(url)
+
+    def _mark_as_published(self, url: str, mtime: float = 0) -> None:
+        self._sync_mark(url, mtime)
 
     def debug_published_cache(self) -> dict:
-        """Debug helper: return current published objects cache."""
         return {
-            "cache_file": str(self.published_objects_file),
-            "cache_exists": self.published_objects_file.exists(),
-            "published_urls": list(self._load_published_objects()),
+            "cache_file": str(self._sync_cache_file),
+            "cache_exists": self._sync_cache_file.exists(),
+            "published_urls": self._load_sync_cache(),
         }
 
     def reset_published_cache(self) -> None:
-        """Reset the published objects cache (for debugging/recovery)."""
-        self._save_published_objects(set())
-        logger.info("Reset published objects cache")
+        self._sync_reset()
 
     def _load_recently_deleted_urls(self) -> dict:
         """Load recently deleted URLs with timestamps."""
@@ -326,9 +317,7 @@ class ActivityPubIntegration:
             )
 
             # Always remove from cache, even if delete fails
-            published = self._load_published_objects()
-            published.discard(url)
-            self._save_published_objects(published)
+            self._sync_unmark(url)
 
             try:
                 self.handler.publish_object(obj, activity_type="Delete")
@@ -375,11 +364,13 @@ class ActivityPubIntegration:
         for username, domain in mentions:
             actor_url_mention = f"https://{domain}/@{username}"
             # Use webfinger-style href for the tag
-            mention_tags.append({
-                "type": "Mention",
-                "href": actor_url_mention,
-                "name": f"@{username}@{domain}",
-            })
+            mention_tags.append(
+                {
+                    "type": "Mention",
+                    "href": actor_url_mention,
+                    "name": f"@{username}@{domain}",
+                }
+            )
             mention_actor_urls.append(actor_url_mention)
 
         # More efficient update detection using local tracking
@@ -406,8 +397,12 @@ class ActivityPubIntegration:
 
         try:
             self.handler.publish_object(obj, activity_type=activity_type)
-            # Mark as published for future update detection
-            self._mark_as_published(url)
+            # Mark as published with current file mtime
+            try:
+                mtime = os.path.getmtime(filepath)
+            except OSError:
+                mtime = 0
+            self._mark_as_published(url, mtime)
             logger.info("Published %s for %s", activity_type, url)
         except Exception:
             logger.exception("Failed to publish %s for %s", activity_type, url)
