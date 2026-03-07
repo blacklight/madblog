@@ -5,10 +5,15 @@ Wraps pubby's file-based storage and provides a content-change callback
 that publishes Article objects to followers.
 """
 
+import base64
+import hashlib
 import logging
 import os
 import re
 import json
+import shutil
+import subprocess
+import tempfile
 
 from datetime import datetime, timezone
 from pathlib import Path
@@ -286,6 +291,168 @@ class ActivityPubIntegration(StartupSyncMixin):
             return md_text
 
     # -----------------------------------------------------------------
+    # Rendered media extraction (LaTeX / Mermaid → PNG attachments)
+    # -----------------------------------------------------------------
+
+    # base64 LaTeX images (block and inline variants)
+    _LATEX_IMG_RE = re.compile(
+        r'(?:<div class="latex-block">)?'
+        r'<img\s+class="latex[^"]*"\s+'
+        r'id="([^"]*)"\s+src="data:image/png;base64,([^"]+)"'
+        r"\s*/?>(?:</div>)?",
+    )
+
+    # Mermaid SVG wrappers: <div class="mermaid-wrapper">...</div> (outermost)
+    _MERMAID_WRAPPER_RE = re.compile(
+        r'<div class="mermaid-wrapper">(.+?)\n</div>',
+        re.DOTALL,
+    )
+
+    def _ensure_img_dir(self) -> Path:
+        """Ensure the img directory exists and return its path."""
+        img_dir = Path(config.content_dir) / "img"
+        img_dir.mkdir(parents=True, exist_ok=True)
+        return img_dir
+
+    def _mermaid_to_png(self, mermaid_source: str) -> bytes | None:
+        """Render Mermaid source directly to PNG via mmdc."""
+        mmdc = shutil.which("mmdc")
+        npx = shutil.which("npx")
+
+        if not mmdc and not npx:
+            logger.warning("Neither mmdc nor npx found; cannot render Mermaid to PNG")
+            return None
+
+        cmd = [mmdc] if mmdc else [npx, "-y", "@mermaid-js/mermaid-cli"]
+        mmd_path = png_path = None
+
+        try:
+            with tempfile.NamedTemporaryFile(
+                suffix=".mmd", mode="w", delete=False
+            ) as f:
+                f.write(mermaid_source)
+                mmd_path = f.name
+
+            png_path = mmd_path.replace(".mmd", ".png")
+
+            subprocess.run(
+                [
+                    *cmd,
+                    "-i",
+                    mmd_path,
+                    "-o",
+                    png_path,
+                    "-t",
+                    "default",
+                    "-b",
+                    "transparent",
+                    "--scale",
+                    "2",
+                ],
+                capture_output=True,
+                timeout=60,
+                check=True,
+            )
+
+            with open(png_path, "rb") as f:
+                return f.read()
+        except Exception as e:
+            logger.warning("Mermaid → PNG rendering failed: %s", e)
+            return None
+        finally:
+            for p in (mmd_path, png_path):
+                try:
+                    if p:
+                        os.unlink(p)
+                except OSError:
+                    pass
+
+    # Regex to extract ```mermaid ... ``` blocks from raw markdown
+    _MERMAID_SOURCE_RE = re.compile(
+        r"^```mermaid\s*\n(.*?)^```\s*$",
+        re.MULTILINE | re.DOTALL,
+    )
+
+    def _extract_media_attachments(
+        self, html: str, md_text: str
+    ) -> tuple[str, list[dict]]:
+        """
+        Extract rendered LaTeX/Mermaid from HTML, save as PNGs, and return
+        ``(cleaned_html, attachments)`` where attachments is a list of AP
+        attachment dicts.
+        """
+        img_dir = self._ensure_img_dir()
+        attachments: list[dict] = []
+        counter = {"latex": 0, "mermaid": 0}
+
+        def _save_png(data: bytes, prefix: str) -> str | None:
+            """Save PNG bytes, return public URL."""
+            content_hash = hashlib.sha256(data).hexdigest()[:16]
+            filename = f"ap-{prefix}-{content_hash}.png"
+            dest = img_dir / filename
+            if not dest.exists():
+                dest.write_bytes(data)
+            return f"{self.base_url}/img/{filename}"
+
+        # --- LaTeX base64 images ---
+        def _replace_latex(m: re.Match) -> str:
+            b64_data = m.group(2)
+            try:
+                png_bytes = base64.b64decode(b64_data)
+            except Exception:
+                return m.group(0)
+
+            counter["latex"] += 1
+            url = _save_png(png_bytes, "latex")
+            if url:
+                attachments.append(
+                    {
+                        "type": "Image",
+                        "mediaType": "image/png",
+                        "url": url,
+                        "name": f"LaTeX formula {counter['latex']}",
+                    }
+                )
+                return f'<p>[<a href="{url}">formula {counter["latex"]}</a>]</p>'
+            return m.group(0)
+
+        html = self._LATEX_IMG_RE.sub(_replace_latex, html)
+
+        # --- Mermaid diagrams (render from source via mmdc) ---
+        mermaid_sources = self._MERMAID_SOURCE_RE.findall(md_text)
+        mermaid_idx = 0
+
+        def _replace_mermaid(m: re.Match) -> str:
+            nonlocal mermaid_idx
+            if mermaid_idx >= len(mermaid_sources):
+                return m.group(0)
+
+            source = mermaid_sources[mermaid_idx]
+            mermaid_idx += 1
+
+            png_bytes = self._mermaid_to_png(source)
+            if not png_bytes:
+                return m.group(0)
+
+            counter["mermaid"] += 1
+            url = _save_png(png_bytes, "mermaid")
+            if url:
+                attachments.append(
+                    {
+                        "type": "Image",
+                        "mediaType": "image/png",
+                        "url": url,
+                        "name": f"Mermaid diagram {counter['mermaid']}",
+                    }
+                )
+                return f'<p>[<a href="{url}">diagram {counter["mermaid"]}</a>]</p>'
+            return m.group(0)
+
+        html = self._MERMAID_WRAPPER_RE.sub(_replace_mermaid, html)
+
+        return html, attachments
+
+    # -----------------------------------------------------------------
     # Object builders
     # -----------------------------------------------------------------
 
@@ -295,11 +462,11 @@ class ActivityPubIntegration(StartupSyncMixin):
         url: str,
         title: str,
         description: str,
-    ) -> tuple[str, str | None]:
+    ) -> tuple[str, str | None, list[dict]]:
         """
         Build the HTML content and optional summary for a post.
 
-        Returns ``(html_content, summary_or_none)``.
+        Returns ``(html_content, summary_or_none, attachments)``.
         """
         cleaned = self._clean_content(filepath)
         summary: str | None = None
@@ -312,6 +479,9 @@ class ActivityPubIntegration(StartupSyncMixin):
 
         html = self._render_html(cleaned)
 
+        # Extract LaTeX/Mermaid rendered media → PNG attachments
+        html, attachments = self._extract_media_attachments(html, cleaned)
+
         if (
             config.activitypub_posts_content_wrapped
             and not config.activitypub_description_only
@@ -322,7 +492,7 @@ class ActivityPubIntegration(StartupSyncMixin):
             # Default: linked title prepended to body
             html = f'<p><strong><a href="{url}">{title}</a></strong></p>\n{html}'
 
-        return html, summary
+        return html, summary, attachments
 
     def _build_object(
         self,
@@ -345,7 +515,7 @@ class ActivityPubIntegration(StartupSyncMixin):
             except ValueError:
                 published = None
 
-        content, summary = self._build_post_content(
+        content, summary, attachments = self._build_post_content(
             filepath,
             url,
             title,
@@ -387,6 +557,7 @@ class ActivityPubIntegration(StartupSyncMixin):
             to=["https://www.w3.org/ns/activitystreams#Public"],
             cc=[self.handler.followers_url] + mention_cc,
             tag=mention_tags + hashtag_tags,
+            attachment=attachments,
         )
 
         if not config.activitypub_description_only:
