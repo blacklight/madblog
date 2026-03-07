@@ -21,6 +21,7 @@ from ...activitypub import MarkdownActivityPubMentions
 from ...autolink import MarkdownAutolink
 from ...latex import MarkdownLatex
 from ...mermaid import MarkdownMermaid
+from .._sync import StartupSyncMixin
 from ...tasklist import MarkdownTaskList
 from ...toc import MarkdownTocMarkers
 from ...tags import MarkdownTags
