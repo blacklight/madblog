@@ -278,7 +278,7 @@ class ActivityPubContentChangeTest(unittest.TestCase):
         handler.publish_object.assert_called_once()
         obj = handler.publish_object.call_args[0][0]
         self.assertEqual(obj.type, "Note")
-        self.assertEqual(obj.name, "Hello")
+        self.assertIn("Hello", obj.content)  # Title rendered as linked heading
         self.assertIn("https://example.com/article/hello", obj.id)
 
     @skip_if_no_pubby

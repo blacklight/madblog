@@ -259,7 +259,11 @@ class ActivityPubIntegration(StartupSyncMixin):
                 ):
                     continue
 
-                # Include everything else (including titles, content, etc.)
+                # Skip top-level heading — added separately as linked title
+                if re.match(r"^#\s+", line) and not cleaned_lines:
+                    continue
+
+                # Include everything else
                 cleaned_lines.append(line)
 
             return "".join(cleaned_lines).strip()
@@ -307,15 +311,15 @@ class ActivityPubIntegration(StartupSyncMixin):
             resp.raise_for_status()
             data = resp.json()
             for link in data.get("links", []):
-                if (
-                    link.get("rel") == "self"
-                    and link.get("type", "").startswith("application/")
+                if link.get("rel") == "self" and link.get("type", "").startswith(
+                    "application/"
                 ):
                     return link["href"]
         except Exception:
             logger.warning(
                 "WebFinger lookup failed for @%s@%s, using fallback",
-                username, domain,
+                username,
+                domain,
             )
         return fallback
 
@@ -365,21 +369,44 @@ class ActivityPubIntegration(StartupSyncMixin):
             except ValueError:
                 published = None
 
+        cleaned_content = self._clean_content_for_activitypub(filepath)
+        post_summary = None
+
         # Choose content based on config setting
         if config.activitypub_description_only:
-            # Use description as main content, with a snippet as summary
-            post_content = (
-                description
-                or self._clean_content_for_activitypub(filepath)[:500] + "..."
-            )
-            post_summary = (
-                description[:200] + "..." if len(description) > 200 else description
-            )
+            # Use description as main content, with a 500 character snippet
+            cleaned_content = description or cleaned_content[:500] + "..."
         else:
-            # Use full article content (default behavior) - render as HTML
-            cleaned_content = self._clean_content_for_activitypub(filepath)
-            post_content = self._render_markdown_to_html(cleaned_content)
-            post_summary = description  # Keep description as summary for previews
+            # Prepend description if present
+            if description:
+                cleaned_content = f"**{description}**\n\n{cleaned_content}"
+
+            post_summary = (
+                # Use full article content as HTML, wrapped in a summary with the title
+                title
+                if config.activitypub_posts_content_wrapped
+                # Use full article content (default behavior) - render as HTML
+                else None
+            )
+
+        post_content = self._render_markdown_to_html(cleaned_content)
+
+        # Prepend a linked title so the article URL is always visible
+        post_content = (
+            f'<p><strong><a href="{url}">{title}</a></strong></p>\n{post_content}'
+        )
+
+        # Content-wrapped mode: use title as summary (CW header on Mastodon/Pleroma)
+        # and keep description + content in the body
+        if (
+            config.activitypub_posts_content_wrapped
+            and not config.activitypub_description_only
+        ):
+            post_summary = title
+            # Rebuild body without the linked title (it's now in summary)
+            post_content = (
+                f"<strong>{description}</strong>\n\n" if description else ""
+            ) + self._render_markdown_to_html(cleaned_content)
 
         # Extract @user@domain mentions for ActivityPub tags + cc
         mention_pattern = re.compile(
@@ -412,7 +439,7 @@ class ActivityPubIntegration(StartupSyncMixin):
             url=url,
             attributed_to=actor_url,
             published=published or datetime.now(timezone.utc),
-            updated=datetime.now(timezone.utc),  # Required for Update activities
+            updated=datetime.now(timezone.utc),
             summary=post_summary,
             to=["https://www.w3.org/ns/activitystreams#Public"],  # Public timeline
             cc=[self.handler.followers_url] + mention_actor_urls,
