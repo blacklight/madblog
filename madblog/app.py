@@ -3,6 +3,7 @@ import email.utils
 import hashlib
 import os
 import re
+import stat
 
 from pathlib import Path
 from typing import IO, List, Optional, Tuple, Type
@@ -23,10 +24,15 @@ from .latex import MarkdownLatex
 from .mermaid import MarkdownMermaid
 from .tasklist import MarkdownTaskList
 from .toc import MarkdownTocMarkers
-from .notifications import SmtpConfig, build_webmention_email_notifier
+from .notifications import (
+    SmtpConfig,
+    build_activitypub_email_notifier,
+    build_webmention_email_notifier,
+)
 from .storage.mentions import FileWebmentionsStorage
 from .storage.tags import TagIndex
 from .tags import MarkdownTags, parse_metadata_tags
+from .activitypub import MarkdownActivityPubMentions
 from ._sorters import PagesSorter, PagesSortByTime
 
 
@@ -79,6 +85,7 @@ class BlogApp(Flask):
             self.template_folder = os.path.abspath(templates_dir)
 
         self._init_webmentions()
+        self._init_activitypub()
         self.tag_index = TagIndex(
             content_dir=config.content_dir,
             pages_dir=str(self.pages_dir),
@@ -132,6 +139,106 @@ class BlogApp(Flask):
         if config.enable_webmentions:
             bind_webmentions(self, self.webmentions_handler)
             self.content_monitor.register(self.webmentions_storage.on_content_change)
+
+    def _generate_or_check_key(self, key_path: str) -> str:
+        from pubby.crypto import generate_rsa_keypair, export_private_key_pem
+
+        key_path = os.path.abspath(os.path.expanduser(key_path))
+        if not os.path.isfile(key_path):
+            private_key, _ = generate_rsa_keypair()
+            pem = export_private_key_pem(private_key)
+            with open(key_path, "w") as f:
+                f.write(pem)
+
+            os.chmod(key_path, 0o600)
+            self.logger.info("Generated ActivityPub private key at %s", key_path)
+
+        # Check permissions: must not be readable by group/others
+        st = os.stat(key_path)
+        if st.st_mode & (stat.S_IRGRP | stat.S_IROTH):
+            raise RuntimeError(
+                f"ActivityPub private key file {key_path} is readable "
+                "by group or others. Fix permissions with: "
+                f"chmod 600 {key_path}"
+            )
+
+        return key_path
+
+    def _init_activitypub(self):
+        if not config.enable_activitypub:
+            return
+
+        try:
+            from pubby import ActivityPubHandler
+            from pubby.storage.adapters.file import FileActivityPubStorage
+            from pubby.server.adapters.flask import bind_activitypub
+            from .storage.activitypub import ActivityPubIntegration
+        except ImportError:
+            self.logger.error(
+                "ActivityPub is enabled but pubby is not installed. "
+                "Install it with: pip install 'madblog[activitypub]'"
+            )
+            return
+
+        from . import __version__
+
+        ap_dir = os.path.join(config.content_dir, "activitypub")
+        os.makedirs(ap_dir, exist_ok=True)
+
+        # Key management
+        key_path = config.activitypub_private_key_path or os.path.join(
+            ap_dir, "private_key.pem"
+        )
+
+        self._generate_or_check_key(key_path)
+        self.activitypub_storage = FileActivityPubStorage(data_dir=ap_dir)
+
+        on_interaction = None
+        if (
+            config.author_email
+            and config.smtp_server
+            and config.activitypub_email_notifications
+        ):
+            on_interaction = build_activitypub_email_notifier(
+                recipient=config.author_email,
+                blog_base_url=config.link,
+                smtp=SmtpConfig(
+                    server=config.smtp_server,
+                    port=config.smtp_port,
+                    username=config.smtp_username,
+                    password=config.smtp_password,
+                    starttls=config.smtp_starttls,
+                    enable_starttls_auto=config.smtp_enable_starttls_auto,
+                    sender=config.smtp_sender,
+                ),
+            )
+
+        # Create the ActivityPub handler
+        self.activitypub_handler = ActivityPubHandler(
+            storage=self.activitypub_storage,
+            actor_config={
+                "base_url": config.link,
+                "username": config.activitypub_username,
+                "name": (config.activitypub_name or config.author or config.title),
+                "summary": (config.activitypub_summary or config.description),
+                "icon_url": (config.activitypub_icon_url or config.author_photo or ""),
+                "manually_approves_followers": (
+                    config.activitypub_manually_approves_followers
+                ),
+            },
+            private_key_path=key_path,
+            on_interaction_received=on_interaction,
+            software_name="madblog",
+            software_version=__version__,
+        )
+
+        bind_activitypub(self, self.activitypub_handler)
+        self._ap_integration = ActivityPubIntegration(
+            handler=self.activitypub_handler,
+            pages_dir=str(self.pages_dir),
+            base_url=config.link,
+        )
+        self.content_monitor.register(self._ap_integration.on_content_change)
 
     def _on_content_change_tags(self, _: ChangeType, filepath: str) -> None:
         """Bridge: forward content changes to the tag indexer."""
