@@ -12,7 +12,11 @@ RUN apk add --no-cache \
     ttf-dejavu \
     && rm -rf /var/cache/apk/*
 
+# Support for Mermaid diagrams
 RUN npm install -g @mermaid-js/mermaid-cli
+
+# Support for ActivityPub
+RUN pip install --no-cache-dir --prefix=/usr/local pubby
 
 # Tell puppeteer/mermaid where chromium is and to not download its own
 ENV PUPPETEER_SKIP_DOWNLOAD=1
