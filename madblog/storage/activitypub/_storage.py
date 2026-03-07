@@ -22,6 +22,7 @@ from ...activitypub import MarkdownActivityPubMentions
 from ...autolink import MarkdownAutolink
 from ...latex import MarkdownLatex
 from ...mermaid import MarkdownMermaid
+from ...monitor import ChangeType
 from .._sync import StartupSyncMixin
 from ...tasklist import MarkdownTaskList
 from ...toc import MarkdownTocMarkers
@@ -66,8 +67,6 @@ class ActivityPubIntegration(StartupSyncMixin):
         return self._file_to_url(filepath)
 
     def _sync_notify(self, filepath: str, is_new: bool) -> None:
-        from madblog.monitor import ChangeType
-
         change = ChangeType.ADDED if is_new else ChangeType.EDITED
         self.on_content_change(change, filepath)
 
@@ -323,7 +322,7 @@ class ActivityPubIntegration(StartupSyncMixin):
             )
         return fallback
 
-    def on_content_change(self, change_type, filepath: str) -> None:
+    def on_content_change(self, change_type: ChangeType, filepath: str) -> None:
         """
         Callback for :class:`ContentMonitor`.
 
