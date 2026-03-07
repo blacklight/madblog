@@ -15,15 +15,13 @@ from markdown import markdown
 from webmentions import WebmentionDirection, WebmentionsHandler
 from webmentions.server.adapters.flask import bind_webmentions
 
-from .monitor import ChangeType, ContentMonitor
-
+from .activitypub import MarkdownActivityPubMentions
+from .autolink import MarkdownAutolink
 from .config import config
 from .feeds import FeedAuthor, FeedParser
-from .autolink import MarkdownAutolink
 from .latex import MarkdownLatex
 from .mermaid import MarkdownMermaid
-from .tasklist import MarkdownTaskList
-from .toc import MarkdownTocMarkers
+from .monitor import ChangeType, ContentMonitor
 from .notifications import (
     SmtpConfig,
     build_activitypub_email_notifier,
@@ -31,8 +29,9 @@ from .notifications import (
 )
 from .storage.mentions import FileWebmentionsStorage
 from .storage.tags import TagIndex
+from .tasklist import MarkdownTaskList
+from .toc import MarkdownTocMarkers
 from .tags import MarkdownTags, parse_metadata_tags
-from .activitypub import MarkdownActivityPubMentions
 from ._sorters import PagesSorter, PagesSortByTime
 
 
