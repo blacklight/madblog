@@ -378,6 +378,9 @@ class ActivityPubIntegration(StartupSyncMixin):
         if not config.activitypub_description_only:
             obj.media_type = "text/html"
 
+        # Language: per-post metadata overrides global config
+        obj.language = metadata.get("language", config.language)
+
         return obj, activity_type
 
     # -----------------------------------------------------------------

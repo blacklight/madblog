@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ config.language | default('en') }}">
 {% set is_home_page = '/'.join((url or config.link or '').rstrip('/').split('/')[3:]).split('?')[0].split('#')[0] == '' %}
 <head>
     <meta charset="UTF-8">
