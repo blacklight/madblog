@@ -25,7 +25,7 @@ from ...monitor import ChangeType
 from .._sync import StartupSyncMixin
 from ...tasklist import MarkdownTaskList
 from ...toc import MarkdownTocMarkers
-from ...tags import MarkdownTags
+from ...tags import MarkdownTags, extract_hashtags
 
 logger = logging.getLogger(__name__)
 
@@ -358,6 +358,20 @@ class ActivityPubIntegration(StartupSyncMixin):
         mention_tags = [m.to_tag() for m in mentions]
         mention_cc = [m.actor_url for m in mentions]
 
+        # Extract #hashtags and build Hashtag tags
+        hashtags = extract_hashtags(raw_text)
+        hashtag_tags = [
+            {
+                "type": "Hashtag",
+                "href": f"{self.base_url}/tags/{tag}",
+                "name": f"#{tag}",
+            }
+            for tag in hashtags
+        ]
+
+        # Make hashtag links absolute in HTML content
+        content = content.replace('href="/tags/', f'href="{self.base_url}/tags/')
+
         activity_type = "Update" if self._is_published(url) else "Create"
 
         obj = Object(
@@ -372,7 +386,7 @@ class ActivityPubIntegration(StartupSyncMixin):
             summary=summary,
             to=["https://www.w3.org/ns/activitystreams#Public"],
             cc=[self.handler.followers_url] + mention_cc,
-            tag=mention_tags,
+            tag=mention_tags + hashtag_tags,
         )
 
         if not config.activitypub_description_only:
