@@ -362,6 +362,25 @@ class ActivityPubIntegration:
             post_content = self._render_markdown_to_html(cleaned_content)
             post_summary = description  # Keep description as summary for previews
 
+        # Extract @user@domain mentions for ActivityPub tags + cc
+        mention_pattern = re.compile(
+            r"(?<!\w)@([a-zA-Z0-9_.-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"
+        )
+        raw_content = self._clean_content_for_activitypub(filepath)
+        mentions = mention_pattern.findall(raw_content)  # [(user, domain), ...]
+
+        mention_tags = []
+        mention_actor_urls = []
+        for username, domain in mentions:
+            actor_url_mention = f"https://{domain}/@{username}"
+            # Use webfinger-style href for the tag
+            mention_tags.append({
+                "type": "Mention",
+                "href": actor_url_mention,
+                "name": f"@{username}@{domain}",
+            })
+            mention_actor_urls.append(actor_url_mention)
+
         # More efficient update detection using local tracking
         activity_type = "Update" if self._is_published(url) else "Create"
 
@@ -376,7 +395,8 @@ class ActivityPubIntegration:
             updated=datetime.now(timezone.utc),  # Required for Update activities
             summary=post_summary,
             to=["https://www.w3.org/ns/activitystreams#Public"],  # Public timeline
-            cc=[self.handler.followers_url],  # Send to followers
+            cc=[self.handler.followers_url] + mention_actor_urls,
+            tag=mention_tags,
         )
 
         # Add media type for HTML content (ActivityPub standard)
