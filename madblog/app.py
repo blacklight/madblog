@@ -469,6 +469,16 @@ class BlogApp(Flask):
             )
         )
 
+        ap_interactions = ""
+        if hasattr(self, "activitypub_handler"):
+            interactions = self.activitypub_handler.storage.get_interactions(
+                target_resource=config.link + metadata.get("uri", "")
+            )
+            if interactions:
+                ap_interactions = self.activitypub_handler.render_interactions(
+                    interactions
+                )
+
         with open(md_file, "r") as f:
             content = self._parse_content(f)
 
@@ -510,6 +520,7 @@ class BlogApp(Flask):
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
                 mentions=mentions,
+                ap_interactions=ap_interactions,
                 **author_info,
             )
         )
