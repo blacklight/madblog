@@ -121,7 +121,7 @@
                 </label>
                 <nav class="hamburger-nav">
                     {% if config.enable_activitypub %}
-                    <a href="/followers">&#128101; Followers</a>
+                    <a href="/followers">&#128101; Followers <span class="nav-count">({{ followers_count }})</span></a>
                     {% endif %}
                     <a href="/tags">&#127991; Tags</a>
                     <a href="/feed.atom" target="_blank">{% include 'icons/rss.html' %} Atom Feed</a>
@@ -209,5 +209,9 @@
     flex-shrink: 0;
     width: 20px;
     height: 20px;
+}
+.hamburger-nav .nav-count {
+    opacity: 0.7;
+    font-size: 0.9em;
 }
 </style>

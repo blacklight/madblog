@@ -91,6 +91,19 @@ class BlogApp(Flask):
             pages_dir=str(self.pages_dir),
             mentions_dir=str(self.mentions_dir),
         )
+        self._register_context_processors()
+
+    def _register_context_processors(self):
+        @self.context_processor
+        def inject_followers_count():
+            if not config.enable_activitypub:
+                return {"followers_count": 0}
+            if not hasattr(self, "activitypub_storage"):
+                return {"followers_count": 0}
+            try:
+                return {"followers_count": len(self.activitypub_storage.get_followers())}
+            except Exception:
+                return {"followers_count": 0}
 
     def _init_webmentions(self):
         from . import __version__
