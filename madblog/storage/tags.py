@@ -212,7 +212,11 @@ class TagIndex:
                 except OSError:
                     continue
 
-                if last_indexed_at and file_mtime < last_indexed_at and rel in old_posts:
+                if (
+                    last_indexed_at
+                    and file_mtime < last_indexed_at
+                    and rel in old_posts
+                ):
                     posts[rel] = old_posts[rel]
                     skipped += 1
                     continue
@@ -230,7 +234,10 @@ class TagIndex:
         self._save()
         logger.info(
             "Tag index built: %d posts, %d tags (%d reindexed, %d unchanged)",
-            len(self._posts), len(self._tag_to_posts), reindexed, skipped,
+            len(self._posts),
+            len(self._tag_to_posts),
+            reindexed,
+            skipped,
         )
 
     def reindex_file(self, filepath: str) -> None:
@@ -293,7 +300,9 @@ class TagIndex:
                 )
 
         # Sort by score desc, then published date desc
-        results.sort(key=lambda r: (-r["score"], r.get("published", "") or ""), reverse=False)
+        results.sort(
+            key=lambda r: (-r["score"], r.get("published", "") or ""), reverse=False
+        )
         # secondary sort: published desc when scores are equal
         results.sort(key=lambda r: r.get("published", "") or "", reverse=True)
         results.sort(key=lambda r: -r["score"])

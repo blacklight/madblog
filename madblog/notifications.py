@@ -77,7 +77,11 @@ def build_webmention_email_notifier(
         if getattr(mention, "status", None) == WebmentionStatus.DELETED:
             return
 
-        if mention.created_at and mention.updated_at and mention.created_at != mention.updated_at:
+        if (
+            mention.created_at
+            and mention.updated_at
+            and mention.created_at != mention.updated_at
+        ):
             return
 
         subject = f"New Webmention received for {blog_base_url}"
@@ -175,8 +179,7 @@ def build_activitypub_email_notifier(
             )
         except Exception:
             logger.exception(
-                "Failed to send ActivityPub notification email"
-                " (actor=%s target=%s)",
+                "Failed to send ActivityPub notification email (actor=%s target=%s)",
                 interaction.source_actor_id,
                 interaction.target_resource,
             )

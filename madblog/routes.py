@@ -462,7 +462,9 @@ def followers_route():
                 followers.append(
                     {
                         "actor_id": f.actor_id,
-                        "name": actor_data.get("name") or actor_data.get("preferredUsername") or f.actor_id,
+                        "name": actor_data.get("name")
+                        or actor_data.get("preferredUsername")
+                        or f.actor_id,
                         "username": actor_data.get("preferredUsername", ""),
                         "url": actor_data.get("url") or f.actor_id,
                         "icon": (

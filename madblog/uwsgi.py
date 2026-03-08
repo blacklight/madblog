@@ -58,9 +58,7 @@ def _start_monitor_once() -> None:
     try:
         app.start()
     except Exception:
-        logging.getLogger(__name__).exception(
-            "Failed to start content monitor"
-        )
+        logging.getLogger(__name__).exception("Failed to start content monitor")
 
 
 try:

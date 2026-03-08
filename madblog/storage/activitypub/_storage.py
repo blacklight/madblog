@@ -483,7 +483,7 @@ class ActivityPubIntegration(StartupSyncMixin):
             tag = m.group(0)
 
             # Skip LaTeX-rendered images (handled above)
-            if "class=\"latex" in tag or "class='latex" in tag:
+            if 'class="latex' in tag or "class='latex" in tag:
                 return tag
 
             src_m = self._INLINE_IMG_SRC_RE.search(tag)
@@ -499,7 +499,7 @@ class ActivityPubIntegration(StartupSyncMixin):
                 return ""
 
             alt_m = self._INLINE_IMG_ALT_RE.search(tag)
-            alt = (alt_m.group(1).strip() if alt_m else "")
+            alt = alt_m.group(1).strip() if alt_m else ""
 
             img_counter += 1
             attachment_urls.add(src)
