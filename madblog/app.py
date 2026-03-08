@@ -112,7 +112,9 @@ class BlogApp(Flask):
             if not hasattr(self, "activitypub_storage"):
                 return {"followers_count": 0}
             try:
-                return {"followers_count": len(self.activitypub_storage.get_followers())}
+                return {
+                    "followers_count": len(self.activitypub_storage.get_followers())
+                }
             except Exception:
                 return {"followers_count": 0}
 
@@ -250,11 +252,13 @@ class BlogApp(Flask):
                 }
             )
 
+        ap_base_url = (config.activitypub_link or config.link).rstrip("/")
+
         # Create the ActivityPub handler
         self.activitypub_handler = ActivityPubHandler(
             storage=self.activitypub_storage,
             actor_config={
-                "base_url": config.link,
+                "base_url": ap_base_url,
                 "username": config.activitypub_username,
                 "name": (config.activitypub_name or config.author or config.title),
                 "summary": (config.activitypub_summary or config.description),
@@ -277,7 +281,8 @@ class BlogApp(Flask):
         self._ap_integration = ActivityPubIntegration(
             handler=self.activitypub_handler,
             pages_dir=str(self.pages_dir),
-            base_url=config.link,
+            base_url=ap_base_url,
+            content_base_url=config.link,  # Images served at actual blog URL
         )
         self.content_monitor.register(self._ap_integration.on_content_change)
 
@@ -349,7 +354,9 @@ class BlogApp(Flask):
                 continue
 
             if m.group(1) == "published":
-                metadata[m.group(1)] = datetime.datetime.fromisoformat(m.group(2)).date()
+                metadata[m.group(1)] = datetime.datetime.fromisoformat(
+                    m.group(2)
+                ).date()
             else:
                 metadata[m.group(1)] = m.group(2)
 
