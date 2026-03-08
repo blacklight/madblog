@@ -113,7 +113,7 @@ class ActivityPubEnabledTest(unittest.TestCase):
         self.config = config
         self._orig_activitypub_domain = config.activitypub_domain
         self._orig_activitypub_link = config.activitypub_link
-        self._tmpdir = tempfile.TemporaryDirectory()
+        self._tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self._tmpdir.cleanup)
 
         root = Path(self._tmpdir.name)
@@ -165,9 +165,12 @@ class ActivityPubEnabledTest(unittest.TestCase):
     @skip_if_no_pubby
     def test_webfinger_domain_override(self):
         from madblog.config import config
+        from madblog.app import BlogApp
 
         config.activitypub_domain = "example.org"
-        client = self.app.test_client()
+        # Create a new app after setting the domain override
+        app = BlogApp(__name__)
+        client = app.test_client()
 
         resp = client.get("/.well-known/webfinger" "?resource=acct:blog@example.org")
         self.assertEqual(resp.status_code, 200)
