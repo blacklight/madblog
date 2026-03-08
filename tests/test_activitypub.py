@@ -41,6 +41,7 @@ class ActivityPubConfigTest(unittest.TestCase):
 
         env = {
             "MADBLOG_ENABLE_ACTIVITYPUB": "1",
+            "MADBLOG_ACTIVITYPUB_LINK": "https://ap.example.org",
             "MADBLOG_ACTIVITYPUB_USERNAME": "testuser",
             "MADBLOG_ACTIVITYPUB_DOMAIN": "example.org",
             "MADBLOG_ACTIVITYPUB_NAME": "Test Blog",
@@ -55,6 +56,7 @@ class ActivityPubConfigTest(unittest.TestCase):
             _init_config_from_env()
 
         self.assertTrue(config.enable_activitypub)
+        self.assertEqual(config.activitypub_link, "https://ap.example.org")
         self.assertEqual(config.activitypub_username, "testuser")
         self.assertEqual(config.activitypub_domain, "example.org")
         self.assertEqual(config.activitypub_name, "Test Blog")
@@ -66,6 +68,7 @@ class ActivityPubConfigTest(unittest.TestCase):
 
         # Reset
         config.enable_activitypub = False
+        config.activitypub_link = None
         config.activitypub_username = "blog"
         config.activitypub_domain = None
         config.activitypub_name = None
@@ -109,6 +112,7 @@ class ActivityPubEnabledTest(unittest.TestCase):
 
         self.config = config
         self._orig_activitypub_domain = config.activitypub_domain
+        self._orig_activitypub_link = config.activitypub_link
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
 
@@ -134,6 +138,7 @@ class ActivityPubEnabledTest(unittest.TestCase):
         config.content_dir = str(root)
         config.link = "https://example.com"
         config.enable_activitypub = True
+        config.activitypub_link = None
         config.activitypub_domain = None
         config.activitypub_private_key_path = None
         config.author = "Test Author"
@@ -146,6 +151,7 @@ class ActivityPubEnabledTest(unittest.TestCase):
     def tearDown(self):
         if hasattr(self, "config"):
             self.config.enable_activitypub = False
+            self.config.activitypub_link = self._orig_activitypub_link
             self.config.activitypub_domain = self._orig_activitypub_domain
 
     @skip_if_no_pubby
@@ -180,6 +186,32 @@ class ActivityPubEnabledTest(unittest.TestCase):
         data = resp.get_json()
         self.assertEqual(data["type"], "Person")
         self.assertEqual(data["preferredUsername"], "blog")
+
+    @skip_if_no_pubby
+    def test_activitypub_link_override_changes_actor_id(self):
+        from madblog.config import config
+        from madblog.app import BlogApp
+
+        config.link = "https://example.com"
+        config.activitypub_link = "https://ap.example.org"
+        config.activitypub_domain = "example.org"
+
+        app = BlogApp(__name__)
+        client = app.test_client()
+
+        resp = client.get("/.well-known/webfinger" "?resource=acct:blog@example.org")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertEqual(data["subject"], "acct:blog@example.org")
+        self.assertEqual(data["aliases"][0], "https://ap.example.org/ap/actor")
+
+        resp = client.get("/ap/actor")
+        self.assertEqual(resp.status_code, 200)
+        actor = resp.get_json()
+        self.assertEqual(actor["id"], "https://ap.example.org/ap/actor")
+
+        # Website/profile URL remains based on config.link
+        self.assertEqual(actor["url"], "https://example.com/@blog")
 
     @skip_if_no_pubby
     def test_outbox(self):
@@ -435,6 +467,75 @@ class ActivityPubContentChangeTest(unittest.TestCase):
         obj = handler.publish_object.call_args[0][0]
         self.assertTrue(obj.attachment)
         self.assertTrue(any(a.get("url") == img_url for a in obj.attachment))
+
+    @skip_if_no_pubby
+    def test_generated_image_attachments_use_content_base_url(self):
+        """LaTeX/Mermaid PNGs use content_base_url, not base_url (AP identity)."""
+        from pubby import ActivityPubHandler
+        from pubby.crypto import generate_rsa_keypair
+        from pubby.storage.adapters.file import FileActivityPubStorage
+        from madblog.storage.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+
+        root = Path(tmpdir.name)
+        pages_dir = root / "pages"
+        pages_dir.mkdir()
+        ap_dir = root / "ap"
+
+        config.content_dir = str(root)
+
+        priv, _ = generate_rsa_keypair()
+        storage = FileActivityPubStorage(data_dir=str(ap_dir))
+        handler = ActivityPubHandler(
+            storage=storage,
+            actor_config={
+                "base_url": "https://ap.example.org",  # AP identity URL
+                "username": "blog",
+            },
+            private_key=priv,
+        )
+
+        integration = ActivityPubIntegration(
+            handler=handler,
+            pages_dir=str(pages_dir),
+            base_url="https://ap.example.org",  # AP identity
+            content_base_url="https://blog.example.com",  # Where images served
+        )
+
+        # Post with inline LaTeX (base64 image that gets extracted)
+        test_file = pages_dir / "latex-post.md"
+        test_file.write_text(
+            "\n".join(
+                [
+                    "[//]: # (title: LaTeX Post)",
+                    "",
+                    "# LaTeX Post",
+                    "",
+                    "Some math: $E=mc^2$",
+                ]
+            )
+        )
+
+        handler.publish_object = MagicMock()
+        integration.on_content_change(self.ChangeType.ADDED, str(test_file))
+
+        handler.publish_object.assert_called_once()
+        obj = handler.publish_object.call_args[0][0]
+
+        # Article ID should use AP base_url
+        self.assertTrue(obj.id.startswith("https://ap.example.org/"))
+
+        # If there are generated image attachments, they should use content_base_url
+        for att in obj.attachment or []:
+            if att.get("url", "").startswith("https://"):
+                # Generated PNGs should point to content_base_url, not AP base_url
+                self.assertFalse(
+                    att["url"].startswith("https://ap.example.org/"),
+                    f"Attachment URL should use content_base_url: {att['url']}",
+                )
 
 
 class ActivityPubNotificationsTest(unittest.TestCase):

@@ -78,7 +78,9 @@ This is test article {i+1} for cache header testing.
                 "\nTest 2: Testing 304 Not Modified response for get_pages_response..."
             )
 
-            with app.test_request_context("/", headers={"If-Modified-Since": last_modified}):
+            with app.test_request_context(
+                "/", headers={"If-Modified-Since": last_modified}
+            ):
                 response_304 = app.get_pages_response()
 
                 # Should return 304 for unchanged files
