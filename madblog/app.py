@@ -1,6 +1,7 @@
 import datetime
 import email.utils
 import hashlib
+import json
 import os
 import re
 import stat
@@ -391,6 +392,52 @@ class BlogApp(Flask):
             "author_photo": author_photo,
         }
 
+    def _get_activitypub_page_response(
+        self,
+        *,
+        md_file: str,
+        metadata: dict,
+        last_modified: str,
+        etag: str,
+    ) -> Response | None:
+        if not (
+            hasattr(self, "activitypub_handler") and hasattr(self, "_ap_integration")
+        ):
+            return None
+
+        accepts_ap = (
+            request.accept_mimetypes["application/activity+json"]
+            or request.accept_mimetypes["application/ld+json"]
+        )
+        if not accepts_ap:
+            return None
+
+        from pubby._model import AP_CONTEXT
+
+        base_url = config.link or request.host_url.rstrip("/")
+        url = base_url.rstrip("/") + metadata.get("uri", "")
+        obj, _ = self._ap_integration._build_object(
+            md_file,
+            url,
+            self.activitypub_handler.actor_id,
+        )
+        doc = obj.to_dict()
+        doc["@context"] = AP_CONTEXT
+
+        response = make_response(json.dumps(doc, ensure_ascii=False))
+        response.mimetype = "application/activity+json"
+        response.headers["Last-Modified"] = last_modified
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+
+        article_language = metadata.get("language")
+        if article_language:
+            response.headers["Language"] = article_language
+        elif config.language:
+            response.headers["Language"] = config.language
+
+        return response
+
     def get_page(
         self,
         page: str,
@@ -464,6 +511,16 @@ class BlogApp(Flask):
             return response
 
         title = title or metadata.get("title") or config.title
+        ap_response = self._get_activitypub_page_response(
+            md_file=md_file,
+            metadata=metadata,
+            last_modified=last_modified,
+            etag=etag,
+        )
+
+        if ap_response:
+            return ap_response
+
         author_info = self._parse_author(metadata)
         mentions = self.webmentions_handler.render_webmentions(
             self.webmentions_handler.retrieve_stored_webmentions(
