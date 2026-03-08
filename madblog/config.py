@@ -61,6 +61,7 @@ class Config:
     activitypub_object_type: str = "Note"
     activitypub_posts_content_wrapped: bool = False
     activitypub_email_notifications: bool = True
+    activitypub_quote_control: str = "public"
 
     @property
     def templates_dir(self) -> str:
@@ -200,11 +201,15 @@ def _init_config_from_file(config_file: str):
     if cfg.get("activitypub_object_type"):
         config.activitypub_object_type = cfg["activitypub_object_type"]
     if cfg.get("activitypub_posts_content_wrapped") is not None:
-        config.activitypub_posts_content_wrapped = bool(cfg["activitypub_posts_content_wrapped"])
+        config.activitypub_posts_content_wrapped = bool(
+            cfg["activitypub_posts_content_wrapped"]
+        )
     if cfg.get("activitypub_email_notifications") is not None:
         config.activitypub_email_notifications = bool(
             cfg["activitypub_email_notifications"]
         )
+    if cfg.get("activitypub_quote_control"):
+        config.activitypub_quote_control = cfg["activitypub_quote_control"]
     config.categories = cfg.get("categories", [])
 
 
@@ -323,6 +328,10 @@ def _init_config_from_env():
         config.activitypub_email_notifications = (
             os.environ["MADBLOG_ACTIVITYPUB_EMAIL_NOTIFICATIONS"] == "1"
         )
+    if os.getenv("MADBLOG_ACTIVITYPUB_QUOTE_CONTROL"):
+        config.activitypub_quote_control = os.environ[
+            "MADBLOG_ACTIVITYPUB_QUOTE_CONTROL"
+        ]
 
 
 def _init_config_from_cli(args: Optional[Namespace]):

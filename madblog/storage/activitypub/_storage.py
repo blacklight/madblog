@@ -544,6 +544,10 @@ class ActivityPubIntegration(StartupSyncMixin):
 
         activity_type = "Update" if self._is_published(url) else "Create"
 
+        quote_control = None
+        if config.activitypub_quote_control:
+            quote_control = {"quotePolicy": config.activitypub_quote_control}
+
         obj = Object(
             id=url,
             type=config.activitypub_object_type,
@@ -558,6 +562,7 @@ class ActivityPubIntegration(StartupSyncMixin):
             cc=[self.handler.followers_url] + mention_cc,
             tag=mention_tags + hashtag_tags,
             attachment=attachments,
+            quote_control=quote_control,
         )
 
         if not config.activitypub_description_only:

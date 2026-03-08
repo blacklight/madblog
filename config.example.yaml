@@ -158,3 +158,7 @@ link: https://myblog.example.com
 # bold text at the top of the body. When false (default), title and
 # description are both rendered inline in the post body with no CW.
 # activitypub_posts_content_wrapped: false
+
+# Quote policy for ActivityPub posts (optional, default: "public").
+# Mastodon will refuse quote-boosts unless this is set to "public".
+# activitypub_quote_control: public
