@@ -52,6 +52,16 @@ def home_route():
     )
 
 
+@app.route("/@<username>", methods=["GET"])
+def profile_redirect(username: str):
+    """Redirect /@username to the homepage (actor profile URL)."""
+    from flask import redirect
+
+    if config.enable_activitypub and username == config.activitypub_username:
+        return redirect("/", code=302)
+    return Response("Not found", status=404, mimetype="text/plain")
+
+
 @app.route("/img/<img>", methods=["GET"])
 def img_route(img: str):
     return send_from_directory(app.img_dir, img, config.default_img_dir)

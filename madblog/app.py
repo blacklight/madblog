@@ -222,7 +222,7 @@ class BlogApp(Flask):
                 {
                     "type": "PropertyValue",
                     "name": "Blog",
-                    "value": f'<a href="{config.link}" rel="me">{config.link}</a>',
+                    "value": f'<a href="{config.link}" rel="me">{config.link.lstrip("https://").rstrip("/")}</a>',
                 }
             )
 
@@ -239,6 +239,7 @@ class BlogApp(Flask):
                     config.activitypub_manually_approves_followers
                 ),
                 "attachment": actor_attachment,
+                "url": f'{config.link.rstrip("/")}/@{config.activitypub_username}',
             },
             private_key_path=key_path,
             on_interaction_received=on_interaction,
@@ -255,6 +256,13 @@ class BlogApp(Flask):
         )
         self.content_monitor.register(self._ap_integration.on_content_change)
         self._ap_integration.sync_on_startup()
+
+        # Push the current actor profile to all followers so remote
+        # instances pick up attachment/field changes (e.g. verified links).
+        try:
+            self.activitypub_handler.publish_actor_update()
+        except Exception:
+            self.logger.warning("Failed to publish actor profile update", exc_info=True)
 
     def _on_content_change_tags(self, _: ChangeType, filepath: str) -> None:
         """Bridge: forward content changes to the tag indexer."""

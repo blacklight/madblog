@@ -94,7 +94,7 @@ class Config:
             return None
 
         base = self.link.rstrip("/")
-        return f"{base}/ap/actor"
+        return f"{base}/@{self.activitypub_username}"
 
     @property
     def webmention_url(self) -> Optional[str]:
