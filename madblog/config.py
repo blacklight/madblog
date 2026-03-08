@@ -62,6 +62,7 @@ class Config:
     activitypub_posts_content_wrapped: bool = False
     activitypub_email_notifications: bool = True
     activitypub_quote_control: str = "public"
+    activitypub_auto_approve_quotes: bool = True
 
     @property
     def templates_dir(self) -> str:
@@ -210,6 +211,10 @@ def _init_config_from_file(config_file: str):
         )
     if cfg.get("activitypub_quote_control"):
         config.activitypub_quote_control = cfg["activitypub_quote_control"]
+    if cfg.get("activitypub_auto_approve_quotes") is not None:
+        config.activitypub_auto_approve_quotes = bool(
+            cfg["activitypub_auto_approve_quotes"]
+        )
     config.categories = cfg.get("categories", [])
 
 
@@ -332,6 +337,10 @@ def _init_config_from_env():
         config.activitypub_quote_control = os.environ[
             "MADBLOG_ACTIVITYPUB_QUOTE_CONTROL"
         ]
+    if os.getenv("MADBLOG_ACTIVITYPUB_AUTO_APPROVE_QUOTES"):
+        config.activitypub_auto_approve_quotes = (
+            os.environ["MADBLOG_ACTIVITYPUB_AUTO_APPROVE_QUOTES"] == "1"
+        )
 
 
 def _init_config_from_cli(args: Optional[Namespace]):

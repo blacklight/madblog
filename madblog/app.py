@@ -230,6 +230,7 @@ class BlogApp(Flask):
             },
             private_key_path=key_path,
             on_interaction_received=on_interaction,
+            auto_approve_quotes=config.activitypub_auto_approve_quotes,
             software_name="madblog",
             software_version=__version__,
         )
@@ -510,17 +511,21 @@ class BlogApp(Flask):
 
             return response
 
+        if (
+            request.accept_mimetypes["application/activity+json"]
+            and not request.accept_mimetypes["text/html"]
+        ):
+            ap_response = self._get_activitypub_page_response(
+                md_file=md_file,
+                metadata=metadata,
+                last_modified=last_modified,
+                etag=etag,
+            )
+
+            if ap_response:
+                return ap_response
+
         title = title or metadata.get("title") or config.title
-        ap_response = self._get_activitypub_page_response(
-            md_file=md_file,
-            metadata=metadata,
-            last_modified=last_modified,
-            etag=etag,
-        )
-
-        if ap_response:
-            return ap_response
-
         author_info = self._parse_author(metadata)
         mentions = self.webmentions_handler.render_webmentions(
             self.webmentions_handler.retrieve_stored_webmentions(

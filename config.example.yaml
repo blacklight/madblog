@@ -162,3 +162,8 @@ link: https://myblog.example.com
 # Quote policy for ActivityPub posts (optional, default: "public").
 # Mastodon will refuse quote-boosts unless this is set to "public".
 # activitypub_quote_control: public
+
+# Automatically send a QuoteAuthorization when a remote actor quotes one
+# of your posts. Without this, Mastodon keeps quotes in "pending" state.
+# (optional, default: true)
+# activitypub_auto_approve_quotes: true
