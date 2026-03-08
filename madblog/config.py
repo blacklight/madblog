@@ -89,6 +89,14 @@ class Config:
         return os.path.join(self.static_dir, "img")
 
     @property
+    def activitypub_profile_url(self) -> Optional[str]:
+        if not self.enable_activitypub:
+            return None
+
+        base = self.link.rstrip("/")
+        return f"{base}/ap/actor"
+
+    @property
     def webmention_url(self) -> Optional[str]:
         from flask import request
 

@@ -37,6 +37,10 @@
     <link rel="me" href="{{ external_link }}">
     {% endfor %}
     {% endif %}
+    {% if config.activitypub_profile_url %}
+    <!-- ActivityPub actor profile link for Mastodon verification -->
+    <link rel="me" href="{{ config.activitypub_profile_url }}">
+    {% endif %}
     
     <!-- Semantic tag/category links -->
     {% if is_home_page and config.categories %}

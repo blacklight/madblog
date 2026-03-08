@@ -215,6 +215,17 @@ class BlogApp(Flask):
                 ),
             )
 
+        # Build profile metadata links (Mastodon "verified" fields)
+        actor_attachment = []
+        if config.link:
+            actor_attachment.append(
+                {
+                    "type": "PropertyValue",
+                    "name": "Blog",
+                    "value": f'<a href="{config.link}" rel="me">{config.link}</a>',
+                }
+            )
+
         # Create the ActivityPub handler
         self.activitypub_handler = ActivityPubHandler(
             storage=self.activitypub_storage,
@@ -227,6 +238,7 @@ class BlogApp(Flask):
                 "manually_approves_followers": (
                     config.activitypub_manually_approves_followers
                 ),
+                "attachment": actor_attachment,
             },
             private_key_path=key_path,
             on_interaction_received=on_interaction,
