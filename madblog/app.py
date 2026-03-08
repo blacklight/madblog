@@ -326,13 +326,12 @@ class BlogApp(Flask):
             if not line.strip() or re.match(r"(^---\s*$)|(^#\s+.*)", line):
                 continue
 
-            if not (m := re.match(r"^\[//]: # \(([^:]+):\s*(.*)\)\s*$", line)):
-                break
+            m = re.match(r"^\[//\]: # \(([^:]+):\s*(.*)\)\s*$", line)
+            if not m:
+                continue
 
             if m.group(1) == "published":
-                metadata[m.group(1)] = datetime.datetime.fromisoformat(
-                    m.group(2)
-                ).date()
+                metadata[m.group(1)] = datetime.datetime.fromisoformat(m.group(2)).date()
             else:
                 metadata[m.group(1)] = m.group(2)
 
@@ -506,8 +505,11 @@ class BlogApp(Flask):
 
         # Check if the client has a cached version that's still valid
         # Check both If-Modified-Since and If-None-Match headers
-        if_modified_since = request.headers.get("If-Modified-Since")
-        if_none_match = request.headers.get("If-None-Match")
+        if_modified_since = None
+        if_none_match = None
+        if has_request_context():
+            if_modified_since = request.headers.get("If-Modified-Since")
+            if_none_match = request.headers.get("If-None-Match")
         cache_valid = False
 
         # Check If-Modified-Since
@@ -582,46 +584,49 @@ class BlogApp(Flask):
 
         tags = parse_metadata_tags(metadata.get("tags", ""))
 
-        output = (
-            f"# {title}\n\n{content}"
-            if as_markdown
-            else render_template(
-                "article.html",
-                config=config,
-                title=title,
-                uri=metadata.get("uri"),
-                url=config.link + metadata.get("uri", ""),
-                external_url=metadata.get("external_url"),
-                image=metadata.get("image"),
-                description=metadata.get("description"),
-                published_datetime=metadata.get("published"),
-                published=metadata["published"].strftime("%b %d, %Y"),
-                content=markdown(
-                    content,
-                    extensions=[
-                        "fenced_code",
-                        "codehilite",
-                        "tables",
-                        "toc",
-                        "attr_list",
-                        "sane_lists",
-                        MarkdownAutolink(),
-                        MarkdownTaskList(),
-                        MarkdownTocMarkers(),
-                        MarkdownLatex(),
-                        MarkdownMermaid(),
-                        MarkdownTags(),
-                        MarkdownActivityPubMentions(),
-                    ],
-                ),
-                tags=tags,
-                skip_header=skip_header,
-                skip_html_head=skip_html_head,
-                mentions=mentions,
-                ap_interactions=ap_interactions,
-                **author_info,
-            )
-        )
+        if as_markdown:
+            output = f"# {title}\n\n{content}"
+        else:
+            with contextlib.ExitStack() as stack:
+                if not has_app_context():
+                    stack.enter_context(self.app_context())
+
+                output = render_template(
+                    "article.html",
+                    config=config,
+                    title=title,
+                    uri=metadata.get("uri"),
+                    url=config.link + metadata.get("uri", ""),
+                    external_url=metadata.get("external_url"),
+                    image=metadata.get("image"),
+                    description=metadata.get("description"),
+                    published_datetime=metadata.get("published"),
+                    published=metadata["published"].strftime("%b %d, %Y"),
+                    content=markdown(
+                        content,
+                        extensions=[
+                            "fenced_code",
+                            "codehilite",
+                            "tables",
+                            "toc",
+                            "attr_list",
+                            "sane_lists",
+                            MarkdownAutolink(),
+                            MarkdownTaskList(),
+                            MarkdownTocMarkers(),
+                            MarkdownLatex(),
+                            MarkdownMermaid(),
+                            MarkdownTags(),
+                            MarkdownActivityPubMentions(),
+                        ],
+                    ),
+                    tags=tags,
+                    skip_header=skip_header,
+                    skip_html_head=skip_html_head,
+                    mentions=mentions,
+                    ap_interactions=ap_interactions,
+                    **author_info,
+                )
 
         response = make_response(output)
 
@@ -676,9 +681,7 @@ class BlogApp(Flask):
         skip_header: bool = False,
         skip_html_head: bool = False,
     ):
-        pages_dir = getattr(app, "pages_dir", "")
-        assert pages_dir  # for mypy
-        pages_dir = str(pages_dir).rstrip("/")
+        pages_dir = str(self.pages_dir).rstrip("/")
         return [
             {
                 "path": os.path.join(root[len(pages_dir) + 1 :], f),
