@@ -416,11 +416,12 @@ class FollowersRouteTest(unittest.TestCase):
         self.assertIn(b"No followers yet", resp.data)
 
     @skip_if_no_pubby
-    def test_home_page_shows_followers_bar(self):
-        """Test the home page shows the followers bar when AP is enabled."""
+    def test_home_page_shows_followers_in_menu(self):
+        """Test the home page shows the followers link in hamburger menu when AP is enabled."""
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(b"followers-bar", resp.data)
+        self.assertIn(b"hamburger-menu", resp.data)
+        self.assertIn(b'href="/followers"', resp.data)
 
     @skip_if_no_pubby
     def test_followers_route_404_when_ap_disabled(self):

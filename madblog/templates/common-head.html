@@ -112,16 +112,101 @@
               </div>
             {% endif %}
 
-            <a href="/feed.atom" target="_blank" title="Feed">
-                <div class="icon">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect width="24" height="24" rx="4" fill="#FF6600"/>
-                    <circle cx="6.5" cy="17.5" r="1.5" fill="white"/>
-                    <path d="M4 4.44v2.83c7.03 0 12.73 5.7 12.73 12.73h2.83c0-8.59-6.97-15.56-15.56-15.56z" fill="white"/>
-                    <path d="M4 10.1v2.83c3.73 0 6.77 3.04 6.77 6.77h2.83c0-5.29-4.31-9.6-9.6-9.6z" fill="white"/>
-                  </svg>
-                </div>
-            </a>
+            <div class="hamburger-menu">
+                <input type="checkbox" id="hamburger-toggle" class="hamburger-toggle">
+                <label for="hamburger-toggle" class="hamburger-icon" title="Menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </label>
+                <nav class="hamburger-nav">
+                    {% if config.enable_activitypub %}
+                    <a href="/followers">&#128101; Followers</a>
+                    {% endif %}
+                    <a href="/tags">&#127991; Tags</a>
+                    <a href="/feed.atom" target="_blank">{% include 'icons/rss.html' %} Atom Feed</a>
+                    <a href="/feed.rss" target="_blank">{% include 'icons/rss.html' %} RSS Feed</a>
+                </nav>
+            </div>
         </div>
     </header>
     {% endif %}
+
+<style>
+.hamburger-menu {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.5em;
+}
+.hamburger-toggle {
+    display: none;
+}
+.hamburger-icon {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 24px;
+    height: 18px;
+    cursor: pointer;
+    padding: 4px;
+}
+.hamburger-icon span {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background: var(--color-fg-primary);
+    border-radius: 1px;
+    transition: transform 0.2s, opacity 0.2s;
+}
+.hamburger-toggle:checked + .hamburger-icon span:nth-child(1) {
+    transform: translateY(8px) rotate(45deg);
+}
+.hamburger-toggle:checked + .hamburger-icon span:nth-child(2) {
+    opacity: 0;
+}
+.hamburger-toggle:checked + .hamburger-icon span:nth-child(3) {
+    transform: translateY(-8px) rotate(-45deg);
+}
+.hamburger-nav {
+    display: none;
+    position: fixed;
+    top: var(--header-height);
+    right: 0;
+    height: calc(100vh - var(--header-height));
+    width: 220px;
+    background-color: #fff;
+    background: var(--color-bg-primary);
+    border-left: 1px solid var(--color-border);
+    box-shadow: -4px 0 12px var(--color-shadow);
+    z-index: 10000;
+    overflow-y: auto;
+    opacity: 1;
+}
+@media (prefers-color-scheme: dark) {
+    .hamburger-nav {
+        background-color: #282828;
+    }
+}
+.hamburger-toggle:checked ~ .hamburger-nav {
+    display: block;
+}
+.hamburger-nav a {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.8em 1em;
+    color: var(--color-fg-primary);
+    text-decoration: none;
+    border-bottom: 1px solid var(--color-border-tertiary);
+    text-align: left;
+}
+.hamburger-nav a:hover {
+    background: var(--color-bg-tertiary);
+}
+.hamburger-nav a svg {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+}
+</style>

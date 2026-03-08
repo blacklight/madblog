@@ -41,7 +41,6 @@
   --header-margin: 1px;
   --footer-height: 1em;
   --footer-margin: 2px;
-  --followers-bar-height: 0px;
 }
 
 html {
@@ -80,6 +79,8 @@ header {
   padding: 0 .5em;
   font-size: .9em;
   box-shadow: 1px 3px 3px 0 var(--color-shadow);
+  position: relative;
+  z-index: 1000;
 }
 
 header a {
@@ -134,7 +135,7 @@ header .left .icon {
 }
 
 main {
-  height: calc(100% - var(--header-height) - var(--header-margin) - var(--footer-height) - var(--footer-margin) - var(--followers-bar-height));
+  height: calc(100% - var(--header-height) - var(--header-margin) - var(--footer-height) - var(--footer-margin));
   overflow: auto;
   display: flex;
   flex-direction: column;
