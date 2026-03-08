@@ -2,6 +2,8 @@
 
 [![Build Status](https://ci-cd.platypush.tech/api/badges/blacklight/madblog/status.svg)](https://ci-cd.platypush.tech/blacklight/madblog)
 
+[[TOC]]
+
 A minimal but capable blog and Web framework that you can directly run from a Markdown folder.
 
 ## Demos
@@ -43,7 +45,7 @@ docker build -f docker/minimal.Dockerfile -t madblog .
 
 #### Full installation
 
-Includes all plugins - including LaTeX and Mermaid; &gt; 2 GB in size.
+Includes all plugins - including ActivityPub, LaTeX and Mermaid; &gt; 2 GB in size.
 
 ```shell
 git clone https://git.fabiomanganiello.com/madblog
@@ -90,6 +92,34 @@ docker run -it \
   -v "/path/to/your/content:/data" \
   madblog
 ```
+
+If you have ActivityPub federation enabled, mount your private key and
+(optionally) the ActivityPub data directory for persistence:
+
+```shell
+docker run -it \
+  -p 8000:8000 \
+  -v "/path/to/your/config.yaml:/etc/madblog/config.yaml" \
+  -v "/path/to/your/content:/data" \
+  -v "/path/to/your/private_key.pem:/etc/madblog/ap_key.pem:ro" \
+  -v "/path/to/your/activitypub-data:/data/activitypub" \
+  madblog
+```
+
+Or pass the configuration directory where `config.yaml` lives as a volume
+to let Madblog create a key there on the first start:
+
+```shell
+docker run -it \
+  -p 8000:8000 \
+  -v "/path/to/your/config:/etc/madblog" \
+  -v "/path/to/your/content:/data" \
+  -v "/path/to/your/activitypub-data:/data/activitypub" \
+  madblog
+```
+
+Set `activitypub_private_key_path: /etc/madblog/ap_key.pem` in your
+`config.yaml`. The key file must be readable only by the owner (`chmod 600`).
 
 ## Configuration
 
@@ -294,6 +324,53 @@ graph LR
     A --> B --> C
 ```
 ````
+
+## ActivityPub federation
+
+Madblog supports [ActivityPub](https://www.w3.org/TR/activitypub/) federation,
+allowing your blog posts to appear on Mastodon, Pleroma, and other fediverse
+platforms. Followers receive new and updated articles directly in their timelines.
+
+Install with the ActivityPub extra:
+
+```shell
+pip install 'madblog[activitypub]'
+```
+
+Enable it in your `config.yaml`:
+
+```yaml
+enable_activitypub: true
+# It will be created if it doesn't exist
+activitypub_private_key_path: /path/to/private_key.pem
+```
+
+Or via environment variables:
+
+```shell
+export MADBLOG_ENABLE_ACTIVITYPUB=1
+export MADBLOG_ACTIVITYPUB_PRIVATE_KEY_PATH=/path/to/private_key.pem
+```
+
+### Mentions
+
+You can mention fediverse users in your articles using the `@user@domain`
+syntax. Mentions are rendered as links and delivered as proper ActivityPub
+mentions — the mentioned user will receive a notification on their instance.
+
+```markdown
+Great article by @alice@mastodon.social about federation!
+```
+
+### Configuration options
+
+| Option | Env var | Default | Description |
+|--------|---------|---------|-------------|
+| `activitypub_object_type` | `MADBLOG_ACTIVITYPUB_OBJECT_TYPE` | `Note` | ActivityPub object type (`Note` or `Article`). `Note` renders inline on Mastodon; `Article` shows as a link preview. |
+| `activitypub_description_only` | `MADBLOG_ACTIVITYPUB_DESCRIPTION_ONLY` | `false` | Only send the article description instead of the full rendered content. |
+| `activitypub_username` | `MADBLOG_ACTIVITYPUB_USERNAME` | `blog` | Fediverse username for the blog actor. |
+| `activitypub_manually_approves_followers` | `MADBLOG_ACTIVITYPUB_MANUALLY_APPROVES_FOLLOWERS` | `false` | Require manual approval for new followers. |
+| `activitypub_quote_control` | `MADBLOG_ACTIVITYPUB_QUOTE_CONTROL` | `public` | Quote policy for ActivityPub posts. Mastodon will refuse quote-boosts unless set to `public`. |
 
 ## RSS syndication
 

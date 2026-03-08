@@ -111,3 +111,59 @@ link: https://myblog.example.com
 # smtp_password: password
 # smtp_starttls: true
 # smtp_enable_starttls_auto: true
+
+#### (Optional) ActivityPub Federation ####
+# Requires: pip install 'madblog[activitypub]'
+
+# Enable ActivityPub federation (optional, default: false)
+# enable_activitypub: false
+
+# The username for the ActivityPub actor (optional, default: "blog")
+# The full handle will be @username@yourdomain.com
+# activitypub_username: blog
+
+# Display name for the ActivityPub actor (optional, falls back to author or title)
+# activitypub_name: My Blog
+
+# Summary/bio for the ActivityPub actor (optional, falls back to description)
+# activitypub_summary: A blog about various topics.
+
+# Avatar URL for the ActivityPub actor (optional, falls back to author_photo)
+# activitypub_icon_url: https://myblog.example.com/img/avatar.png
+
+# Path to the RSA private key PEM file (optional).
+# If not set, a keypair will be auto-generated on first start.
+# The file must be readable only by the owner (chmod 600).
+# activitypub_private_key_path: /path/to/private_key.pem
+
+# Whether to require manual approval for new followers (optional, default: false)
+# activitypub_manually_approves_followers: false
+
+# Whether to send email notifications to the blog's author email when
+# new ActivityPub activities occur, if ActivityPub is enabled, an email
+# address is provided, and an SMTP server is configured (optional, default: true)
+# activitypub_email_notifications: true
+
+# ActivityPub object type: "Note" (default) renders content inline on
+# Mastodon/Pleroma. "Article" only shows as a link preview card.
+# activitypub_object_type: Note
+
+# If true, only send the article description (not the full body) in
+# ActivityPub posts (default: false).
+# activitypub_description_only: false
+
+# If true, the article title is sent as the ActivityPub "summary" field,
+# which Mastodon/Pleroma render as a Content Warning / spoiler header
+# that must be clicked to reveal the body. The description is kept as
+# bold text at the top of the body. When false (default), title and
+# description are both rendered inline in the post body with no CW.
+# activitypub_posts_content_wrapped: false
+
+# Quote policy for ActivityPub posts (optional, default: "public").
+# Mastodon will refuse quote-boosts unless this is set to "public".
+# activitypub_quote_control: public
+
+# Automatically send a QuoteAuthorization when a remote actor quotes one
+# of your posts. Without this, Mastodon keeps quotes in "pending" state.
+# (optional, default: true)
+# activitypub_auto_approve_quotes: true

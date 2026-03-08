@@ -1,8 +1,10 @@
 import datetime
 import email.utils
 import hashlib
+import json
 import os
 import re
+import stat
 
 from pathlib import Path
 from typing import IO, List, Optional, Tuple, Type
@@ -14,18 +16,22 @@ from markdown import markdown
 from webmentions import WebmentionDirection, WebmentionsHandler
 from webmentions.server.adapters.flask import bind_webmentions
 
-from .monitor import ChangeType, ContentMonitor
-
+from .activitypub import MarkdownActivityPubMentions
+from .autolink import MarkdownAutolink
 from .config import config
 from .feeds import FeedAuthor, FeedParser
-from .autolink import MarkdownAutolink
 from .latex import MarkdownLatex
 from .mermaid import MarkdownMermaid
-from .tasklist import MarkdownTaskList
-from .toc import MarkdownTocMarkers
-from .notifications import SmtpConfig, build_webmention_email_notifier
+from .monitor import ChangeType, ContentMonitor
+from .notifications import (
+    SmtpConfig,
+    build_activitypub_email_notifier,
+    build_webmention_email_notifier,
+)
 from .storage.mentions import FileWebmentionsStorage
 from .storage.tags import TagIndex
+from .tasklist import MarkdownTaskList
+from .toc import MarkdownTocMarkers
 from .tags import MarkdownTags, parse_metadata_tags
 from ._sorters import PagesSorter, PagesSortByTime
 
@@ -79,6 +85,7 @@ class BlogApp(Flask):
             self.template_folder = os.path.abspath(templates_dir)
 
         self._init_webmentions()
+        self._init_activitypub()
         self.tag_index = TagIndex(
             content_dir=config.content_dir,
             pages_dir=str(self.pages_dir),
@@ -132,6 +139,122 @@ class BlogApp(Flask):
         if config.enable_webmentions:
             bind_webmentions(self, self.webmentions_handler)
             self.content_monitor.register(self.webmentions_storage.on_content_change)
+            self.webmentions_storage.sync_on_startup()
+
+    def _generate_or_check_key(self, key_path: str) -> str:
+        from pubby.crypto import generate_rsa_keypair, export_private_key_pem
+
+        key_path = os.path.abspath(os.path.expanduser(key_path))
+        if not os.path.isfile(key_path):
+            private_key, _ = generate_rsa_keypair()
+            pem = export_private_key_pem(private_key)
+            with open(key_path, "w") as f:
+                f.write(pem)
+
+            os.chmod(key_path, 0o600)
+            self.logger.info("Generated ActivityPub private key at %s", key_path)
+
+        # Check permissions: must not be readable by group/others
+        st = os.stat(key_path)
+        if st.st_mode & (stat.S_IRGRP | stat.S_IROTH):
+            raise RuntimeError(
+                f"ActivityPub private key file {key_path} is readable "
+                "by group or others. Fix permissions with: "
+                f"chmod 600 {key_path}"
+            )
+
+        return key_path
+
+    def _init_activitypub(self):
+        if not config.enable_activitypub:
+            return
+
+        try:
+            from pubby import ActivityPubHandler
+            from pubby.storage.adapters.file import FileActivityPubStorage
+            from pubby.server.adapters.flask import bind_activitypub
+            from .storage.activitypub import ActivityPubIntegration
+        except ImportError:
+            self.logger.error(
+                "ActivityPub is enabled but pubby is not installed. "
+                "Install it with: pip install 'madblog[activitypub]'"
+            )
+            return
+
+        from . import __version__
+
+        ap_dir = os.path.join(config.content_dir, "activitypub")
+        os.makedirs(ap_dir, exist_ok=True)
+
+        # Key management
+        key_path = os.path.expanduser(
+            config.activitypub_private_key_path
+            or os.path.join(ap_dir, "private_key.pem")
+        )
+
+        self._generate_or_check_key(key_path)
+        self.activitypub_storage = FileActivityPubStorage(data_dir=ap_dir)
+
+        on_interaction = None
+        if (
+            config.author_email
+            and config.smtp_server
+            and config.activitypub_email_notifications
+        ):
+            on_interaction = build_activitypub_email_notifier(
+                recipient=config.author_email,
+                blog_base_url=config.link,
+                smtp=SmtpConfig(
+                    server=config.smtp_server,
+                    port=config.smtp_port,
+                    username=config.smtp_username,
+                    password=config.smtp_password,
+                    starttls=config.smtp_starttls,
+                    enable_starttls_auto=config.smtp_enable_starttls_auto,
+                    sender=config.smtp_sender,
+                ),
+            )
+
+        # Build profile metadata links (Mastodon "verified" fields)
+        actor_attachment = []
+        if config.link:
+            actor_attachment.append(
+                {
+                    "type": "PropertyValue",
+                    "name": "Blog",
+                    "value": f'<a href="{config.link}" rel="me">{config.link}</a>',
+                }
+            )
+
+        # Create the ActivityPub handler
+        self.activitypub_handler = ActivityPubHandler(
+            storage=self.activitypub_storage,
+            actor_config={
+                "base_url": config.link,
+                "username": config.activitypub_username,
+                "name": (config.activitypub_name or config.author or config.title),
+                "summary": (config.activitypub_summary or config.description),
+                "icon_url": (config.activitypub_icon_url or config.author_photo or ""),
+                "manually_approves_followers": (
+                    config.activitypub_manually_approves_followers
+                ),
+                "attachment": actor_attachment,
+            },
+            private_key_path=key_path,
+            on_interaction_received=on_interaction,
+            auto_approve_quotes=config.activitypub_auto_approve_quotes,
+            software_name="madblog",
+            software_version=__version__,
+        )
+
+        bind_activitypub(self, self.activitypub_handler)
+        self._ap_integration = ActivityPubIntegration(
+            handler=self.activitypub_handler,
+            pages_dir=str(self.pages_dir),
+            base_url=config.link,
+        )
+        self.content_monitor.register(self._ap_integration.on_content_change)
+        self._ap_integration.sync_on_startup()
 
     def _on_content_change_tags(self, _: ChangeType, filepath: str) -> None:
         """Bridge: forward content changes to the tag indexer."""
@@ -282,6 +405,52 @@ class BlogApp(Flask):
             "author_photo": author_photo,
         }
 
+    def _get_activitypub_page_response(
+        self,
+        *,
+        md_file: str,
+        metadata: dict,
+        last_modified: str,
+        etag: str,
+    ) -> Response | None:
+        if not (
+            hasattr(self, "activitypub_handler") and hasattr(self, "_ap_integration")
+        ):
+            return None
+
+        accepts_ap = (
+            request.accept_mimetypes["application/activity+json"]
+            or request.accept_mimetypes["application/ld+json"]
+        )
+        if not accepts_ap:
+            return None
+
+        from pubby._model import AP_CONTEXT
+
+        base_url = config.link or request.host_url.rstrip("/")
+        url = base_url.rstrip("/") + metadata.get("uri", "")
+        obj, _ = self._ap_integration._build_object(
+            md_file,
+            url,
+            self.activitypub_handler.actor_id,
+        )
+        doc = obj.to_dict()
+        doc["@context"] = AP_CONTEXT
+
+        response = make_response(json.dumps(doc, ensure_ascii=False))
+        response.mimetype = "application/activity+json"
+        response.headers["Last-Modified"] = last_modified
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+
+        article_language = metadata.get("language")
+        if article_language:
+            response.headers["Language"] = article_language
+        elif config.language:
+            response.headers["Language"] = config.language
+
+        return response
+
     def get_page(
         self,
         page: str,
@@ -354,6 +523,20 @@ class BlogApp(Flask):
 
             return response
 
+        if (
+            request.accept_mimetypes["application/activity+json"]
+            and not request.accept_mimetypes["text/html"]
+        ):
+            ap_response = self._get_activitypub_page_response(
+                md_file=md_file,
+                metadata=metadata,
+                last_modified=last_modified,
+                etag=etag,
+            )
+
+            if ap_response:
+                return ap_response
+
         title = title or metadata.get("title") or config.title
         author_info = self._parse_author(metadata)
         mentions = self.webmentions_handler.render_webmentions(
@@ -362,6 +545,16 @@ class BlogApp(Flask):
                 direction=WebmentionDirection.IN,
             )
         )
+
+        ap_interactions = ""
+        if hasattr(self, "activitypub_handler"):
+            interactions = self.activitypub_handler.storage.get_interactions(
+                target_resource=config.link + metadata.get("uri", "")
+            )
+            if interactions:
+                ap_interactions = self.activitypub_handler.render_interactions(
+                    interactions
+                )
 
         with open(md_file, "r") as f:
             content = self._parse_content(f)
@@ -397,12 +590,14 @@ class BlogApp(Flask):
                         MarkdownLatex(),
                         MarkdownMermaid(),
                         MarkdownTags(),
+                        MarkdownActivityPubMentions(),
                     ],
                 ),
                 tags=tags,
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
                 mentions=mentions,
+                ap_interactions=ap_interactions,
                 **author_info,
             )
         )

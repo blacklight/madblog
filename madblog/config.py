@@ -49,6 +49,21 @@ class Config:
     external_feeds: List[str] = field(default_factory=list)
     feeds_cache_expiry_secs: int = 300
 
+    # ActivityPub
+    enable_activitypub: bool = False
+    activitypub_username: str = "blog"
+    activitypub_name: str | None = None
+    activitypub_summary: str | None = None
+    activitypub_icon_url: str | None = None
+    activitypub_private_key_path: str | None = None
+    activitypub_manually_approves_followers: bool = False
+    activitypub_description_only: bool = False
+    activitypub_object_type: str = "Note"
+    activitypub_posts_content_wrapped: bool = False
+    activitypub_email_notifications: bool = True
+    activitypub_quote_control: str = "public"
+    activitypub_auto_approve_quotes: bool = True
+
     @property
     def templates_dir(self) -> str:
         return os.path.join(self.basedir, "templates")
@@ -72,6 +87,14 @@ class Config:
     @property
     def default_img_dir(self) -> str:
         return os.path.join(self.static_dir, "img")
+
+    @property
+    def activitypub_profile_url(self) -> Optional[str]:
+        if not self.enable_activitypub:
+            return None
+
+        base = self.link.rstrip("/")
+        return f"{base}/ap/actor"
 
     @property
     def webmention_url(self) -> Optional[str]:
@@ -165,6 +188,43 @@ def _init_config_from_file(config_file: str):
         config.feeds_cache_expiry_secs = int(cfg["feeds_cache_expiry_secs"])
     config.categories = cfg.get("categories", [])
 
+    # ActivityPub
+    if cfg.get("enable_activitypub") is not None:
+        config.enable_activitypub = bool(cfg["enable_activitypub"])
+    if cfg.get("activitypub_username"):
+        config.activitypub_username = cfg["activitypub_username"]
+    if cfg.get("activitypub_name"):
+        config.activitypub_name = cfg["activitypub_name"]
+    if cfg.get("activitypub_summary"):
+        config.activitypub_summary = cfg["activitypub_summary"]
+    if cfg.get("activitypub_icon_url"):
+        config.activitypub_icon_url = cfg["activitypub_icon_url"]
+    if cfg.get("activitypub_private_key_path"):
+        config.activitypub_private_key_path = cfg["activitypub_private_key_path"]
+    if cfg.get("activitypub_manually_approves_followers") is not None:
+        config.activitypub_manually_approves_followers = bool(
+            cfg["activitypub_manually_approves_followers"]
+        )
+    if cfg.get("activitypub_description_only") is not None:
+        config.activitypub_description_only = bool(cfg["activitypub_description_only"])
+    if cfg.get("activitypub_object_type"):
+        config.activitypub_object_type = cfg["activitypub_object_type"]
+    if cfg.get("activitypub_posts_content_wrapped") is not None:
+        config.activitypub_posts_content_wrapped = bool(
+            cfg["activitypub_posts_content_wrapped"]
+        )
+    if cfg.get("activitypub_email_notifications") is not None:
+        config.activitypub_email_notifications = bool(
+            cfg["activitypub_email_notifications"]
+        )
+    if cfg.get("activitypub_quote_control"):
+        config.activitypub_quote_control = cfg["activitypub_quote_control"]
+    if cfg.get("activitypub_auto_approve_quotes") is not None:
+        config.activitypub_auto_approve_quotes = bool(
+            cfg["activitypub_auto_approve_quotes"]
+        )
+    config.categories = cfg.get("categories", [])
+
 
 def _init_config_from_env():
     if os.getenv("MADBLOG_TITLE"):
@@ -246,6 +306,48 @@ def _init_config_from_env():
     if os.getenv("MADBLOG_FEEDS_CACHE_EXPIRY_SECS"):
         config.feeds_cache_expiry_secs = int(
             os.environ["MADBLOG_FEEDS_CACHE_EXPIRY_SECS"]
+        )
+
+    # ActivityPub
+    if os.getenv("MADBLOG_ENABLE_ACTIVITYPUB"):
+        config.enable_activitypub = os.environ["MADBLOG_ENABLE_ACTIVITYPUB"] == "1"
+    if os.getenv("MADBLOG_ACTIVITYPUB_USERNAME"):
+        config.activitypub_username = os.environ["MADBLOG_ACTIVITYPUB_USERNAME"]
+    if os.getenv("MADBLOG_ACTIVITYPUB_NAME"):
+        config.activitypub_name = os.environ["MADBLOG_ACTIVITYPUB_NAME"]
+    if os.getenv("MADBLOG_ACTIVITYPUB_SUMMARY"):
+        config.activitypub_summary = os.environ["MADBLOG_ACTIVITYPUB_SUMMARY"]
+    if os.getenv("MADBLOG_ACTIVITYPUB_ICON_URL"):
+        config.activitypub_icon_url = os.environ["MADBLOG_ACTIVITYPUB_ICON_URL"]
+    if os.getenv("MADBLOG_ACTIVITYPUB_PRIVATE_KEY_PATH"):
+        config.activitypub_private_key_path = os.environ[
+            "MADBLOG_ACTIVITYPUB_PRIVATE_KEY_PATH"
+        ]
+    if os.getenv("MADBLOG_ACTIVITYPUB_MANUALLY_APPROVES_FOLLOWERS"):
+        config.activitypub_manually_approves_followers = (
+            os.environ["MADBLOG_ACTIVITYPUB_MANUALLY_APPROVES_FOLLOWERS"] == "1"
+        )
+    if os.getenv("MADBLOG_ACTIVITYPUB_DESCRIPTION_ONLY"):
+        config.activitypub_description_only = (
+            os.environ["MADBLOG_ACTIVITYPUB_DESCRIPTION_ONLY"] == "1"
+        )
+    if os.getenv("MADBLOG_ACTIVITYPUB_OBJECT_TYPE"):
+        config.activitypub_object_type = os.environ["MADBLOG_ACTIVITYPUB_OBJECT_TYPE"]
+    if os.getenv("MADBLOG_ACTIVITYPUB_POSTS_CONTENT_WRAPPED"):
+        config.activitypub_posts_content_wrapped = (
+            os.environ["MADBLOG_ACTIVITYPUB_POSTS_CONTENT_WRAPPED"] == "1"
+        )
+    if os.getenv("MADBLOG_ACTIVITYPUB_EMAIL_NOTIFICATIONS"):
+        config.activitypub_email_notifications = (
+            os.environ["MADBLOG_ACTIVITYPUB_EMAIL_NOTIFICATIONS"] == "1"
+        )
+    if os.getenv("MADBLOG_ACTIVITYPUB_QUOTE_CONTROL"):
+        config.activitypub_quote_control = os.environ[
+            "MADBLOG_ACTIVITYPUB_QUOTE_CONTROL"
+        ]
+    if os.getenv("MADBLOG_ACTIVITYPUB_AUTO_APPROVE_QUOTES"):
+        config.activitypub_auto_approve_quotes = (
+            os.environ["MADBLOG_ACTIVITYPUB_AUTO_APPROVE_QUOTES"] == "1"
         )
 
 

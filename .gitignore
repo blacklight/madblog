@@ -6,3 +6,4 @@ dist/
 config.yaml
 /requests
 *.lock
+.madblog

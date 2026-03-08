@@ -34,6 +34,9 @@ setup(
     ],
     extras_require={
         "mermaid": ["nodejs-wheel"],
+        "activitypub": ["pubby"],
+        "test": ["pytest", "pubby"],  # Include pubby for testing
+        "dev": ["pytest", "pubby", "nodejs-wheel"],  # Include all dev dependencies
     },
     install_requires=[
         "feedgen2",
