@@ -364,8 +364,17 @@ That means:
 - Actor/object IDs (e.g. `/ap/actor`, `/article/<slug>`) will also be built from
   `link`.
 
-You can override only the advertised WebFinger handle domain with
-`activitypub_domain`.
+Madblog provides two optional overrides:
+
+- **`activitypub_link`**: Overrides where the ActivityPub actor and objects
+  *live* (canonical IDs like `https://<...>/ap/actor`). This is what remote
+  instances like Mastodon will typically treat as the authoritative identity.
+- **`activitypub_domain`**: Overrides only the WebFinger `acct:` domain
+  advertised for the handle (i.e. `acct:user@domain`). This controls how people
+  discover the actor when they type `@user@domain`.
+
+In the simplest case, `activitypub_domain` can be inferred from
+`activitypub_link` and you only need `activitypub_link`.
 
 If you want the blog to be *browsed* at `https://blog.example.com` and keep
 `link` unchanged, but you want the fediverse handle to be `@blog@example.com`,
@@ -375,7 +384,11 @@ set:
 # Keep your canonical blog URL
 link: https://blog.example.com
 
-# Advertise the handle on a different domain via WebFinger
+# Publish the ActivityPub actor and objects on a different base URL
+activitypub_link: https://example.com
+
+# Optional: if omitted, the handle domain defaults to the hostname of
+# activitypub_link
 activitypub_domain: example.com
 
 # Optional: what the UI header “Home” link points to
@@ -401,11 +414,11 @@ Some remote software may also query:
 
 In this split-domain setup:
 
-- `link` remains the blog’s canonical base URL and continues to determine the
-  actor/object IDs.
+- `link` remains the blog’s canonical base URL.
+- `activitypub_link` determines the actor/object IDs.
 - `activitypub_domain` determines the WebFinger `acct:` domain.
-- Requests to `https://example.com/.well-known/webfinger` should be proxied to
-  the Madblog instance on `blog.example.com`.
+- Requests to `https://example.com/.well-known/webfinger` and
+  `https://example.com/ap/` should be routed to the Madblog instance.
 
 Example (nginx, simplified):
 
@@ -461,6 +474,13 @@ server {
         proxy_pass http://madblog;
     }
 
+    location /ap/ {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass http://madblog;
+    }
+
     location = /.well-known/nodeinfo {
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -491,7 +511,9 @@ Great article by @alice@mastodon.social about federation!
 |--------|---------|---------|-------------|
 | `activitypub_object_type` | `MADBLOG_ACTIVITYPUB_OBJECT_TYPE` | `Note` | ActivityPub object type (`Note` or `Article`). `Note` renders inline on Mastodon; `Article` shows as a link preview. |
 | `activitypub_description_only` | `MADBLOG_ACTIVITYPUB_DESCRIPTION_ONLY` | `false` | Only send the article description instead of the full rendered content. |
+| `activitypub_link` | `MADBLOG_ACTIVITYPUB_LINK` | unset (uses `link`) | Base URL used for ActivityPub actor/object IDs (e.g. actor `id` is `<base>/ap/actor`). Set this if you want the canonical ActivityPub identity to live on a different hostname than `link`. |
 | `activitypub_username` | `MADBLOG_ACTIVITYPUB_USERNAME` | `blog` | Fediverse username for the blog actor. |
+| `activitypub_domain` | `MADBLOG_ACTIVITYPUB_DOMAIN` | unset (uses `activitypub_link` hostname, else `link` hostname) | Domain used in WebFinger `acct:` handle discovery (e.g. `acct:blog@example.com`). This affects discovery/handle only, not where ActivityPub endpoints are hosted. |
 | `activitypub_manually_approves_followers` | `MADBLOG_ACTIVITYPUB_MANUALLY_APPROVES_FOLLOWERS` | `false` | Require manual approval for new followers. |
 | `activitypub_quote_control` | `MADBLOG_ACTIVITYPUB_QUOTE_CONTROL` | `public` | Quote policy for ActivityPub posts. Mastodon will refuse quote-boosts unless set to `public`. |
 

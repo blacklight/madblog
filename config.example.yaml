@@ -122,6 +122,19 @@ link: https://myblog.example.com
 # The full handle will be @username@yourdomain.com
 # activitypub_username: blog
 
+# Override the base URL used for ActivityPub actor/object IDs (optional).
+#
+# By default, Madblog uses `link` as the ActivityPub base URL, so actor ID will
+# be like: <link>/ap/actor.
+#
+# If you want your blog to be served at one hostname (e.g. https://blog.example.com)
+# but you want ActivityPub actor IDs to live on another hostname (e.g. https://example.com)
+# you can set this.
+#
+# Note: If you set this, you must ensure that the ActivityPub endpoints are
+# reachable on that hostname (at least `/ap/*` and the `.well-known` endpoints).
+# activitypub_link: https://example.com
+
 # Override the domain used in WebFinger `acct:` identifiers (optional).
 # This is useful if you serve the blog at one hostname (e.g.
 # https://blog.example.com) but you want to advertise the fediverse handle as
