@@ -99,7 +99,8 @@ This is a test article without explicit language metadata.
 
             # Test 3: Home page (should use global config)
             print("\nTest 3: Home page language header...")
-            response = app.get_pages_response()
+            with app.test_request_context("/"):
+                response = app.get_pages_response()
 
             assert (
                 "Language" in response.headers
@@ -116,10 +117,10 @@ This is a test article without explicit language metadata.
             response = app.get_page(page_with_lang)
             last_modified = response.headers["Last-Modified"]
 
-            # Mock request with If-Modified-Since
-            with patch("madblog.app.request") as mock_request:
-                mock_request.headers.get.return_value = last_modified
-
+            with app.test_request_context(
+                f"/article/{os.path.splitext(page_with_lang)[0]}",
+                headers={"If-Modified-Since": last_modified},
+            ):
                 response_304 = app.get_page(page_with_lang)
 
                 if response_304.status_code == 304:

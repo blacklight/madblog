@@ -58,8 +58,7 @@ This is test article {i+1} for cache header testing.
 
             # Test 1: First request should return full content with Last-Modified header
             print("Test 1: Initial request for pages cache headers...")
-
-            with app.app_context():
+            with app.test_request_context("/"):
                 response = app.get_pages_response()
 
             # Check that cache headers are present
@@ -79,14 +78,8 @@ This is test article {i+1} for cache header testing.
                 "\nTest 2: Testing 304 Not Modified response for get_pages_response..."
             )
 
-            # Create a mock request with If-Modified-Since header
-            from unittest.mock import patch
-
-            with patch("madblog.app.request") as mock_request:
-                mock_request.headers.get.return_value = last_modified
-
-                with app.app_context():
-                    response_304 = app.get_pages_response()
+            with app.test_request_context("/", headers={"If-Modified-Since": last_modified}):
+                response_304 = app.get_pages_response()
 
                 # Should return 304 for unchanged files
                 print(f"✓ Response status: {response_304.status_code}")
@@ -106,7 +99,7 @@ This is test article {i+1} for cache header testing.
                 f.write("\nAdditional content added for cache test.")
 
             # Request again - should get fresh content with new Last-Modified
-            with app.app_context():
+            with app.test_request_context("/"):
                 new_response = app.get_pages_response()
             new_last_modified = new_response.headers["Last-Modified"]
 
@@ -131,7 +124,7 @@ This is test article {i+1} for cache header testing.
             with open(test_files[2], "a") as f:
                 f.write("\nThis should be the newest modification.")
 
-            with app.app_context():
+            with app.test_request_context("/"):
                 newest_response = app.get_pages_response()
             newest_last_modified = newest_response.headers["Last-Modified"]
 

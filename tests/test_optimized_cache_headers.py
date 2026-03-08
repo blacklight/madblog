@@ -102,11 +102,10 @@ This is a test article for optimized cache header testing.
             # Test 5: Test 304 response with mock If-Modified-Since
             print("\nTest 5: Testing 304 Not Modified response...")
 
-            from unittest.mock import patch
-
-            with patch("madblog.app.request") as mock_request:
-                mock_request.headers.get.return_value = last_modified
-
+            with app.test_request_context(
+                "/",
+                headers={"If-Modified-Since": last_modified},
+            ):
                 response_304 = app.get_pages_response()
                 print(f"✓ Response status: {response_304.status_code}")
 

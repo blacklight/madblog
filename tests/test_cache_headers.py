@@ -50,7 +50,8 @@ This is a test article for cache header testing.
 
             # Test 1: First request should return full content with Last-Modified header
             print("Test 1: Initial request for cache headers...")
-            response = app.get_page(page_name)
+            with app.test_request_context(f"/article/{page_name[:-3]}"):
+                response = app.get_page(page_name)
 
             # Check that Last-Modified header is present
             assert "Last-Modified" in response.headers, "Last-Modified header not found"
@@ -63,12 +64,10 @@ This is a test article for cache header testing.
             # Test 2: Simulate If-Modified-Since with same timestamp (should return 304)
             print("\nTest 2: Testing 304 Not Modified response...")
 
-            # Create a mock request with If-Modified-Since header
-            from unittest.mock import patch
-
-            with patch("madblog.app.request") as mock_request:
-                mock_request.headers.get.return_value = last_modified
-
+            with app.test_request_context(
+                f"/article/{page_name[:-3]}",
+                headers={"If-Modified-Since": last_modified},
+            ):
                 response_304 = app.get_page(page_name)
 
                 # Should return 304 for unchanged file
@@ -89,7 +88,8 @@ This is a test article for cache header testing.
                 f.write("\nAdditional content added for cache test.")
 
             # Request again - should get fresh content
-            new_response = app.get_page(page_name)
+            with app.test_request_context(f"/article/{page_name[:-3]}"):
+                new_response = app.get_page(page_name)
             new_last_modified = new_response.headers["Last-Modified"]
 
             print(f"✓ New Last-Modified header: {new_last_modified}")

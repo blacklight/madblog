@@ -183,6 +183,36 @@ class ActivityPubEnabledTest(unittest.TestCase):
         data = resp.get_json()
         self.assertIn("links", data)
 
+    @skip_if_no_pubby
+    def test_article_advertises_ap_alternate_link(self):
+        with self.app.test_request_context("/article/test-post"):
+            resp = self.app.get_page("test-post")
+
+        self.assertEqual(resp.status_code, 200)
+        links = resp.headers.getlist("Link")
+        self.assertTrue(
+            any(
+                'rel="alternate"' in link
+                and 'type="application/activity+json"' in link
+                and "https://example.com/article/test-post" in link
+                for link in links
+            ),
+            links,
+        )
+
+    @skip_if_no_pubby
+    def test_article_can_be_fetched_as_activitypub_json(self):
+        with self.app.test_request_context(
+            "/article/test-post",
+            headers={"Accept": "application/activity+json"},
+        ):
+            resp = self.app.get_page("test-post")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.mimetype, "application/activity+json")
+        data = resp.get_json()
+        self.assertEqual(data["id"], "https://example.com/article/test-post")
+
 
 class ActivityPubKeyPermissionsTest(unittest.TestCase):
     """Test that Madblog refuses to start if the key file is world-readable."""

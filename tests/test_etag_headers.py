@@ -105,12 +105,10 @@ This is another article for ETag testing.
             # Test 3: If-None-Match validation (should return 304)
             print("\nTest 3: If-None-Match validation (304 response)...")
 
-            with patch("madblog.app.request") as mock_request:
-                mock_request.headers.get = lambda header: {
-                    "If-None-Match": etag,
-                    "If-Modified-Since": None,
-                }.get(header)
-
+            with app.test_request_context(
+                f"/article/{os.path.splitext(page_name)[0]}",
+                headers={"If-None-Match": etag},
+            ):
                 response_304 = app.get_page(page_name)
 
                 assert (
@@ -124,12 +122,10 @@ This is another article for ETag testing.
             # Test 4: If-None-Match with wildcard (should return 304)
             print("\nTest 4: If-None-Match with wildcard...")
 
-            with patch("madblog.app.request") as mock_request:
-                mock_request.headers.get = lambda header: {
-                    "If-None-Match": "*",
-                    "If-Modified-Since": None,
-                }.get(header)
-
+            with app.test_request_context(
+                f"/article/{os.path.splitext(page_name)[0]}",
+                headers={"If-None-Match": "*"},
+            ):
                 response_304_wildcard = app.get_page(page_name)
 
                 assert (
@@ -142,12 +138,10 @@ This is another article for ETag testing.
 
             dummy_etag = '"dummy123456"'
 
-            with patch("madblog.app.request") as mock_request:
-                mock_request.headers.get = lambda header: {
-                    "If-None-Match": f"{dummy_etag}, {etag}",
-                    "If-Modified-Since": None,
-                }.get(header)
-
+            with app.test_request_context(
+                f"/article/{os.path.splitext(page_name)[0]}",
+                headers={"If-None-Match": f"{dummy_etag}, {etag}"},
+            ):
                 response_304_multi = app.get_page(page_name)
 
                 assert (
@@ -192,17 +186,15 @@ This is another article for ETag testing.
             # Test 8: Pages list If-None-Match validation
             print("\nTest 8: Pages list If-None-Match validation...")
 
-            with patch("madblog.app.request") as mock_request:
-                mock_request.headers.get = lambda header: {
-                    "If-None-Match": pages_etag,
-                    "If-Modified-Since": None,
-                }.get(header)
-
-                pages_304_response = app.get_pages_response()
+            with app.test_request_context(
+                "/",
+                headers={"If-None-Match": pages_etag},
+            ):
+                pages_response_304 = app.get_pages_response()
 
                 assert (
-                    pages_304_response.status_code == 304
-                ), f"Expected 304 for pages, got {pages_304_response.status_code}"
+                    pages_response_304.status_code == 304
+                ), f"Expected 304 for pages, got {pages_response_304.status_code}"
                 print(f"✓ 304 response for pages list with matching ETag")
 
             # Test 9: ETag helper function
