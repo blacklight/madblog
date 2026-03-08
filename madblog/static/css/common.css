@@ -116,7 +116,6 @@ header .right {
   display: inline-flex;
   justify-content: right;
   text-align: right;
-  opacity: .8;
 }
 
 header .icon {
