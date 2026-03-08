@@ -5,13 +5,23 @@ import json
 import os
 import re
 import stat
+import contextlib
 
 from pathlib import Path
 from typing import IO, List, Optional, Tuple, Type
 from urllib.parse import urlparse
 from email.utils import formatdate
 
-from flask import Flask, Response, abort, make_response, render_template, request
+from flask import (
+    Flask,
+    Response,
+    abort,
+    has_app_context,
+    has_request_context,
+    make_response,
+    render_template,
+    request,
+)
 from markdown import markdown
 from webmentions import WebmentionDirection, WebmentionsHandler
 from webmentions.server.adapters.flask import bind_webmentions
@@ -546,10 +556,18 @@ class BlogApp(Flask):
 
             return response
 
-        if (
-            request.accept_mimetypes["application/activity+json"]
-            and not request.accept_mimetypes["text/html"]
-        ):
+        prefers_ap = False
+        if has_request_context():
+            accepts_ap = (
+                request.accept_mimetypes["application/activity+json"]
+                or request.accept_mimetypes["application/ld+json"]
+            )
+            prefers_ap = accepts_ap and (
+                request.accept_mimetypes["application/activity+json"]
+                > request.accept_mimetypes["text/html"]
+            )
+
+        if prefers_ap:
             ap_response = self._get_activitypub_page_response(
                 md_file=md_file,
                 metadata=metadata,
@@ -643,7 +661,22 @@ class BlogApp(Flask):
             response.headers["Language"] = config.language
 
         if config.webmention_url:
-            response.headers["Link"] = f'<{config.webmention_url}>; rel="webmention"'
+            response.headers.add(
+                "Link",
+                f'<{config.webmention_url}>; rel="webmention"',
+            )
+
+        if hasattr(self, "activitypub_handler"):
+            if has_request_context():
+                base_url = config.link or request.host_url.rstrip("/")
+            else:
+                base_url = config.link or ""
+
+            page_url = base_url + metadata.get("uri", "")
+            response.headers.add(
+                "Link",
+                f'<{page_url}>; rel="alternate"; type="application/activity+json"',
+            )
         if as_markdown:
             response.mimetype = "text/markdown"
 
@@ -818,7 +851,7 @@ class BlogApp(Flask):
         # Check both If-Modified-Since and If-None-Match headers
         cache_valid = False
 
-        if last_modified and most_recent_mtime > 0:
+        if last_modified and most_recent_mtime > 0 and has_request_context():
             if_modified_since = request.headers.get("If-Modified-Since")
             if_none_match = request.headers.get("If-None-Match")
 
@@ -846,28 +879,33 @@ class BlogApp(Flask):
             # Return 304 if cache is valid
             if cache_valid:
                 response = make_response("", 304)
-                response.headers["Last-Modified"] = last_modified
+                if last_modified:
+                    response.headers["Last-Modified"] = last_modified
                 if etag:
                     response.headers["ETag"] = etag
+                response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
 
-                # Set Language header for 304 responses too
+                # Add Language header
                 if config.language:
                     response.headers["Language"] = config.language
 
                 return response
 
-        # Render the template
-        output = render_template(
-            template_name,
-            pages=pages,
-            config=config,
-            view_mode=view_mode,
-            **extra_context,
-        )
+        with contextlib.ExitStack() as stack:
+            if not has_app_context():
+                stack.enter_context(self.app_context())
+
+            response = make_response(
+                render_template(
+                    template_name,
+                    pages=pages,
+                    config=config,
+                    view_mode=view_mode,
+                    **extra_context,
+                )
+            )
 
         # Create response with cache headers
-        response = make_response(output)
-
         if last_modified:
             response.headers["Last-Modified"] = last_modified
             response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
