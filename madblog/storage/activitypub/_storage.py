@@ -61,10 +61,13 @@ class ActivityPubIntegration(StartupSyncMixin):
         handler: ActivityPubHandler,
         pages_dir: str | Path,
         base_url: str,
+        content_base_url: str | None = None,
     ):
         self.handler = handler
         self.pages_dir = str(Path(pages_dir).resolve())
         self.base_url = base_url.rstrip("/")
+        # URL where images/assets are actually served (may differ from AP base_url)
+        self.content_base_url = (content_base_url or base_url).rstrip("/")
         self.workdir = Path(config.content_dir) / ".madblog" / "activitypub"
         self.workdir.mkdir(parents=True, exist_ok=True)
 
@@ -413,7 +416,8 @@ class ActivityPubIntegration(StartupSyncMixin):
             dest = img_dir / filename
             if not dest.exists():
                 dest.write_bytes(data)
-            return f"{self.base_url}/img/{filename}"
+            # Use content_base_url for assets (where Madblog actually serves them)
+            return f"{self.content_base_url}/img/{filename}"
 
         # --- LaTeX base64 images ---
         def _replace_latex(m: re.Match) -> str:
