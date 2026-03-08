@@ -106,7 +106,7 @@ class BlogApp(Flask):
 
     def _register_context_processors(self):
         @self.context_processor
-        def inject_followers_count():
+        def inject_followers_count():  # type: ignore
             if not config.enable_activitypub:
                 return {"followers_count": 0}
             if not hasattr(self, "activitypub_storage"):
@@ -450,6 +450,218 @@ class BlogApp(Flask):
             "author_photo": author_photo,
         }
 
+    def _check_cache_validity(
+        self,
+        file_mtime: float,
+        etag: str,
+    ) -> bool:
+        """
+        Check if the client's cached version is still valid.
+
+        :param file_mtime: File modification timestamp
+        :param etag: ETag for the current file version
+        :return: True if the client's cache is valid (304 should be returned)
+        """
+        if not has_request_context():
+            return False
+
+        if_modified_since = request.headers.get("If-Modified-Since")
+        if_none_match = request.headers.get("If-None-Match")
+
+        # Check If-Modified-Since
+        if if_modified_since:
+            try:
+                parsed_date = email.utils.parsedate_tz(if_modified_since)
+                if parsed_date:
+                    cached_timestamp = email.utils.mktime_tz(parsed_date)  # type: ignore
+                    if cached_timestamp is not None and cached_timestamp >= file_mtime:
+                        return True
+            except (ValueError, TypeError, OverflowError):
+                pass
+
+        # Check If-None-Match (ETag)
+        if if_none_match:
+            client_etags = [tag.strip() for tag in if_none_match.split(",")]
+            if etag in client_etags or "*" in client_etags:
+                return True
+
+        return False
+
+    def _make_304_response(
+        self,
+        last_modified: str,
+        etag: str,
+        metadata: dict,
+    ) -> Response:
+        """
+        Create a 304 Not Modified response with appropriate headers.
+        """
+        response = make_response("", 304)
+        response.headers["Last-Modified"] = last_modified
+        response.headers["ETag"] = etag
+
+        article_language = metadata.get("language")
+        if article_language:
+            response.headers["Language"] = article_language
+        elif config.language:
+            response.headers["Language"] = config.language
+
+        return response
+
+    def _get_page_interactions(
+        self,
+        md_file: str,
+        metadata: dict,
+    ) -> Tuple[str, str]:
+        """
+        Retrieve webmentions and ActivityPub interactions for a page.
+
+        :return: Tuple of (webmentions_html, ap_interactions_html)
+        """
+        mentions = self.webmentions_handler.render_webmentions(
+            self.webmentions_handler.retrieve_stored_webmentions(
+                config.link + metadata.get("uri", ""),
+                direction=WebmentionDirection.IN,
+            )
+        )
+
+        ap_interactions = ""
+        if hasattr(self, "_ap_integration"):
+            ap_object_url = self._ap_integration._file_to_url(md_file)
+            interactions = self.activitypub_handler.storage.get_interactions(
+                target_resource=ap_object_url
+            )
+            if interactions:
+                ap_interactions = self.activitypub_handler.render_interactions(
+                    interactions
+                )
+
+        return mentions, ap_interactions
+
+    def _set_page_response_headers(
+        self,
+        response: Response,
+        *,
+        last_modified: str,
+        etag: str,
+        metadata: dict,
+        as_markdown: bool = False,
+    ) -> None:
+        """
+        Set cache, language, and Link headers on a page response.
+        """
+        response.headers["Last-Modified"] = last_modified
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+
+        article_language = metadata.get("language")
+        if article_language:
+            response.headers["Language"] = article_language
+        elif config.language:
+            response.headers["Language"] = config.language
+
+        if config.webmention_url:
+            response.headers.add(
+                "Link",
+                f'<{config.webmention_url}>; rel="webmention"',
+            )
+
+        if hasattr(self, "activitypub_handler"):
+            if has_request_context():
+                base_url = config.link or request.host_url.rstrip("/")
+            else:
+                base_url = config.link or ""
+
+            page_url = base_url + metadata.get("uri", "")
+            response.headers.add(
+                "Link",
+                f'<{page_url}>; rel="alternate"; type="application/activity+json"',
+            )
+
+        if as_markdown:
+            response.mimetype = "text/markdown"
+
+    def _render_page_html(
+        self,
+        *,
+        md_file: str,
+        metadata: dict,
+        title: str,
+        skip_header: bool,
+        skip_html_head: bool,
+        mentions: str,
+        ap_interactions: str,
+    ) -> str:
+        """
+        Render a markdown page to HTML using the article template.
+        """
+        with open(md_file, "r") as f:
+            content = self._parse_content(f)
+
+        tags = parse_metadata_tags(metadata.get("tags", ""))
+        author_info = self._parse_author(metadata)
+
+        with contextlib.ExitStack() as stack:
+            if not has_app_context():
+                stack.enter_context(self.app_context())
+
+            return render_template(
+                "article.html",
+                config=config,
+                title=title,
+                uri=metadata.get("uri"),
+                url=config.link + metadata.get("uri", ""),
+                external_url=metadata.get("external_url"),
+                image=metadata.get("image"),
+                description=metadata.get("description"),
+                published_datetime=metadata.get("published"),
+                published=metadata["published"].strftime("%b %d, %Y"),
+                content=markdown(
+                    content,
+                    extensions=[
+                        "fenced_code",
+                        "codehilite",
+                        "tables",
+                        "toc",
+                        "attr_list",
+                        "sane_lists",
+                        MarkdownAutolink(),
+                        MarkdownTaskList(),
+                        MarkdownTocMarkers(),
+                        MarkdownLatex(),
+                        MarkdownMermaid(),
+                        MarkdownTags(),
+                        MarkdownActivityPubMentions(),
+                    ],
+                ),
+                tags=tags,
+                skip_header=skip_header,
+                skip_html_head=skip_html_head,
+                mentions=mentions,
+                ap_interactions=ap_interactions,
+                **author_info,
+            )
+
+    def _client_prefers_activitypub(self) -> bool:
+        """
+        Check if the client prefers ActivityPub format over HTML.
+        """
+        if not has_request_context():
+            return False
+
+        accepts_ap = (
+            request.accept_mimetypes["application/activity+json"]
+            or request.accept_mimetypes["application/ld+json"]
+        )
+
+        return bool(
+            accepts_ap
+            and (
+                request.accept_mimetypes["application/activity+json"]
+                > request.accept_mimetypes["text/html"]
+            )
+        )
+
     def _get_activitypub_page_response(
         self,
         *,
@@ -528,174 +740,47 @@ class BlogApp(Flask):
         last_modified = formatdate(file_mtime, usegmt=True)
         etag = self._generate_etag(file_mtime)
 
-        # Check if the client has a cached version that's still valid
-        # Check both If-Modified-Since and If-None-Match headers
-        if_modified_since = None
-        if_none_match = None
-        if has_request_context():
-            if_modified_since = request.headers.get("If-Modified-Since")
-            if_none_match = request.headers.get("If-None-Match")
-        cache_valid = False
+        # Return 304 if client cache is valid
+        if self._check_cache_validity(file_mtime, etag):
+            return self._make_304_response(last_modified, etag, metadata)
 
-        # Check If-Modified-Since
-        if if_modified_since and not cache_valid:
-            try:
-                parsed_date = email.utils.parsedate_tz(if_modified_since)
-                if parsed_date:
-                    cached_timestamp = email.utils.mktime_tz(parsed_date)  # type: ignore
-                    if cached_timestamp is not None and cached_timestamp >= file_mtime:
-                        cache_valid = True
-            except (ValueError, TypeError, OverflowError):
-                # Invalid If-Modified-Since header, ignore it
-                pass
-
-        # Check If-None-Match (ETag)
-        if if_none_match and not cache_valid:
-            # Handle both single ETags and comma-separated lists
-            client_etags = [tag.strip() for tag in if_none_match.split(",")]
-            if etag in client_etags or "*" in client_etags:
-                cache_valid = True
-
-        # Return 304 if cache is valid
-        if cache_valid:
-            response = make_response("", 304)
-            response.headers["Last-Modified"] = last_modified
-            response.headers["ETag"] = etag
-
-            # Set Language header for 304 responses too
-            article_language = metadata.get("language")
-            if article_language:
-                response.headers["Language"] = article_language
-            elif config.language:
-                response.headers["Language"] = config.language
-
-            return response
-
-        prefers_ap = False
-        if has_request_context():
-            accepts_ap = (
-                request.accept_mimetypes["application/activity+json"]
-                or request.accept_mimetypes["application/ld+json"]
-            )
-            prefers_ap = accepts_ap and (
-                request.accept_mimetypes["application/activity+json"]
-                > request.accept_mimetypes["text/html"]
-            )
-
-        if prefers_ap:
+        # Return ActivityPub response if client prefers it
+        if self._client_prefers_activitypub():
             ap_response = self._get_activitypub_page_response(
                 md_file=md_file,
                 metadata=metadata,
                 last_modified=last_modified,
                 etag=etag,
             )
-
             if ap_response:
                 return ap_response
 
+        # Render content
         title = title or metadata.get("title") or config.title
-        author_info = self._parse_author(metadata)
-        mentions = self.webmentions_handler.render_webmentions(
-            self.webmentions_handler.retrieve_stored_webmentions(
-                config.link + metadata.get("uri", ""),
-                direction=WebmentionDirection.IN,
-            )
-        )
-
-        ap_interactions = ""
-        if hasattr(self, "_ap_integration"):
-            # Use the exact AP object URL (includes ?v= suffix if collision-avoiding)
-            ap_object_url = self._ap_integration._file_to_url(md_file)
-            interactions = self.activitypub_handler.storage.get_interactions(
-                target_resource=ap_object_url
-            )
-            if interactions:
-                ap_interactions = self.activitypub_handler.render_interactions(
-                    interactions
-                )
-
-        with open(md_file, "r") as f:
-            content = self._parse_content(f)
-
-        tags = parse_metadata_tags(metadata.get("tags", ""))
-
         if as_markdown:
+            with open(md_file, "r") as f:
+                content = self._parse_content(f)
             output = f"# {title}\n\n{content}"
         else:
-            with contextlib.ExitStack() as stack:
-                if not has_app_context():
-                    stack.enter_context(self.app_context())
-
-                output = render_template(
-                    "article.html",
-                    config=config,
-                    title=title,
-                    uri=metadata.get("uri"),
-                    url=config.link + metadata.get("uri", ""),
-                    external_url=metadata.get("external_url"),
-                    image=metadata.get("image"),
-                    description=metadata.get("description"),
-                    published_datetime=metadata.get("published"),
-                    published=metadata["published"].strftime("%b %d, %Y"),
-                    content=markdown(
-                        content,
-                        extensions=[
-                            "fenced_code",
-                            "codehilite",
-                            "tables",
-                            "toc",
-                            "attr_list",
-                            "sane_lists",
-                            MarkdownAutolink(),
-                            MarkdownTaskList(),
-                            MarkdownTocMarkers(),
-                            MarkdownLatex(),
-                            MarkdownMermaid(),
-                            MarkdownTags(),
-                            MarkdownActivityPubMentions(),
-                        ],
-                    ),
-                    tags=tags,
-                    skip_header=skip_header,
-                    skip_html_head=skip_html_head,
-                    mentions=mentions,
-                    ap_interactions=ap_interactions,
-                    **author_info,
-                )
+            mentions, ap_interactions = self._get_page_interactions(md_file, metadata)
+            output = self._render_page_html(
+                md_file=md_file,
+                metadata=metadata,
+                title=title,
+                skip_header=skip_header,
+                skip_html_head=skip_html_head,
+                mentions=mentions,
+                ap_interactions=ap_interactions,
+            )
 
         response = make_response(output)
-
-        # Set cache headers based on file modification time
-        response.headers["Last-Modified"] = last_modified
-        response.headers["ETag"] = etag
-        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
-
-        # Set Language header based on article metadata or global config
-        article_language = metadata.get("language")
-        if article_language:
-            response.headers["Language"] = article_language
-        elif config.language:
-            response.headers["Language"] = config.language
-
-        if config.webmention_url:
-            response.headers.add(
-                "Link",
-                f'<{config.webmention_url}>; rel="webmention"',
-            )
-
-        if hasattr(self, "activitypub_handler"):
-            if has_request_context():
-                base_url = config.link or request.host_url.rstrip("/")
-            else:
-                base_url = config.link or ""
-
-            page_url = base_url + metadata.get("uri", "")
-            response.headers.add(
-                "Link",
-                f'<{page_url}>; rel="alternate"; type="application/activity+json"',
-            )
-        if as_markdown:
-            response.mimetype = "text/markdown"
+        self._set_page_response_headers(
+            response,
+            last_modified=last_modified,
+            etag=etag,
+            metadata=metadata,
+            as_markdown=as_markdown,
+        )
 
         return response
 
