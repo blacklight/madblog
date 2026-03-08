@@ -757,6 +757,7 @@ class BlogApp(Flask):
         reverse: bool = True,
         template_name: str = "index.html",
         view_mode: str = "cards",
+        **extra_context,
     ) -> Response:
         """
         Get a Response for the pages list with proper cache headers.
@@ -845,6 +846,7 @@ class BlogApp(Flask):
             pages=pages,
             config=config,
             view_mode=view_mode,
+            **extra_context,
         )
 
         # Create response with cache headers

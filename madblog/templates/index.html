@@ -6,6 +6,48 @@
 
 {% set view_mode = _view_mode %}
 
+{% if config.enable_activitypub and followers_count is defined %}
+<div class="followers-bar">
+  <a href="/followers">
+    <span class="followers-icon">&#128101;</span>
+    <span class="followers-count">{{ followers_count }}</span>
+  </a>
+</div>
+<style>
+:root {
+  --followers-bar-height: calc(0.9rem + 1rem + 1px); /* font-size + padding + border */
+}
+.followers-bar {
+  background: var(--followers-bar-bg, #f0f0f0);
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--border-color, #ddd);
+}
+.followers-bar a {
+  color: var(--link-color, #333);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.followers-bar a:hover {
+  text-decoration: underline;
+}
+.followers-icon {
+  font-size: 1rem;
+}
+@media (prefers-color-scheme: dark) {
+  .followers-bar {
+    background: var(--followers-bar-bg, #2a2a2a);
+    border-bottom-color: var(--border-color, #444);
+  }
+  .followers-bar a {
+    color: var(--link-color, #ccc);
+  }
+}
+</style>
+{% endif %}
+
 <main>
   <div class="index view-{{ view_mode }}">
     {% set state = {} %}

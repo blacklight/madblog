@@ -41,6 +41,7 @@
   --header-margin: 1px;
   --footer-height: 1em;
   --footer-margin: 2px;
+  --followers-bar-height: 0px;
 }
 
 html {
@@ -133,7 +134,7 @@ header .left .icon {
 }
 
 main {
-  height: calc(100% - var(--header-height) - var(--header-margin) - var(--footer-height) - var(--footer-margin));
+  height: calc(100% - var(--header-height) - var(--header-margin) - var(--footer-height) - var(--footer-margin) - var(--followers-bar-height));
   overflow: auto;
   display: flex;
   flex-direction: column;

@@ -36,6 +36,18 @@ def send_from_directory(
     return send_from_directory_(path, file, **kwargs)
 
 
+def _get_followers_count() -> int:
+    """Get the number of ActivityPub followers, or 0 if AP is disabled."""
+    if not config.enable_activitypub:
+        return 0
+    if not hasattr(app, "activitypub_storage"):
+        return 0
+    try:
+        return len(app.activitypub_storage.get_followers())
+    except Exception:
+        return 0
+
+
 @app.route("/", methods=["GET"])
 def home_route():
     view_mode = request.args.get("view", config.view_mode)
@@ -49,6 +61,7 @@ def home_route():
         skip_html_head=True,
         template_name="index.html",
         view_mode=view_mode,
+        followers_count=_get_followers_count(),
     )
 
 
@@ -426,6 +439,49 @@ def tag_posts_route(tag: str):
             "tag_posts.html",
             tag=canonical,
             posts=posts,
+            config=config,
+        )
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/followers", methods=["GET"])
+def followers_route():
+    from flask import make_response, render_template
+
+    if not config.enable_activitypub:
+        return Response("ActivityPub is not enabled", status=404, mimetype="text/plain")
+
+    followers = []
+    if hasattr(app, "activitypub_storage"):
+        try:
+            raw_followers = app.activitypub_storage.get_followers()
+            for f in raw_followers:
+                actor_data = f.actor_data or {}
+                followers.append(
+                    {
+                        "actor_id": f.actor_id,
+                        "name": actor_data.get("name") or actor_data.get("preferredUsername") or f.actor_id,
+                        "username": actor_data.get("preferredUsername", ""),
+                        "url": actor_data.get("url") or f.actor_id,
+                        "icon": (
+                            actor_data.get("icon", {}).get("url")
+                            if isinstance(actor_data.get("icon"), dict)
+                            else actor_data.get("icon")
+                        ),
+                        "summary": actor_data.get("summary", ""),
+                        "followed_at": f.followed_at,
+                    }
+                )
+            followers.sort(key=lambda x: x.get("followed_at") or "", reverse=True)
+        except Exception:
+            logger.exception("Failed to get followers")
+
+    response = make_response(
+        render_template(
+            "followers.html",
+            followers=followers,
             config=config,
         )
     )

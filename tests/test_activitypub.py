@@ -354,5 +354,81 @@ class ActivityPubNotificationsTest(unittest.TestCase):
         self.assertIn("Alice", call_kwargs["body"])
 
 
+class FollowersRouteTest(unittest.TestCase):
+    """Test /followers HTML route and followers bar on home page."""
+
+    @skip_if_no_pubby
+    def setUp(self):
+        from madblog.app import app
+        from madblog.config import config
+
+        self.app = app
+        self.config = config
+        self._orig_enable_ap = config.enable_activitypub
+
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+
+        root = Path(self._tmpdir.name)
+        markdown_dir = root / "markdown"
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+        mentions_dir = root / "mentions"
+        mentions_dir.mkdir(parents=True, exist_ok=True)
+
+        (markdown_dir / "test-post.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (title: Test Post)",
+                    "[//]: # (published: 2026-01-01)",
+                    "",
+                    "# Test Post",
+                    "",
+                    "Hello world.",
+                ]
+            )
+        )
+
+        self.config.content_dir = str(root)
+        self.config.link = "https://example.com"
+        self.config.title = "Example"
+        self.config.description = "Example blog"
+        self.config.enable_activitypub = True
+        self.app.pages_dir = str(markdown_dir)
+        self.app.mentions_dir = mentions_dir
+        self.client = self.app.test_client()
+
+    def tearDown(self):
+        if hasattr(self, "config"):
+            self.config.enable_activitypub = self._orig_enable_ap
+
+    @skip_if_no_pubby
+    def test_followers_html_page_returns_200(self):
+        """Test the /followers HTML page renders when AP is enabled."""
+        resp = self.client.get("/followers")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Followers", resp.data)
+
+    @skip_if_no_pubby
+    def test_followers_html_page_shows_no_followers(self):
+        """Test the /followers page shows 'no followers' when empty."""
+        resp = self.client.get("/followers")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"No followers yet", resp.data)
+
+    @skip_if_no_pubby
+    def test_home_page_shows_followers_bar(self):
+        """Test the home page shows the followers bar when AP is enabled."""
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"followers-bar", resp.data)
+
+    @skip_if_no_pubby
+    def test_followers_route_404_when_ap_disabled(self):
+        """Test /followers returns 404 when ActivityPub is disabled."""
+        self.config.enable_activitypub = False
+        resp = self.client.get("/followers")
+        self.assertEqual(resp.status_code, 404)
+
+
 if __name__ == "__main__":
     unittest.main()
