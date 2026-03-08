@@ -42,6 +42,7 @@ class ActivityPubConfigTest(unittest.TestCase):
         env = {
             "MADBLOG_ENABLE_ACTIVITYPUB": "1",
             "MADBLOG_ACTIVITYPUB_USERNAME": "testuser",
+            "MADBLOG_ACTIVITYPUB_DOMAIN": "example.org",
             "MADBLOG_ACTIVITYPUB_NAME": "Test Blog",
             "MADBLOG_ACTIVITYPUB_SUMMARY": "A test blog",
             "MADBLOG_ACTIVITYPUB_ICON_URL": "https://example.com/icon.png",
@@ -55,6 +56,7 @@ class ActivityPubConfigTest(unittest.TestCase):
 
         self.assertTrue(config.enable_activitypub)
         self.assertEqual(config.activitypub_username, "testuser")
+        self.assertEqual(config.activitypub_domain, "example.org")
         self.assertEqual(config.activitypub_name, "Test Blog")
         self.assertEqual(config.activitypub_summary, "A test blog")
         self.assertEqual(config.activitypub_icon_url, "https://example.com/icon.png")
@@ -65,6 +67,7 @@ class ActivityPubConfigTest(unittest.TestCase):
         # Reset
         config.enable_activitypub = False
         config.activitypub_username = "blog"
+        config.activitypub_domain = None
         config.activitypub_name = None
         config.activitypub_summary = None
         config.activitypub_icon_url = None
@@ -105,6 +108,7 @@ class ActivityPubEnabledTest(unittest.TestCase):
         from madblog.config import config
 
         self.config = config
+        self._orig_activitypub_domain = config.activitypub_domain
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
 
@@ -130,6 +134,7 @@ class ActivityPubEnabledTest(unittest.TestCase):
         config.content_dir = str(root)
         config.link = "https://example.com"
         config.enable_activitypub = True
+        config.activitypub_domain = None
         config.activitypub_private_key_path = None
         config.author = "Test Author"
 
@@ -141,6 +146,7 @@ class ActivityPubEnabledTest(unittest.TestCase):
     def tearDown(self):
         if hasattr(self, "config"):
             self.config.enable_activitypub = False
+            self.config.activitypub_domain = self._orig_activitypub_domain
 
     @skip_if_no_pubby
     def test_webfinger(self):
@@ -149,6 +155,22 @@ class ActivityPubEnabledTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json()
         self.assertEqual(data["subject"], "acct:blog@example.com")
+
+    @skip_if_no_pubby
+    def test_webfinger_domain_override(self):
+        from madblog.config import config
+
+        config.activitypub_domain = "example.org"
+        client = self.app.test_client()
+
+        resp = client.get("/.well-known/webfinger" "?resource=acct:blog@example.org")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertEqual(data["subject"], "acct:blog@example.org")
+
+        # Actor IDs are still based on config.link
+        self.assertTrue(data["aliases"])
+        self.assertEqual(data["aliases"][0], "https://example.com/ap/actor")
 
     @skip_if_no_pubby
     def test_actor(self):

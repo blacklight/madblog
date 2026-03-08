@@ -52,6 +52,7 @@ class Config:
     # ActivityPub
     enable_activitypub: bool = False
     activitypub_username: str = "blog"
+    activitypub_domain: str | None = None
     activitypub_name: str | None = None
     activitypub_summary: str | None = None
     activitypub_icon_url: str | None = None
@@ -193,6 +194,8 @@ def _init_config_from_file(config_file: str):
         config.enable_activitypub = bool(cfg["enable_activitypub"])
     if cfg.get("activitypub_username"):
         config.activitypub_username = cfg["activitypub_username"]
+    if cfg.get("activitypub_domain"):
+        config.activitypub_domain = cfg["activitypub_domain"]
     if cfg.get("activitypub_name"):
         config.activitypub_name = cfg["activitypub_name"]
     if cfg.get("activitypub_summary"):
@@ -313,6 +316,8 @@ def _init_config_from_env():
         config.enable_activitypub = os.environ["MADBLOG_ENABLE_ACTIVITYPUB"] == "1"
     if os.getenv("MADBLOG_ACTIVITYPUB_USERNAME"):
         config.activitypub_username = os.environ["MADBLOG_ACTIVITYPUB_USERNAME"]
+    if os.getenv("MADBLOG_ACTIVITYPUB_DOMAIN"):
+        config.activitypub_domain = os.environ["MADBLOG_ACTIVITYPUB_DOMAIN"]
     if os.getenv("MADBLOG_ACTIVITYPUB_NAME"):
         config.activitypub_name = os.environ["MADBLOG_ACTIVITYPUB_NAME"]
     if os.getenv("MADBLOG_ACTIVITYPUB_SUMMARY"):

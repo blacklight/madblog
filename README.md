@@ -352,6 +352,129 @@ export MADBLOG_ENABLE_ACTIVITYPUB=1
 export MADBLOG_ACTIVITYPUB_PRIVATE_KEY_PATH=/path/to/private_key.pem
 ```
 
+### Using a different domain for your ActivityPub handle
+
+Madblog (via the `pubby` integration) uses the configured `link` as the public
+base URL for ActivityPub.
+
+That means:
+
+- The actor handle advertised through WebFinger will be:
+  `@activitypub_username@<domain from link>`.
+- Actor/object IDs (e.g. `/ap/actor`, `/article/<slug>`) will also be built from
+  `link`.
+
+You can override only the advertised WebFinger handle domain with
+`activitypub_domain`.
+
+If you want the blog to be *browsed* at `https://blog.example.com` and keep
+`link` unchanged, but you want the fediverse handle to be `@blog@example.com`,
+set:
+
+```yaml
+# Keep your canonical blog URL
+link: https://blog.example.com
+
+# Advertise the handle on a different domain via WebFinger
+activitypub_domain: example.com
+
+# Optional: what the UI header “Home” link points to
+home_link: https://blog.example.com
+
+enable_activitypub: true
+activitypub_username: blog
+```
+
+And then serve the same Madblog instance on both hostnames (typical setup is a
+reverse-proxy with two server names pointing to the same upstream).
+
+In this configuration, `example.com` must serve WebFinger for the handle.
+You can keep serving `example.com` with a different application and only
+delegate the *discovery endpoints* to Madblog (or implement them yourself).
+At minimum, `example.com` must serve:
+
+- `/.well-known/webfinger` (required for `@user@example.com` discovery)
+
+Some remote software may also query:
+
+- `/.well-known/nodeinfo`
+
+In this split-domain setup:
+
+- `link` remains the blog’s canonical base URL and continues to determine the
+  actor/object IDs.
+- `activitypub_domain` determines the WebFinger `acct:` domain.
+- Requests to `https://example.com/.well-known/webfinger` should be proxied to
+  the Madblog instance on `blog.example.com`.
+
+Example (nginx, simplified):
+
+```nginx
+upstream madblog {
+    server 127.0.0.1:8000;
+}
+
+server {
+    listen 443 ssl;
+    server_name example.com blog.example.com;
+
+    location / {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass http://madblog;
+    }
+}
+```
+
+Notes:
+
+- If `example.com` does not route to Madblog, remote instances will try to fetch
+  `https://example.com/.well-known/webfinger`, `https://example.com/ap/actor`,
+  etc., and federation/discovery will fail.
+- If you prefer `example.com` to redirect browsers to `blog.example.com`, keep
+  the federation endpoints working on `example.com` (no redirect) and only
+  redirect other routes (or do it at the CDN layer while exempting at least
+  `/.well-known/*`).
+
+Example (nginx, split-domain: proxy only discovery endpoints on `example.com`):
+
+```nginx
+upstream madblog {
+    server 127.0.0.1:8000;
+}
+
+server {
+    listen 443 ssl;
+    server_name example.com;
+
+    # Your main site continues to serve everything else
+    location / {
+        proxy_pass http://your_main_site;
+    }
+
+    # Delegate fediverse discovery to Madblog
+    location = /.well-known/webfinger {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass http://madblog;
+    }
+
+    location = /.well-known/nodeinfo {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass http://madblog;
+    }
+}
+```
+
+If you can’t/won’t proxy, you can also implement WebFinger in your main site:
+respond to `GET /.well-known/webfinger?resource=acct:blog@example.com` with a
+JSON document that links to the actor URL hosted on `blog.example.com` (the
+`rel="self"` link is the important one).
+
 ### Mentions
 
 You can mention fediverse users in your articles using the `@user@domain`

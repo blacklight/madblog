@@ -265,6 +265,7 @@ class BlogApp(Flask):
                 "url": f'{config.link.rstrip("/")}/@{config.activitypub_username}',
             },
             private_key_path=key_path,
+            webfinger_domain=config.activitypub_domain,
             on_interaction_received=on_interaction,
             auto_approve_quotes=config.activitypub_auto_approve_quotes,
             software_name="madblog",

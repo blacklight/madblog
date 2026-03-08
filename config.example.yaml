@@ -122,6 +122,15 @@ link: https://myblog.example.com
 # The full handle will be @username@yourdomain.com
 # activitypub_username: blog
 
+# Override the domain used in WebFinger `acct:` identifiers (optional).
+# This is useful if you serve the blog at one hostname (e.g.
+# https://blog.example.com) but you want to advertise the fediverse handle as
+# @username@example.com.
+#
+# Note: this only affects WebFinger `acct:` domain. It does NOT change where the
+# actor and objects are hosted; those still use `link`.
+# activitypub_domain: example.com
+
 # Display name for the ActivityPub actor (optional, falls back to author or title)
 # activitypub_name: My Blog
 
