@@ -14,6 +14,7 @@ import json
 import shutil
 import subprocess
 import tempfile
+import mimetypes
 
 from datetime import datetime, timezone
 from pathlib import Path
@@ -308,6 +309,25 @@ class ActivityPubIntegration(StartupSyncMixin):
         re.DOTALL,
     )
 
+    # Generic inline images coming from Markdown (e.g. ![alt](url) -> <img ...>)
+    _INLINE_IMG_RE = re.compile(
+        r"<img\s+[^>]*?>",
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    _INLINE_IMG_SRC_RE = re.compile(r'\bsrc="([^"]+)"', re.IGNORECASE)
+    _INLINE_IMG_ALT_RE = re.compile(r'\balt="([^"]*)"', re.IGNORECASE)
+
+    @staticmethod
+    def _guess_image_media_type(url: str) -> str | None:
+        # Prefer mimetypes based on URL path extension.
+        # Strip query string so mimetypes can match.
+        path = url.split("?", 1)[0]
+        mt, _ = mimetypes.guess_type(path)
+        if mt and mt.startswith("image/"):
+            return mt
+        return None
+
     def _ensure_img_dir(self) -> Path:
         """Ensure the img directory exists and return its path."""
         img_dir = Path(config.content_dir) / "img"
@@ -383,6 +403,7 @@ class ActivityPubIntegration(StartupSyncMixin):
         """
         img_dir = self._ensure_img_dir()
         attachments: list[dict] = []
+        attachment_urls: set[str] = set()
         counter = {"latex": 0, "mermaid": 0}
 
         def _save_png(data: bytes, prefix: str) -> str | None:
@@ -449,6 +470,50 @@ class ActivityPubIntegration(StartupSyncMixin):
             return m.group(0)
 
         html = self._MERMAID_WRAPPER_RE.sub(_replace_mermaid, html)
+
+        # --- Inline images (Markdown ![alt](url) and raw <img>) ---
+        img_counter = 0
+
+        def _replace_inline_img(m: re.Match) -> str:
+            nonlocal img_counter
+            tag = m.group(0)
+
+            # Skip LaTeX-rendered images (handled above)
+            if "class=\"latex" in tag or "class='latex" in tag:
+                return tag
+
+            src_m = self._INLINE_IMG_SRC_RE.search(tag)
+            if not src_m:
+                return tag
+
+            src = src_m.group(1).strip()
+            if not src or src.startswith("data:"):
+                return tag
+
+            # Avoid duplicates (keep first occurrence in content)
+            if src in attachment_urls:
+                return ""
+
+            alt_m = self._INLINE_IMG_ALT_RE.search(tag)
+            alt = (alt_m.group(1).strip() if alt_m else "")
+
+            img_counter += 1
+            attachment_urls.add(src)
+
+            att: dict = {
+                "type": "Image",
+                "url": src,
+                "name": alt or f"Image {img_counter}",
+            }
+            mt = self._guess_image_media_type(src)
+            if mt:
+                att["mediaType"] = mt
+
+            attachments.append(att)
+            label = alt or f"image {img_counter}"
+            return f'<p>[<a href="{src}">{label}</a>]</p>'
+
+        html = self._INLINE_IMG_RE.sub(_replace_inline_img, html)
 
         return html, attachments
 

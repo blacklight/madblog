@@ -323,6 +323,67 @@ class ActivityPubContentChangeTest(unittest.TestCase):
         kwargs = handler.publish_object.call_args
         self.assertEqual(kwargs[1]["activity_type"], "Delete")
 
+    @skip_if_no_pubby
+    def test_inline_markdown_images_become_attachments(self):
+        from pubby import ActivityPubHandler
+        from pubby.crypto import generate_rsa_keypair
+        from pubby.storage.adapters.file import FileActivityPubStorage
+        from madblog.storage.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+
+        root = Path(tmpdir.name)
+        pages_dir = root / "pages"
+        pages_dir.mkdir()
+        ap_dir = root / "ap"
+
+        # Ensure generated attachments are written into this temp content dir
+        config.content_dir = str(root)
+
+        priv, _ = generate_rsa_keypair()
+        storage = FileActivityPubStorage(data_dir=str(ap_dir))
+        handler = ActivityPubHandler(
+            storage=storage,
+            actor_config={
+                "base_url": "https://example.com",
+                "username": "blog",
+            },
+            private_key=priv,
+        )
+
+        integration = ActivityPubIntegration(
+            handler=handler,
+            pages_dir=str(pages_dir),
+            base_url="https://example.com",
+        )
+
+        # Inline image: should be added as an attachment for Mastodon
+        img_url = "https://s3.example.com/img/stock.jpg"
+        test_file = pages_dir / "with-image.md"
+        test_file.write_text(
+            "\n".join(
+                [
+                    "[//]: # (title: With Image)",
+                    "",
+                    "# With Image",
+                    "",
+                    f"![Stock image]({img_url})",
+                    "",
+                    "Text after.",
+                ]
+            )
+        )
+
+        handler.publish_object = MagicMock()
+        integration.on_content_change(self.ChangeType.ADDED, str(test_file))
+
+        handler.publish_object.assert_called_once()
+        obj = handler.publish_object.call_args[0][0]
+        self.assertTrue(obj.attachment)
+        self.assertTrue(any(a.get("url") == img_url for a in obj.attachment))
+
 
 class ActivityPubNotificationsTest(unittest.TestCase):
     """Test the AP email notifier."""
