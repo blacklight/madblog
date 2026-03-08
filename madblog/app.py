@@ -6,6 +6,7 @@ import os
 import re
 import stat
 import contextlib
+import threading
 
 from pathlib import Path
 from typing import IO, List, Optional, Tuple, Type
@@ -279,14 +280,20 @@ class BlogApp(Flask):
             base_url=config.link,
         )
         self.content_monitor.register(self._ap_integration.on_content_change)
-        self._ap_integration.sync_on_startup()
 
-        # Push the current actor profile to all followers so remote
-        # instances pick up attachment/field changes (e.g. verified links).
-        try:
-            self.activitypub_handler.publish_actor_update()
-        except Exception:
-            self.logger.warning("Failed to publish actor profile update", exc_info=True)
+        def _ap_startup_tasks():
+            self._ap_integration.sync_on_startup()
+
+            # Push the current actor profile to all followers so remote
+            # instances pick up attachment/field changes (e.g. verified links).
+            try:
+                self.activitypub_handler.publish_actor_update()
+            except Exception:
+                self.logger.warning(
+                    "Failed to publish actor profile update", exc_info=True
+                )
+
+        threading.Thread(target=_ap_startup_tasks, daemon=True).start()
 
     def _on_content_change_tags(self, _: ChangeType, filepath: str) -> None:
         """Bridge: forward content changes to the tag indexer."""
