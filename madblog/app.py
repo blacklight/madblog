@@ -603,9 +603,11 @@ class BlogApp(Flask):
         )
 
         ap_interactions = ""
-        if hasattr(self, "activitypub_handler"):
+        if hasattr(self, "_ap_integration"):
+            # Use the exact AP object URL (includes ?v= suffix if collision-avoiding)
+            ap_object_url = self._ap_integration._file_to_url(md_file)
             interactions = self.activitypub_handler.storage.get_interactions(
-                target_resource=config.link + metadata.get("uri", "")
+                target_resource=ap_object_url
             )
             if interactions:
                 ap_interactions = self.activitypub_handler.render_interactions(
