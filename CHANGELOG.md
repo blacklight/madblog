@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
+
+- Full **ActivityPub** integration (closes #11)
+
+## 0.6.17
 
 **Added**
 
