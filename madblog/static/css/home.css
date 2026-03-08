@@ -353,7 +353,7 @@ h3 {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5em;
-  padding-bottom: 1em;
+  padding: 1em 0;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -381,6 +381,17 @@ h3 {
   display: flex;
   gap: 0.5em;
   margin-bottom: 1.5em;
+}
+
+#tags-container .tag {
+  padding: 0.5em 1em;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-fg-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: all 0.2s ease;
 }
 
 .sort-btn {
