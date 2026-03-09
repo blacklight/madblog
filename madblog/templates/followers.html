@@ -6,6 +6,11 @@
   <div class="container">
     <div class="followers-header">
       <h1>Followers</h1>
+      {% if activitypub_handle and config.activitypub_profile_url %}
+      <div class="activitypub-handle-container">
+        <a class="activitypub-handle" href="{{ config.activitypub_profile_url }}"><span class="handle">{{ activitypub_handle }}</span></a>
+      </div>
+      {% endif %}
       {% if followers %}
       <div class="followers-stats">
         <span class="followers-total">{{ followers|length }} follower{{ 's' if followers|length != 1 else '' }}</span>
@@ -27,7 +32,7 @@
           <div class="follower-info">
             <div class="follower-name">{{ follower.name }}</div>
             {% if follower.username %}
-              <div class="follower-handle">@{{ follower.username }}</div>
+              <div class="follower-handle">@{{ follower.username }}@{{ follower.host }}</div>
             {% endif %}
           </div>
         </a>
@@ -136,7 +141,7 @@
 }
 
 .follower-handle {
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: var(--secondary-fg, #666);
   white-space: nowrap;
   overflow: hidden;

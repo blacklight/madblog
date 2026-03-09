@@ -639,6 +639,8 @@ class FollowersRouteTest(unittest.TestCase):
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"hamburger-menu", resp.data)
+        self.assertIn(b"activitypub-handle", resp.data)
+        self.assertIn(b"@blog@example.com", resp.data)
         self.assertIn(b'href="/followers"', resp.data)
 
     @skip_if_no_pubby

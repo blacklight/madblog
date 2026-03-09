@@ -121,6 +121,9 @@
                 </label>
                 <nav class="hamburger-nav">
                     {% if config.enable_activitypub %}
+                    {% if activitypub_handle and config.activitypub_profile_url %}
+                    <a class="activitypub-handle" href="{{ config.activitypub_profile_url }}"><span class="handle">{{ activitypub_handle }}</span></a>
+                    {% endif %}
                     <a href="/followers">&#128101; Followers <span class="nav-count">({{ followers_count }})</span></a>
                     {% endif %}
                     <a href="/tags">&#127991; Tags</a>
@@ -213,5 +216,14 @@
 .hamburger-nav .nav-count {
     opacity: 0.7;
     font-size: 0.9em;
+}
+.hamburger-nav a.activitypub-handle {
+    background: var(--color-bg-secondary);
+    color: var(--color-fg-tertiary);
+    font-size: 0.8em;
+}
+.hamburger-nav a.activitypub-handle .handle {
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 </style>

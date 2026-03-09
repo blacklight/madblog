@@ -3,6 +3,7 @@ import os
 import re
 import stat
 import threading
+from urllib.parse import urlparse
 from abc import ABC, abstractmethod
 from logging import getLogger
 from pathlib import Path
@@ -45,8 +46,28 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             except Exception:
                 return {"followers_count": 0}
 
+        @self._app.context_processor
+        def inject_activitypub_handle():
+            if not config.enable_activitypub:
+                return {"activitypub_handle": None}
+
+            domain = config.activitypub_domain
+            if not domain:
+                base_url = config.activitypub_link or config.link
+                parsed = urlparse(base_url)
+                domain = parsed.hostname
+
+            if not domain:
+                return {"activitypub_handle": None}
+
+            return {"activitypub_handle": f"@{config.activitypub_username}@{domain}"}
+
         logger.debug(
-            "Registered ActivityPub context processors: %s", inject_followers_count
+            "Registered ActivityPub context processors: %s",
+            [
+                inject_followers_count,
+                inject_activitypub_handle,
+            ],
         )
 
     def _generate_or_check_ap_key(self, key_path: str) -> str:

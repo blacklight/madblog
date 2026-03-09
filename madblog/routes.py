@@ -5,7 +5,7 @@ import mimetypes
 import os
 import re
 from typing import Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from feedgen.feed import FeedGenerator
 from flask import (
@@ -467,6 +467,7 @@ def followers_route():
                         or f.actor_id,
                         "username": actor_data.get("preferredUsername", ""),
                         "url": actor_data.get("url") or f.actor_id,
+                        "host": urlparse(actor_data.get("url") or f.actor_id).netloc,
                         "icon": (
                             actor_data.get("icon", {}).get("url")
                             if isinstance(actor_data.get("icon"), dict)
