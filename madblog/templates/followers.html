@@ -55,11 +55,27 @@
   font-size: 0.9rem;
 }
 
+@media screen and (max-width: 900px) {
+  .followers-list {
+    gap: 0;
+  }
+
+  .follower {
+    border-bottom: 1px solid var(--color-border-primary);
+  }
+}
+
+@media screen and (min-width: 901px) {
+  .followers-list {
+    max-width: 900px;
+    gap: 1rem;
+  }
+}
+
 .followers-list {
+  width: 100%;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
-  max-width: 900px;
   margin: 0 auto;
 }
 
