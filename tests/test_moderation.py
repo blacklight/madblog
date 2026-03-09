@@ -509,7 +509,7 @@ class TestGetFollowersFiltering(unittest.TestCase):
         storage = self.app.activitypub_storage
 
         # Store a blocked and a non-blocked follower
-        storage._write_json(
+        storage.write_json(
             storage._follower_path("https://evil.social/users/badguy"),
             Follower(
                 actor_id="https://evil.social/users/badguy",
@@ -517,7 +517,7 @@ class TestGetFollowersFiltering(unittest.TestCase):
                 followed_at=datetime.now(timezone.utc),
             ).to_dict(),
         )
-        storage._write_json(
+        storage.write_json(
             storage._follower_path("https://good.social/users/alice"),
             Follower(
                 actor_id="https://good.social/users/alice",
@@ -540,7 +540,7 @@ class TestGetFollowersFiltering(unittest.TestCase):
         self.app._blocklist_cache.invalidate()
 
         storage = self.app.activitypub_storage
-        storage._write_json(
+        storage.write_json(
             storage._follower_path("https://evil.social/users/badguy"),
             Follower(
                 actor_id="https://evil.social/users/badguy",
@@ -606,7 +606,7 @@ class TestReconcileBlockedFollowers(unittest.TestCase):
         fpath = storage._follower_path(actor_id)
 
         # Write a follower without the blocked flag
-        storage._write_json(
+        storage.write_json(
             fpath,
             Follower(
                 actor_id=actor_id,
@@ -619,13 +619,11 @@ class TestReconcileBlockedFollowers(unittest.TestCase):
         self.app._reconcile_blocked_followers()
 
         # Should now have "blocked": true
-        data = storage._read_json(fpath)
+        data = storage.read_json(fpath)
         self.assertTrue(data.get("blocked"))
 
     @_skip_if_no_pubby
     def test_reconciliation_restores_unblocked_follower(self):
-        import json
-
         storage = self.app.activitypub_storage
         actor_id = "https://good.social/users/alice"
         fpath = storage._follower_path(actor_id)
@@ -637,13 +635,13 @@ class TestReconcileBlockedFollowers(unittest.TestCase):
             "shared_inbox": "",
             "blocked": True,
         }
-        storage._write_json(fpath, data)
+        storage.write_json(fpath, data)
 
         # Run reconciliation (good.social is NOT in blocklist)
         self.app._reconcile_blocked_followers()
 
         # "blocked" key should be removed
-        data = storage._read_json(fpath)
+        data = storage.read_json(fpath)
         self.assertNotIn("blocked", data)
 
     @_skip_if_no_pubby
@@ -660,13 +658,13 @@ class TestReconcileBlockedFollowers(unittest.TestCase):
             inbox="https://good.social/users/alice/inbox",
             followed_at=datetime.now(timezone.utc),
         ).to_dict()
-        storage._write_json(fpath, follower_data)
+        storage.write_json(fpath, follower_data)
 
         # Run reconciliation
         self.app._reconcile_blocked_followers()
 
         # Should not have "blocked" key
-        data = storage._read_json(fpath)
+        data = storage.read_json(fpath)
         self.assertNotIn("blocked", data)
 
     @_skip_if_no_pubby
@@ -683,7 +681,7 @@ class TestReconcileBlockedFollowers(unittest.TestCase):
             "shared_inbox": "",
             "blocked": True,
         }
-        storage._write_json(fpath, data)
+        storage.write_json(fpath, data)
 
         # The blocklist does NOT include formerly-evil.social
         # Reconciliation should remove the flag
