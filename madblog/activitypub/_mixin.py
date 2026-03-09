@@ -11,7 +11,7 @@ from flask import Flask, Response, has_request_context, make_response, request
 
 from ..config import config
 from ..monitor import ContentMonitor
-from ..notifications import (
+from ._notifications import (
     SmtpConfig,
     build_activitypub_email_notifier,
 )

@@ -546,7 +546,8 @@ class ActivityPubNotificationsTest(unittest.TestCase):
 
     @skip_if_no_pubby
     def test_email_sent_on_interaction(self):
-        from madblog.notifications import SmtpConfig, build_activitypub_email_notifier
+        from madblog.activitypub import build_activitypub_email_notifier
+        from madblog.notifications import SmtpConfig
         from pubby import Interaction, InteractionType
 
         send_email = MagicMock()

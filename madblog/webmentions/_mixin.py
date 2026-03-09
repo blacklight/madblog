@@ -8,8 +8,8 @@ from webmentions.server.adapters.flask import bind_webmentions
 
 from madblog.config import config
 from madblog.monitor import ContentMonitor
-from madblog.notifications import SmtpConfig, build_webmention_email_notifier
 
+from ._notifications import SmtpConfig, build_webmention_email_notifier
 from ._storage import FileWebmentionsStorage
 
 
