@@ -19,8 +19,6 @@ import mimetypes
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pubby import ActivityPubHandler, Object, extract_mentions
-
 from madblog.config import config
 from madblog.constants import REGEX_MARKDOWN_METADATA, REGEX_MERMAID_BLOCK
 from madblog.markdown import render_html
@@ -42,11 +40,16 @@ class ActivityPubIntegration(StartupSyncMixin):
 
     def __init__(
         self,
-        handler: ActivityPubHandler,
+        handler: "ActivityPubHandler",
         pages_dir: str | Path,
         base_url: str,
         content_base_url: str | None = None,
     ):
+        try:
+            from pubby import ActivityPubHandler
+        except ImportError:
+            logger.warning("pubby is not installed; skipping ActivityPub integration")
+
         self.handler = handler
         self.pages_dir = str(Path(pages_dir).resolve())
         self.base_url = base_url.rstrip("/")
@@ -528,7 +531,7 @@ class ActivityPubIntegration(StartupSyncMixin):
         url: str,
         actor_url: str,
         public_url: str | None = None,
-    ) -> tuple[Object, str]:
+    ) -> tuple["Object", str]:
         """
         Parse a markdown file and return a fully-populated
         ``(Object, activity_type)`` pair ready for publishing.
@@ -538,6 +541,8 @@ class ActivityPubIntegration(StartupSyncMixin):
             AP object.  Defaults to *url* when the AP domain and blog domain
             are the same.
         """
+        from pubby import Object, extract_mentions
+
         public_url = public_url or url
         metadata = self._parse_metadata(filepath)
         title = metadata.get("title") or self._extract_title(filepath)
@@ -636,6 +641,8 @@ class ActivityPubIntegration(StartupSyncMixin):
 
     def _handle_delete(self, filepath: str, url: str, actor_url: str) -> None:
         """Publish a Delete activity and clean up caches."""
+        from pubby import Object
+
         base_rel = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
         self._mark_as_deleted(f"{self.content_base_url}/article/{base_rel}")
         self._remove_file_url(filepath)
