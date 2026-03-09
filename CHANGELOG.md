@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.8.0
+
+**Added**
+- **ActivityPub enhancements**:
+  - Display ActivityPub handle (e.g., `@user@domain`) in the navigation bar and followers page.
+  - Show follower count in the navigation bar and a dedicated followers page (`/followers`).
+  - Added a followers counter bar on the home page.
+  - Support for `activitypub_link` and `activitypub_domain` configuration options to override ActivityPub actor/profile URLs and WebFinger domains.
+  - Allow separate base URLs for ActivityPub content and assets (e.g., images).
+  - Turn inline HTML/Markdown images into ActivityPub attachments for richer federated posts.
+- **UI/UX improvements**:
+  - Moved followers and feed links into a hamburger menu for cleaner navigation.
+  - Added tag pill styles for better visual hierarchy.
+  - Tweaked header opacity, padding, and sidebar rounding for improved aesthetics.
+- **Documentation**:
+  - Added `ARCHITECTURE.md` for an overview of the project’s structure.
+  - Replaced the `README.md` title with a logo image.
+  - Added contributor guidelines for AGENTS (AI-assisted development).
+
+**Changed**
+- **Refactoring**:
+  - Split email notifiers into dedicated `activitypub` and `webmentions` modules.
+  - Extracted caching, webmentions, and app helpers into dedicated mixins for better maintainability.
+  - Applied `black` formatting for consistent code style.
+- **ActivityPub**:
+  - Run ActivityPub startup tasks (e.g., follower sync) in a background thread to avoid blocking the main application.
+  - Use canonical object URLs when fetching interactions to ensure consistency.
+
+**Fixed**
+- **ActivityPub**:
+  - Guarded request/app context in content negotiation and caching to prevent runtime errors.
+  - Aligned actor profile URLs and `rel=me` verification for Mastodon compatibility.
+  - Made metadata parsing more tolerant to avoid crashes on malformed input.
+
 ## 0.7.0
 
 - Full **ActivityPub** integration (closes #11)
