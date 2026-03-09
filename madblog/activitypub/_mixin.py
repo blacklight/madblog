@@ -14,7 +14,7 @@ from pubby.storage.adapters.file import FileActivityPubStorage
 from pubby.server.adapters.flask import bind_activitypub
 
 from ..config import config
-from ..moderation import is_blocked
+from ..moderation import BlocklistCache, is_blocked
 from ..monitor import ContentMonitor
 from ._integration import ActivityPubIntegration
 from ._notifications import (
@@ -311,20 +311,84 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
     def _install_activitypub_moderation(self):
         """
-        Wrap the inbox activity processor so that activities from
-        blocked actors are silently dropped before signature
-        verification, storage, or Accept delivery.
+        Install moderation hooks for ActivityPub:
+
+        1. Wrap the inbox processor so that activities from blocked
+           actors are silently dropped.
+        2. Wrap ``storage.get_followers()`` so that blocked followers
+           are excluded from fan-out delivery and public counts.
+        3. Run a one-time startup reconciliation that marks newly
+           blocked followers (and restores previously blocked ones
+           whose matching rule was removed).
+
+        The blocklist is held in a :class:`BlocklistCache` with a
+        5-minute TTL so that fan-out delivery does not hit the
+        filesystem on every publish.
         """
-        original = self.activitypub_handler.process_inbox_activity
+        self._blocklist_cache = BlocklistCache()
+
+        # --- 1. Wrap inbox ---
+        original_inbox = self.activitypub_handler.process_inbox_activity
 
         def _filtered_process(activity_data: dict, *args, **kwargs):
             actor = activity_data.get("actor", "")
-            if actor and is_blocked(actor, config.blocked_actors):
+            blocklist = self._blocklist_cache.get()
+            if actor and is_blocked(actor, blocklist):
                 logger.info("Blocked ActivityPub activity from %s", actor)
                 return None
-            return original(activity_data, *args, **kwargs)
+            return original_inbox(activity_data, *args, **kwargs)
 
         self.activitypub_handler.process_inbox_activity = _filtered_process
+
+        # --- 2. Wrap get_followers ---
+        original_get_followers = self.activitypub_storage.get_followers
+
+        def _filtered_get_followers() -> list:
+            blocklist = self._blocklist_cache.get()
+            followers = original_get_followers()
+            if not blocklist:
+                return followers
+            return [f for f in followers if not is_blocked(f.actor_id, blocklist)]
+
+        self.activitypub_storage.get_followers = _filtered_get_followers
+
+        # --- 3. Startup reconciliation ---
+        self._reconcile_blocked_followers()
+
+    def _reconcile_blocked_followers(self):
+        """
+        Synchronise the ``"blocked"`` flag stored in each follower's
+        JSON file with the current blocklist.
+
+        - Followers that now match the blocklist are marked
+          ``"blocked": true``.
+        - Followers previously marked blocked whose matching rule has
+          been removed are restored (``"blocked"`` key is deleted).
+        """
+        storage = self.activitypub_storage
+        followers_dir = storage.data_dir / "followers"
+        if not followers_dir.is_dir():
+            return
+
+        blocklist = list(config.blocked_actors)
+
+        for fpath in storage.list_json_files(followers_dir):
+            data = storage.read_json(fpath)
+            if data is None:
+                continue
+
+            actor_id = data.get("actor_id", "")
+            is_currently_marked = data.get("blocked", False)
+            should_be_blocked = bool(blocklist) and is_blocked(actor_id, blocklist)
+
+            if should_be_blocked and not is_currently_marked:
+                data["blocked"] = True
+                storage.write_json(fpath, data)
+                logger.info("Marked follower %s as blocked", actor_id)
+            elif not should_be_blocked and is_currently_marked:
+                data.pop("blocked", None)
+                storage.write_json(fpath, data)
+                logger.info("Restored previously blocked follower %s", actor_id)
 
     def _get_rendered_ap_interactions(self, md_file: str) -> str:
         """
@@ -342,11 +406,11 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             target_resource=ap_object_url
         )
 
-        if config.blocked_actors:
+        blocklist = getattr(self, "_blocklist_cache", None)
+        bl = blocklist.get() if blocklist else config.blocked_actors
+        if bl:
             interactions = [
-                i
-                for i in interactions
-                if not is_blocked(i.source_actor_id, config.blocked_actors)
+                i for i in interactions if not is_blocked(i.source_actor_id, bl)
             ]
 
         if interactions:

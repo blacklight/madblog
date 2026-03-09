@@ -14,8 +14,11 @@ Used by both Webmentions and ActivityPub subsystems.
 
 import logging
 import re
+import time
 from functools import lru_cache
 from urllib.parse import urlparse
+
+from madblog.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -101,3 +104,33 @@ def is_blocked(  # pylint: disable=too-many-return-statements
             return True
 
     return False
+
+
+class BlocklistCache:
+    """
+    TTL-based cache for the blocked-actors list.
+
+    Avoids re-reading ``config.blocked_actors`` on every call (e.g. during
+    fan-out delivery) while still picking up changes within a bounded
+    window.
+
+    :param ttl_seconds: How long a cached snapshot stays valid (default
+        300 s = 5 min).
+    """
+
+    def __init__(self, ttl_seconds: float = 300):
+        self._ttl = ttl_seconds
+        self._cached: list[str] = []
+        self._expires_at: float = 0
+
+    def get(self) -> list[str]:
+        """Return the current blocklist, refreshing if the TTL expired."""
+        now = time.monotonic()
+        if now >= self._expires_at:
+            self._cached = list(config.blocked_actors)
+            self._expires_at = now + self._ttl
+        return self._cached
+
+    def invalidate(self) -> None:
+        """Force the next :meth:`get` call to reload."""
+        self._expires_at = 0

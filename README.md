@@ -189,6 +189,16 @@ export MADBLOG_BLOCKED_ACTORS="spammer.example.com,@troll@evil.social"
 Interactions already stored before a blocklist entry was added are also filtered
 at render time, so they will no longer appear on your pages.
 
+For ActivityPub, blocking also affects **outgoing** delivery: followers matching
+the blocklist are excluded from fan-out (they will not receive new posts), and
+are hidden from the public follower count. The follower records are kept on disk
+with a `"blocked"` marker so they can be restored automatically — if you later
+remove a blocklist entry that matched a follower, the follower is reinstated on
+the next application start.
+
+The blocklist is cached in memory with a 5-minute TTL to avoid filesystem
+round-trips during publish.
+
 ### View mode
 
 The blog home page supports three view modes:

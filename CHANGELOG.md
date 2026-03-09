@@ -8,6 +8,12 @@
     and ActivityPub interactions by domain, URL, FQN, or regular expression.
   - Blocked actors are rejected at ingestion time (before storage or Accept
     delivery) and also filtered at render time for pre-existing data.
+  - Blocked followers are excluded from outgoing delivery (fan-out) and
+    public follower counts, but kept on disk marked as `"blocked"`.
+  - On startup, followers whose matching blocklist rule was removed are
+    automatically restored.
+  - Blocklist is cached with a 5-minute TTL to avoid filesystem
+    round-trips during publish.
   - Configurable via `config.yaml` (list) or `MADBLOG_BLOCKED_ACTORS`
     environment variable (comma/space-separated).
 

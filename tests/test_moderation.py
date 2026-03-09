@@ -337,7 +337,8 @@ class TestActivityPubModeration(unittest.TestCase):
         config.activitypub_private_key_path = None
         config.blocked_actors = ["evil.social"]
 
-        self.app = BlogApp(__name__)
+        with patch("madblog.activitypub._mixin.threading.Thread"):
+            self.app = BlogApp(__name__)
         self.config = config
 
     def tearDown(self):
@@ -409,6 +410,289 @@ class TestActivityPubModeration(unittest.TestCase):
 
         result = self.app._get_rendered_ap_interactions(str(test_file))
         self.assertEqual(result, "")
+
+
+class TestBlocklistCache(unittest.TestCase):
+    """Tests for the TTL-based BlocklistCache."""
+
+    def test_returns_config_blocked_actors(self):
+        from madblog.config import config
+        from madblog.moderation import BlocklistCache
+
+        orig = config.blocked_actors[:]
+        config.blocked_actors = ["evil.social", "spam.example.com"]
+        try:
+            cache = BlocklistCache(ttl_seconds=60)
+            self.assertEqual(cache.get(), ["evil.social", "spam.example.com"])
+        finally:
+            config.blocked_actors = orig
+
+    def test_cache_does_not_reload_within_ttl(self):
+        from madblog.config import config
+        from madblog.moderation import BlocklistCache
+
+        orig = config.blocked_actors[:]
+        config.blocked_actors = ["evil.social"]
+        try:
+            cache = BlocklistCache(ttl_seconds=300)
+            cache.get()
+            config.blocked_actors = ["other.social"]
+            # Should still return the cached version
+            self.assertEqual(cache.get(), ["evil.social"])
+        finally:
+            config.blocked_actors = orig
+
+    def test_invalidate_forces_reload(self):
+        from madblog.config import config
+        from madblog.moderation import BlocklistCache
+
+        orig = config.blocked_actors[:]
+        config.blocked_actors = ["evil.social"]
+        try:
+            cache = BlocklistCache(ttl_seconds=300)
+            cache.get()
+            config.blocked_actors = ["other.social"]
+            cache.invalidate()
+            self.assertEqual(cache.get(), ["other.social"])
+        finally:
+            config.blocked_actors = orig
+
+
+class TestGetFollowersFiltering(unittest.TestCase):
+    """Test that blocked followers are excluded from get_followers()."""
+
+    @_skip_if_no_pubby
+    def setUp(self):
+        from madblog.config import config
+
+        self._orig_blocked = config.blocked_actors[:]
+        self._orig_enable_ap = config.enable_activitypub
+        self._orig_content_dir = config.content_dir
+        self._orig_link = config.link
+        self._orig_ap_link = config.activitypub_link
+        self._orig_ap_domain = config.activitypub_domain
+
+        self._tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self._tmpdir.cleanup)
+        root = Path(self._tmpdir.name)
+        md_dir = root / "markdown"
+        md_dir.mkdir(parents=True)
+
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+        config.enable_activitypub = True
+        config.activitypub_link = None
+        config.activitypub_domain = None
+        config.activitypub_private_key_path = None
+        config.blocked_actors = ["evil.social"]
+
+        from madblog.app import BlogApp
+
+        with patch("madblog.activitypub._mixin.threading.Thread"):
+            self.app = BlogApp(__name__)
+        self.config = config
+
+    def tearDown(self):
+        if hasattr(self, "config"):
+            self.config.blocked_actors = self._orig_blocked
+            self.config.enable_activitypub = self._orig_enable_ap
+            self.config.content_dir = self._orig_content_dir
+            self.config.link = self._orig_link
+            self.config.activitypub_link = self._orig_ap_link
+            self.config.activitypub_domain = self._orig_ap_domain
+
+    @_skip_if_no_pubby
+    def test_blocked_follower_excluded_from_get_followers(self):
+        from pubby._model import Follower
+        from datetime import datetime, timezone
+
+        storage = self.app.activitypub_storage
+
+        # Store a blocked and a non-blocked follower
+        storage._write_json(
+            storage._follower_path("https://evil.social/users/badguy"),
+            Follower(
+                actor_id="https://evil.social/users/badguy",
+                inbox="https://evil.social/users/badguy/inbox",
+                followed_at=datetime.now(timezone.utc),
+            ).to_dict(),
+        )
+        storage._write_json(
+            storage._follower_path("https://good.social/users/alice"),
+            Follower(
+                actor_id="https://good.social/users/alice",
+                inbox="https://good.social/users/alice/inbox",
+                followed_at=datetime.now(timezone.utc),
+            ).to_dict(),
+        )
+
+        followers = storage.get_followers()
+        actor_ids = [f.actor_id for f in followers]
+        self.assertNotIn("https://evil.social/users/badguy", actor_ids)
+        self.assertIn("https://good.social/users/alice", actor_ids)
+
+    @_skip_if_no_pubby
+    def test_no_blocklist_returns_all_followers(self):
+        from pubby._model import Follower
+        from datetime import datetime, timezone
+
+        self.config.blocked_actors = []
+        self.app._blocklist_cache.invalidate()
+
+        storage = self.app.activitypub_storage
+        storage._write_json(
+            storage._follower_path("https://evil.social/users/badguy"),
+            Follower(
+                actor_id="https://evil.social/users/badguy",
+                inbox="https://evil.social/users/badguy/inbox",
+                followed_at=datetime.now(timezone.utc),
+            ).to_dict(),
+        )
+
+        followers = storage.get_followers()
+        self.assertEqual(len(followers), 1)
+
+
+class TestReconcileBlockedFollowers(unittest.TestCase):
+    """Test startup reconciliation of blocked/unblocked followers."""
+
+    @_skip_if_no_pubby
+    def setUp(self):
+        from madblog.config import config
+
+        self._orig_blocked = config.blocked_actors[:]
+        self._orig_enable_ap = config.enable_activitypub
+        self._orig_content_dir = config.content_dir
+        self._orig_link = config.link
+        self._orig_ap_link = config.activitypub_link
+        self._orig_ap_domain = config.activitypub_domain
+
+        self._tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self._tmpdir.cleanup)
+        root = Path(self._tmpdir.name)
+        md_dir = root / "markdown"
+        md_dir.mkdir(parents=True)
+
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+        config.enable_activitypub = True
+        config.activitypub_link = None
+        config.activitypub_domain = None
+        config.activitypub_private_key_path = None
+        config.blocked_actors = ["evil.social"]
+
+        from madblog.app import BlogApp
+
+        with patch("madblog.activitypub._mixin.threading.Thread"):
+            self.app = BlogApp(__name__)
+        self.config = config
+
+    def tearDown(self):
+        if hasattr(self, "config"):
+            self.config.blocked_actors = self._orig_blocked
+            self.config.enable_activitypub = self._orig_enable_ap
+            self.config.content_dir = self._orig_content_dir
+            self.config.link = self._orig_link
+            self.config.activitypub_link = self._orig_ap_link
+            self.config.activitypub_domain = self._orig_ap_domain
+
+    @_skip_if_no_pubby
+    def test_reconciliation_marks_blocked_follower(self):
+        from pubby._model import Follower
+        from datetime import datetime, timezone
+
+        storage = self.app.activitypub_storage
+        actor_id = "https://evil.social/users/badguy"
+        fpath = storage._follower_path(actor_id)
+
+        # Write a follower without the blocked flag
+        storage._write_json(
+            fpath,
+            Follower(
+                actor_id=actor_id,
+                inbox="https://evil.social/users/badguy/inbox",
+                followed_at=datetime.now(timezone.utc),
+            ).to_dict(),
+        )
+
+        # Run reconciliation
+        self.app._reconcile_blocked_followers()
+
+        # Should now have "blocked": true
+        data = storage._read_json(fpath)
+        self.assertTrue(data.get("blocked"))
+
+    @_skip_if_no_pubby
+    def test_reconciliation_restores_unblocked_follower(self):
+        import json
+
+        storage = self.app.activitypub_storage
+        actor_id = "https://good.social/users/alice"
+        fpath = storage._follower_path(actor_id)
+
+        # Write a follower that was previously blocked
+        data = {
+            "actor_id": actor_id,
+            "inbox": "https://good.social/users/alice/inbox",
+            "shared_inbox": "",
+            "blocked": True,
+        }
+        storage._write_json(fpath, data)
+
+        # Run reconciliation (good.social is NOT in blocklist)
+        self.app._reconcile_blocked_followers()
+
+        # "blocked" key should be removed
+        data = storage._read_json(fpath)
+        self.assertNotIn("blocked", data)
+
+    @_skip_if_no_pubby
+    def test_reconciliation_leaves_unblocked_follower_alone(self):
+        from pubby._model import Follower
+        from datetime import datetime, timezone
+
+        storage = self.app.activitypub_storage
+        actor_id = "https://good.social/users/alice"
+        fpath = storage._follower_path(actor_id)
+
+        follower_data = Follower(
+            actor_id=actor_id,
+            inbox="https://good.social/users/alice/inbox",
+            followed_at=datetime.now(timezone.utc),
+        ).to_dict()
+        storage._write_json(fpath, follower_data)
+
+        # Run reconciliation
+        self.app._reconcile_blocked_followers()
+
+        # Should not have "blocked" key
+        data = storage._read_json(fpath)
+        self.assertNotIn("blocked", data)
+
+    @_skip_if_no_pubby
+    def test_restored_follower_appears_in_get_followers(self):
+        """A previously blocked follower whose rule was removed reappears."""
+        storage = self.app.activitypub_storage
+        actor_id = "https://formerly-evil.social/users/reformed"
+        fpath = storage._follower_path(actor_id)
+
+        # Simulate a follower that was blocked (flag set in JSON)
+        data = {
+            "actor_id": actor_id,
+            "inbox": "https://formerly-evil.social/users/reformed/inbox",
+            "shared_inbox": "",
+            "blocked": True,
+        }
+        storage._write_json(fpath, data)
+
+        # The blocklist does NOT include formerly-evil.social
+        # Reconciliation should remove the flag
+        self.app._reconcile_blocked_followers()
+        self.app._blocklist_cache.invalidate()
+
+        followers = storage.get_followers()
+        actor_ids = [f.actor_id for f in followers]
+        self.assertIn(actor_id, actor_ids)
 
 
 if __name__ == "__main__":

@@ -253,8 +253,14 @@ external dependency `pubby` is installed.
 - `madblog/moderation.py`
   - Shared blocklist checker for both Webmentions and ActivityPub.
   - Supports blocking by domain, URL, ActivityPub FQN, or regex.
+  - `BlocklistCache`: TTL-based cache (5 min) around `config.blocked_actors`
+    to avoid filesystem lookups during fan-out delivery.
   - Used by `WebmentionsMixin` and `ActivityPubMixin` to wrap incoming
-    handlers and filter rendered interactions.
+    handlers, filter rendered interactions, and exclude blocked followers
+    from outgoing delivery.
+  - At startup, `ActivityPubMixin` reconciles follower JSON files: newly
+    blocked followers are marked `"blocked": true`; previously blocked
+    followers whose rule was removed are restored.
 
 - `madblog/notifications.py`
   - Shared SMTP helper (`send_email`) and `SmtpConfig`.
