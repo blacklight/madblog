@@ -8,21 +8,12 @@ import re
 import markdown
 import markdown.preprocessors
 
-
-# Matches bare URLs (http/https) that are NOT already:
-#  - wrapped in <> angle brackets
-#  - inside a Markdown link [text](url) or reference
-#  - preceded by ( or "
-_BARE_URL_RE = re.compile(
-    r'(?<![(<"\[])(?<!\]\()(?<!`)(?<![=\'"])'  # negative lookbehinds
-    r"(https?://[^\s\)<>\]\"`]+)"
-)
-
-# Fenced code block delimiters
-_FENCED_OPEN_RE = re.compile(r"^(`{3,}|~{3,})")
+from madblog.constants import REGEX_BARE_URL, REGEX_FENCED_OPEN
 
 
-class AutolinkPreprocessor(markdown.preprocessors.Preprocessor):
+class AutolinkPreprocessor(  # pylint: disable=too-few-public-methods
+    markdown.preprocessors.Preprocessor
+):
     """Replace bare URLs with <URL> so Markdown renders them as links."""
 
     def run(self, lines):
@@ -31,13 +22,13 @@ class AutolinkPreprocessor(markdown.preprocessors.Preprocessor):
 
         for line in lines:
             # Track fenced code blocks
-            m = _FENCED_OPEN_RE.match(line)
+            m = REGEX_FENCED_OPEN.match(line)
             if m:
                 if fence is None:
                     fence = m.group(1)[0]  # '`' or '~'
                     out.append(line)
                     continue
-                elif line.strip().startswith(fence):
+                if line.strip().startswith(fence):
                     fence = None
                     out.append(line)
                     continue
@@ -55,7 +46,7 @@ class AutolinkPreprocessor(markdown.preprocessors.Preprocessor):
                 if part.startswith("`") and part.endswith("`"):
                     new_parts.append(part)
                 else:
-                    new_parts.append(_BARE_URL_RE.sub(r"<\1>", part))
+                    new_parts.append(REGEX_BARE_URL.sub(r"<\1>", part))
             out.append("".join(new_parts))
 
         return out

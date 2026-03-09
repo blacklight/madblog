@@ -8,7 +8,8 @@ _TASK_ITEM_RE = re.compile(r"^\s*\[(?P<state>[ xX])\]\s+")
 
 
 def _apply_task_marker(parent: ElementTree.Element) -> bool:
-    """Apply task list marker transformation to a single element.
+    """
+    Apply task list marker transformation to a single element.
 
     Returns True if a marker was found and replaced.
     """
@@ -42,7 +43,11 @@ def _add_task_list_class(li: ElementTree.Element):
     li.set("class", " ".join(c for c in classes if c))
 
 
-class TaskListTreeprocessor(markdown.treeprocessors.Treeprocessor):
+class TaskListTreeprocessor(markdown.treeprocessors.Treeprocessor):  # type: ignore
+    """
+    Apply task list marker transformation to list items.
+    """
+
     def run(self, root: ElementTree.Element):
         for li in root.iter("li"):
             if _apply_task_marker(li):
@@ -56,5 +61,9 @@ class TaskListTreeprocessor(markdown.treeprocessors.Treeprocessor):
 
 
 class MarkdownTaskList(markdown.Extension):
+    """
+    Markdown extension to apply task list marker transformation to list items.
+    """
+
     def extendMarkdown(self, md):
         md.treeprocessors.register(TaskListTreeprocessor(md), "task_list", 15)

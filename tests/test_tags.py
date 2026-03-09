@@ -4,13 +4,13 @@ import time
 import unittest
 from pathlib import Path
 
+from madblog.tags import TagIndex, extract_hashtags, normalize_tag, parse_metadata_tags
+
 
 class TagParsingTest(unittest.TestCase):
     """Test the low-level tag extraction and normalization utilities."""
 
     def test_normalize_tag(self):
-        from madblog.tags import normalize_tag
-
         self.assertEqual(normalize_tag("#Foo"), "foo")
         self.assertEqual(normalize_tag("Foo"), "foo")
         self.assertEqual(normalize_tag("#foo_bar"), "foo_bar")
@@ -19,8 +19,6 @@ class TagParsingTest(unittest.TestCase):
         )  # lstrip strips all leading #
 
     def test_parse_metadata_tags(self):
-        from madblog.tags import parse_metadata_tags
-
         self.assertEqual(
             parse_metadata_tags("#tag1, #tag2, tag3"), ["tag1", "tag2", "tag3"]
         )
@@ -28,15 +26,11 @@ class TagParsingTest(unittest.TestCase):
         self.assertEqual(parse_metadata_tags("#A, ,, #B"), ["a", "b"])
 
     def test_extract_hashtags_basic(self):
-        from madblog.tags import extract_hashtags
-
         counts = extract_hashtags("Hello #world, this is #Python and #world again.")
         self.assertEqual(counts["world"], 2)
         self.assertEqual(counts["python"], 1)
 
     def test_extract_hashtags_skips_fenced_code(self):
-        from madblog.tags import extract_hashtags
-
         text = (
             "Before #visible\n"
             "```\n"
@@ -50,16 +44,12 @@ class TagParsingTest(unittest.TestCase):
         self.assertNotIn("hidden_in_code", counts)
 
     def test_extract_hashtags_skips_inline_code(self):
-        from madblog.tags import extract_hashtags
-
         text = "Use `#not_a_tag` but #real_tag is fine."
         counts = extract_hashtags(text)
         self.assertNotIn("not_a_tag", counts)
         self.assertIn("real_tag", counts)
 
     def test_extract_hashtags_skips_mermaid_block(self):
-        from madblog.tags import extract_hashtags
-
         text = (
             "```mermaid\n"
             "graph LR\n"
@@ -73,8 +63,6 @@ class TagParsingTest(unittest.TestCase):
 
     def test_extract_hashtags_skips_url_fragments(self):
         """Hashtags in URLs should not be parsed as tags."""
-        from madblog.tags import extract_hashtags
-
         text = (
             "Check out [this link](https://example.com/page#section) for more info.\n"
             "Also see [another page](http://test.com/docs.html#tests) about #testing.\n"
@@ -95,8 +83,6 @@ class TagParsingTest(unittest.TestCase):
         self.assertEqual(dict(counts), {"testing": 1, "hashtag": 1})
 
     def test_extract_hashtags_no_match_mid_word(self):
-        from madblog.tags import extract_hashtags
-
         text = "foo#bar is not a tag, but #baz is."
         counts = extract_hashtags(text)
         self.assertNotIn("bar", counts)
@@ -124,7 +110,7 @@ class TagPreprocessorTest(unittest.TestCase):
         self.config.link = "https://example.com"
         self.config.title = "Example"
         self.config.description = "Example blog"
-        self.app.pages_dir = str(markdown_dir)
+        self.app.pages_dir = markdown_dir
         self.config.enable_webmentions = False
         self.client = self.app.test_client()
 
@@ -287,7 +273,7 @@ class TagRoutesTest(unittest.TestCase):
         self.config.link = "https://example.com"
         self.config.title = "Example"
         self.config.description = "Example blog"
-        self.app.pages_dir = str(markdown_dir)
+        self.app.pages_dir = markdown_dir
         self.app.mentions_dir = mentions_dir
         self.config.enable_webmentions = False
         self.client = self.app.test_client()
@@ -343,8 +329,6 @@ class TagRoutesTest(unittest.TestCase):
         )
 
         # Build the tag index
-        from madblog.storage.tags import TagIndex
-
         self.app.tag_index = TagIndex(
             content_dir=str(root),
             pages_dir=str(markdown_dir),
@@ -512,8 +496,6 @@ class TagRankingTest(unittest.TestCase):
             encoding="utf-8",
         )
 
-        from madblog.storage.tags import TagIndex
-
         self.tag_index = TagIndex(
             content_dir=str(root),
             pages_dir=str(self.markdown_dir),
@@ -573,8 +555,6 @@ class TagCacheTest(unittest.TestCase):
         )
 
     def test_index_persists_and_reloads(self):
-        from madblog.storage.tags import TagIndex
-
         # Build and save
         idx1 = TagIndex(
             content_dir=str(self.root),
@@ -600,8 +580,6 @@ class TagCacheTest(unittest.TestCase):
         self.assertTrue(any(t[0] == "cached" for t in tags2))
 
     def test_reindex_on_file_change(self):
-        from madblog.storage.tags import TagIndex
-
         idx = TagIndex(
             content_dir=str(self.root),
             pages_dir=str(self.markdown_dir),
@@ -669,8 +647,6 @@ class TagIncrementalBuildTest(unittest.TestCase):
         )
 
     def test_build_skips_unchanged_files(self):
-        from madblog.storage.tags import TagIndex
-
         idx = TagIndex(
             content_dir=str(self.root),
             pages_dir=str(self.markdown_dir),

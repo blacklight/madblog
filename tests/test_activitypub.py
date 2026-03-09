@@ -327,7 +327,7 @@ class ActivityPubContentChangeTest(unittest.TestCase):
         from pubby import ActivityPubHandler
         from pubby.crypto import generate_rsa_keypair
         from pubby.storage.adapters.file import FileActivityPubStorage
-        from madblog.storage.activitypub import ActivityPubIntegration
+        from madblog.activitypub import ActivityPubIntegration
 
         tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(tmpdir.cleanup)
@@ -373,7 +373,7 @@ class ActivityPubContentChangeTest(unittest.TestCase):
         from pubby import ActivityPubHandler
         from pubby.crypto import generate_rsa_keypair
         from pubby.storage.adapters.file import FileActivityPubStorage
-        from madblog.storage.activitypub import ActivityPubIntegration
+        from madblog.activitypub import ActivityPubIntegration
 
         tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(tmpdir.cleanup)
@@ -415,7 +415,7 @@ class ActivityPubContentChangeTest(unittest.TestCase):
         from pubby import ActivityPubHandler
         from pubby.crypto import generate_rsa_keypair
         from pubby.storage.adapters.file import FileActivityPubStorage
-        from madblog.storage.activitypub import ActivityPubIntegration
+        from madblog.activitypub import ActivityPubIntegration
         from madblog.config import config
 
         tmpdir = tempfile.TemporaryDirectory()
@@ -477,7 +477,7 @@ class ActivityPubContentChangeTest(unittest.TestCase):
         from pubby import ActivityPubHandler
         from pubby.crypto import generate_rsa_keypair
         from pubby.storage.adapters.file import FileActivityPubStorage
-        from madblog.storage.activitypub import ActivityPubIntegration
+        from madblog.activitypub import ActivityPubIntegration
         from madblog.config import config
 
         tmpdir = tempfile.TemporaryDirectory()
@@ -610,7 +610,7 @@ class FollowersRouteTest(unittest.TestCase):
         self.config.title = "Example"
         self.config.description = "Example blog"
         self.config.enable_activitypub = True
-        self.app.pages_dir = str(markdown_dir)
+        self.app.pages_dir = markdown_dir
         self.app.mentions_dir = mentions_dir
         self.client = self.app.test_client()
 

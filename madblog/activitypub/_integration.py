@@ -19,19 +19,14 @@ import mimetypes
 from datetime import datetime, timezone
 from pathlib import Path
 
-from markdown import markdown
 from pubby import ActivityPubHandler, Object, extract_mentions
 
-from ...config import config
-from ...activitypub import MarkdownActivityPubMentions
-from ...autolink import MarkdownAutolink
-from ...latex import MarkdownLatex
-from ...mermaid import MarkdownMermaid
-from ...monitor import ChangeType
-from .._sync import StartupSyncMixin
-from ...tasklist import MarkdownTaskList
-from ...toc import MarkdownTocMarkers
-from ...tags import MarkdownTags, extract_hashtags
+from madblog.config import config
+from madblog.constants import REGEX_MARKDOWN_METADATA, REGEX_MERMAID_BLOCK
+from madblog.markdown import render_html
+from madblog.monitor import ChangeType
+from madblog.storage import StartupSyncMixin
+from madblog.tags import extract_hashtags
 
 logger = logging.getLogger(__name__)
 
@@ -45,17 +40,6 @@ class ActivityPubIntegration(StartupSyncMixin):
     :param base_url: Public base URL (e.g. ``https://example.com``).
     """
 
-    _metadata_regex = re.compile(r"^\[//]: # \(([^:]+):\s*(.*)\)\s*$")
-
-    _MARKDOWN_EXTENSIONS = [
-        "fenced_code",
-        "codehilite",
-        "tables",
-        "toc",
-        "attr_list",
-        "sane_lists",
-    ]
-
     def __init__(
         self,
         handler: ActivityPubHandler,
@@ -66,6 +50,7 @@ class ActivityPubIntegration(StartupSyncMixin):
         self.handler = handler
         self.pages_dir = str(Path(pages_dir).resolve())
         self.base_url = base_url.rstrip("/")
+
         # URL where images/assets are actually served (may differ from AP base_url)
         self.content_base_url = (content_base_url or base_url).rstrip("/")
         self.workdir = Path(config.content_dir) / ".madblog" / "activitypub"
@@ -221,7 +206,7 @@ class ActivityPubIntegration(StartupSyncMixin):
                     if not line.strip() or re.match(r"(^---\s*$)|(^#\s+.*)", line):
                         continue
 
-                    m = self._metadata_regex.match(line)
+                    m = REGEX_MARKDOWN_METADATA.match(line)
                     if not m:
                         break
 
@@ -273,26 +258,6 @@ class ActivityPubIntegration(StartupSyncMixin):
                 continue
             cleaned.append(line)
         return "".join(cleaned).strip()
-
-    def _render_html(self, md_text: str) -> str:
-        """Convert markdown to HTML using Madblog's full extension pipeline."""
-        try:
-            return markdown(
-                md_text,
-                extensions=[
-                    *self._MARKDOWN_EXTENSIONS,
-                    MarkdownAutolink(),
-                    MarkdownTaskList(),
-                    MarkdownTocMarkers(),
-                    MarkdownLatex(),
-                    MarkdownMermaid(),
-                    MarkdownTags(),
-                    MarkdownActivityPubMentions(),
-                ],
-            )
-        except Exception as e:
-            logger.warning("Markdown → HTML failed: %s", e)
-            return md_text
 
     # -----------------------------------------------------------------
     # Rendered media extraction (LaTeX / Mermaid → PNG attachments)
@@ -390,12 +355,6 @@ class ActivityPubIntegration(StartupSyncMixin):
                 except OSError:
                     pass
 
-    # Regex to extract ```mermaid ... ``` blocks from raw markdown
-    _MERMAID_SOURCE_RE = re.compile(
-        r"^```mermaid\s*\n(.*?)^```\s*$",
-        re.MULTILINE | re.DOTALL,
-    )
-
     def _extract_media_attachments(
         self, html: str, md_text: str
     ) -> tuple[str, list[dict]]:
@@ -444,7 +403,7 @@ class ActivityPubIntegration(StartupSyncMixin):
         html = self._LATEX_IMG_RE.sub(_replace_latex, html)
 
         # --- Mermaid diagrams (render from source via mmdc) ---
-        mermaid_sources = self._MERMAID_SOURCE_RE.findall(md_text)
+        mermaid_sources = REGEX_MERMAID_BLOCK.findall(md_text)
         mermaid_idx = 0
 
         def _replace_mermaid(m: re.Match) -> str:
@@ -546,7 +505,7 @@ class ActivityPubIntegration(StartupSyncMixin):
             if description:
                 cleaned = f"**{description}**\n\n{cleaned}"
 
-        html = self._render_html(cleaned)
+        html = render_html(cleaned)
 
         # Extract LaTeX/Mermaid rendered media → PNG attachments
         html, attachments = self._extract_media_attachments(html, cleaned)
@@ -563,7 +522,7 @@ class ActivityPubIntegration(StartupSyncMixin):
 
         return html, summary, attachments
 
-    def _build_object(
+    def build_object(
         self,
         filepath: str,
         url: str,
@@ -688,7 +647,7 @@ class ActivityPubIntegration(StartupSyncMixin):
 
     def _handle_publish(self, filepath: str, url: str, actor_url: str) -> None:
         """Build and publish a Create or Update activity."""
-        obj, activity_type = self._build_object(filepath, url, actor_url)
+        obj, activity_type = self.build_object(filepath, url, actor_url)
 
         try:
             self.handler.publish_object(obj, activity_type=activity_type)

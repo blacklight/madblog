@@ -1,21 +1,21 @@
-import re
-
 import markdown
 import markdown.preprocessors
 
-
-_TOC_MARKER_RE = re.compile(
-    r"^\s*(?:\[\[TOC\]\]|\[TOC\]|\{\{\s*TOC\s*\}\}|<!--\s*TOC\s*-->)\s*$",
-    re.IGNORECASE,
-)
+from madblog.constants import REGEX_TOC_MARKER
 
 
-class TocMarkerPreprocessor(markdown.preprocessors.Preprocessor):
+class TocMarkerPreprocessor(  # pylint: disable=too-few-public-methods
+    markdown.preprocessors.Preprocessor
+):
+    """
+    Replace ``[[TOC]]`` markers with ``[TOC]``.
+    """
+
     def run(self, lines):
         replaced = False
         out = []
         for line in lines:
-            if _TOC_MARKER_RE.match(line):
+            if REGEX_TOC_MARKER.match(line):
                 out.append("[TOC]")
                 replaced = True
             else:
@@ -25,6 +25,10 @@ class TocMarkerPreprocessor(markdown.preprocessors.Preprocessor):
 
 
 class MarkdownTocMarkers(markdown.Extension):
+    """
+    Replace ``[[TOC]]`` markers with ``[TOC]``.
+    """
+
     def extendMarkdown(self, md):
         md.preprocessors.register(
             TocMarkerPreprocessor(md),

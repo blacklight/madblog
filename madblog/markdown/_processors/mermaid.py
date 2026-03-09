@@ -14,16 +14,10 @@ from typing import Optional
 import markdown
 import markdown.preprocessors
 
-from .cache import RenderCache
+from madblog.cache import RenderCache
+from madblog.constants import REGEX_MERMAID_BLOCK
 
 logger = logging.getLogger(__name__)
-
-# Match ```mermaid ... ``` blocks in raw Markdown.
-# Runs as a preprocessor so fenced_code never sees these blocks.
-_MERMAID_BLOCK_RE = re.compile(
-    r"^```mermaid\s*\n(.*?)^```\s*$",
-    re.MULTILINE | re.DOTALL,
-)
 
 # Mermaid themes mapped to our light/dark keys.
 _THEMES = {
@@ -44,7 +38,13 @@ _MERMAID_CONFIG = {
 }
 
 
-class MermaidPreprocessor(markdown.preprocessors.Preprocessor):
+class MermaidPreprocessor(  # pylint: disable=too-few-public-methods
+    markdown.preprocessors.Preprocessor
+):
+    """
+    Mermaid preprocessor.
+    """
+
     def __init__(self, *_, **__):
         super().__init__()
         self.cache = RenderCache("mermaid")
@@ -188,7 +188,7 @@ class MermaidPreprocessor(markdown.preprocessors.Preprocessor):
             return lines
 
         page = "\n".join(lines)
-        blocks = list(_MERMAID_BLOCK_RE.finditer(page))
+        blocks = list(REGEX_MERMAID_BLOCK.finditer(page))
         if not blocks:
             return lines
 

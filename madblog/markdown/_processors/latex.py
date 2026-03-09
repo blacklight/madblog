@@ -24,7 +24,7 @@ from subprocess import call as rawcall, PIPE
 import markdown
 import markdown.preprocessors
 
-from .cache import RenderCache
+from madblog.cache import RenderCache
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,13 @@ img_expr = '<img class="latex inline" id="%s" src="data:image/png;base64,%s">'
 block_img_expr = '<div class="latex-block"><img class="latex block" id="%s" src="data:image/png;base64,%s"></div>'
 
 
-class LaTeXPreprocessor(markdown.preprocessors.Preprocessor):
+class LaTeXPreprocessor(  # pylint: disable=too-few-public-methods
+    markdown.preprocessors.Preprocessor
+):
+    """
+    LaTeX Preprocessor
+    """
+
     # Basic LaTex Setup as well as our list of expressions to parse
     tex_preamble = r"""\documentclass[10pt]{article}
 \usepackage{amsmath}

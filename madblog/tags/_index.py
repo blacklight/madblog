@@ -16,13 +16,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from ..tags import extract_hashtags, normalize_tag, parse_metadata_tags
+from madblog.constants import REGEX_HASHTAG, REGEX_MARKDOWN_METADATA
+
+from ._parsers import extract_hashtags, normalize_tag, parse_metadata_tags
 
 logger = logging.getLogger(__name__)
 
 _INDEX_VERSION = 1
-_METADATA_RE = re.compile(r"^\[//]: # \(([^:]+):\s*(.*)\)\s*$")
-_HASHTAG_RE = re.compile(r"(?<!\w)#([A-Za-z0-9_]+)")
 
 
 class _PostTagInfo:
@@ -43,6 +43,7 @@ class _PostTagInfo:
     def __init__(
         self,
         path: str,
+        *,
         title: str = "",
         description: str = "",
         published: str = "",
@@ -106,7 +107,7 @@ def _parse_metadata_fast(filepath: str) -> dict:
             for line in fh:
                 if not line.strip() or re.match(r"(^---\s*$)|(^#\s+.*)", line):
                     continue
-                m = _METADATA_RE.match(line)
+                m = REGEX_MARKDOWN_METADATA.match(line)
                 if not m:
                     break
                 metadata[m.group(1)] = m.group(2)
@@ -126,7 +127,7 @@ def _read_body(filepath: str) -> str:
                 if not past_header:
                     if not line.strip() or re.match(r"(^---\s*$)", line):
                         continue
-                    if _METADATA_RE.match(line):
+                    if REGEX_MARKDOWN_METADATA.match(line):
                         continue
                     past_header = True
 
@@ -143,7 +144,7 @@ def _read_body(filepath: str) -> str:
 def _count_hashtags_in(text: str) -> Dict[str, int]:
     """Count hashtag occurrences in a plain string (no fence-awareness needed)."""
     counts: Counter = Counter()
-    for hit in _HASHTAG_RE.finditer(text):
+    for hit in REGEX_HASHTAG.finditer(text):
         counts[hit.group(1).lower()] += 1
     return dict(counts)
 
@@ -175,7 +176,8 @@ class TagIndex:
     # ------------------------------------------------------------------
 
     def build(self) -> None:
-        """Rebuild from all ``.md`` files under ``pages_dir``.
+        """
+        Rebuild from all ``.md`` files under ``pages_dir``.
 
         Files whose mtime is older than the last index time are
         skipped — their data is reused from the existing on-disk
@@ -344,7 +346,7 @@ class TagIndex:
             for md_file in mentions_in_dir.glob("webmention-*.md"):
                 try:
                     text = md_file.read_text(encoding="utf-8")
-                    for hit in _HASHTAG_RE.finditer(text):
+                    for hit in REGEX_HASHTAG.finditer(text):
                         tag = hit.group(1).lower()
                         tags_mentions[tag] = tags_mentions.get(tag, 0) + 1
                 except OSError:
