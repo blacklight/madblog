@@ -250,3 +250,24 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             response.headers["Language"] = config.language
 
         return response
+
+    def _get_rendered_ap_interactions(self, md_file: str) -> str:
+        """
+        Retrieve ActivityPub interactions for a given page.
+
+        :return: Tuple of (webmentions_html, ap_interactions_html)
+        """
+        ap_interactions = ""
+        ap_integration = getattr(self, "_ap_integration", None)
+        if not ap_integration:
+            return ap_interactions
+
+        ap_object_url = ap_integration.file_to_url(md_file)
+        interactions = self.activitypub_handler.storage.get_interactions(
+            target_resource=ap_object_url
+        )
+
+        if interactions:
+            ap_interactions = self.activitypub_handler.render_interactions(interactions)
+
+        return ap_interactions

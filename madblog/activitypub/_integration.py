@@ -25,7 +25,7 @@ from madblog.config import config
 from madblog.constants import REGEX_MARKDOWN_METADATA, REGEX_MERMAID_BLOCK
 from madblog.markdown import render_html
 from madblog.monitor import ChangeType
-from madblog.storage import StartupSyncMixin
+from madblog.sync import StartupSyncMixin
 from madblog.tags import extract_hashtags
 
 logger = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ class ActivityPubIntegration(StartupSyncMixin):
     # -----------------------------------------------------------------
 
     def _sync_file_to_url(self, filepath: str) -> str:
-        return self._file_to_url(filepath)
+        return self.file_to_url(filepath)
 
     def _sync_notify(self, filepath: str, is_new: bool) -> None:
         change = ChangeType.ADDED if is_new else ChangeType.EDITED
@@ -171,7 +171,7 @@ class ActivityPubIntegration(StartupSyncMixin):
         file_urls.pop(os.path.relpath(filepath, self.pages_dir), None)
         self._save_file_urls(file_urls)
 
-    def _file_to_url(self, filepath: str) -> str:
+    def file_to_url(self, filepath: str) -> str:
         stored = self._get_file_url(filepath)
         if stored:
             return stored
@@ -667,7 +667,7 @@ class ActivityPubIntegration(StartupSyncMixin):
         On create/edit: publish a Note/Article to followers.
         On delete: send a Delete activity.
         """
-        url = self._file_to_url(filepath)
+        url = self.file_to_url(filepath)
         actor_url = f"{self.base_url}{self.handler.actor_path}"
 
         if change_type.value == "deleted":

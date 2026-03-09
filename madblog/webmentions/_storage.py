@@ -21,8 +21,8 @@ from webmentions import (
 )
 from webmentions.storage.adapters.file._watcher import ContentTextFormat
 
-from ...monitor import ChangeType
-from .._sync import StartupSyncMixin
+from madblog.monitor import ChangeType
+from madblog.sync import StartupSyncMixin
 
 logger = logging.getLogger(__name__)
 
@@ -72,24 +72,28 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
     # -- StartupSyncMixin hooks --
 
     def _sync_file_to_url(self, filepath: str) -> str:
-        return self._file_to_url(filepath)
+        return self.file_to_url(filepath)
 
     def _sync_notify(self, filepath: str, is_new: bool) -> None:
         change = ChangeType.ADDED if is_new else ChangeType.EDITED
         self.on_content_change(change, filepath)
 
-    def _file_to_url(self, filepath: str) -> str:
+    def file_to_url(self, filepath: str) -> str:
         """Convert a local file path to its public article URL."""
         rel = os.path.relpath(filepath, self.content_dir).rsplit(".", 1)[0]
         return f"{self.base_url}/article/{rel}"
 
     def on_content_change(self, change_type, filepath: str) -> None:
-        """Callback for :class:`ContentMonitor`: forward file changes to the
-        webmentions handler so that outgoing mentions are (re-)processed."""
+        """
+        Callback for :class:`ContentMonitor`
+
+        Forward file changes to the Webmentions handler so that outgoing
+        mentions are (re-)processed.
+        """
         if self._webmentions_handler is None:
             return
 
-        source_url = self._file_to_url(filepath)
+        source_url = self.file_to_url(filepath)
         ext = os.path.splitext(filepath)[1].lower()
         text_format = self._EXT_FORMAT_MAP.get(ext, ContentTextFormat.MARKDOWN)
 

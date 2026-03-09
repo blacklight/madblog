@@ -1,5 +1,4 @@
 import email.utils
-import hashlib
 import os
 import contextlib
 
@@ -16,21 +15,21 @@ from flask import (
     render_template,
     request,
 )
-from webmentions import WebmentionDirection, WebmentionsHandler
-from webmentions.server.adapters.flask import bind_webmentions
 
 from .activitypub import ActivityPubMixin
+from .cache import CacheMixin
 from .config import config
 from .feeds import FeedsMixin
 from .markdown import MarkdownMixin
-from .monitor import ChangeType, ContentMonitor
-from .notifications import SmtpConfig, build_webmention_email_notifier
-from .storage.mentions import FileWebmentionsStorage
+from .monitor import ChangeType
 from .tags import TagIndex
+from .webmentions import WebmentionsMixin
 from ._sorters import PagesSorter, PagesSortByTime
 
 
-class BlogApp(ActivityPubMixin, FeedsMixin, MarkdownMixin, Flask):
+class BlogApp(  # pylint: disable=too-many-ancestors
+    ActivityPubMixin, CacheMixin, FeedsMixin, MarkdownMixin, WebmentionsMixin, Flask
+):
     """
     The main application class.
     """
@@ -87,55 +86,6 @@ class BlogApp(ActivityPubMixin, FeedsMixin, MarkdownMixin, Flask):
     def _app(self) -> Flask:
         return self
 
-    def _init_webmentions(self):
-        from . import __version__
-
-        self.mentions_dir = (
-            Path(Path(config.content_dir) / "mentions").expanduser().resolve()
-        )
-
-        self.webmentions_storage = FileWebmentionsStorage(
-            content_dir=self.pages_dir,
-            mentions_dir=self.mentions_dir,
-            base_url=config.link,
-            webmentions_hard_delete=config.webmentions_hard_delete,
-        )
-
-        on_mention_processed = None
-        if config.author_email and config.smtp_server:
-            on_mention_processed = build_webmention_email_notifier(
-                recipient=config.author_email,
-                blog_base_url=config.link,
-                smtp=SmtpConfig(
-                    server=config.smtp_server,
-                    port=config.smtp_port,
-                    username=config.smtp_username,
-                    password=config.smtp_password,
-                    starttls=config.smtp_starttls,
-                    enable_starttls_auto=config.smtp_enable_starttls_auto,
-                    sender=config.smtp_sender,
-                ),
-            )
-
-        self.webmentions_handler = WebmentionsHandler(
-            storage=self.webmentions_storage,
-            base_url=config.link,
-            user_agent=f"Madblog/{__version__} ({config.link})",
-            on_mention_processed=on_mention_processed,
-        )
-
-        self.content_monitor = ContentMonitor(
-            root_dir=str(self.pages_dir),
-            throttle_seconds=config.throttle_seconds_on_update,
-        )
-
-        self.webmentions_storage.set_handler(self.webmentions_handler)
-
-        if config.enable_webmentions:
-            bind_webmentions(self, self.webmentions_handler)
-            self.content_monitor.register(self.webmentions_storage.on_content_change)
-            self.webmentions_storage.sync_on_startup()
-
     def _on_content_change_tags(self, _: ChangeType, filepath: str) -> None:
         """Bridge: forward content changes to the tag indexer."""
         self.tag_index.reindex_file(filepath)
@@ -166,101 +116,20 @@ class BlogApp(ActivityPubMixin, FeedsMixin, MarkdownMixin, Flask):
     def stop(self) -> None:
         self.content_monitor.stop()
 
-    @staticmethod
-    def _generate_etag(mtime: float) -> str:
-        """
-        Generate an ETag based on modification time.
-
-        :param mtime: File modification timestamp
-        :return: ETag string (quoted)
-        """
-        # Use hash of timestamp for more compact ETag
-        etag_hash = hashlib.md5(str(mtime).encode()).hexdigest()[:16]
-        return f'"{etag_hash}"'
-
-    def _check_cache_validity(self, file_mtime: float, etag: str) -> bool:
-        """
-        Check if the client's cached version is still valid.
-
-        :param file_mtime: File modification timestamp
-        :param etag: ETag for the current file version
-        :return: True if the client's cache is valid (304 should be returned)
-        """
-        if not has_request_context():
-            return False
-
-        if_modified_since = request.headers.get("If-Modified-Since")
-        if_none_match = request.headers.get("If-None-Match")
-
-        # Check If-Modified-Since
-        if if_modified_since:
-            try:
-                parsed_date = email.utils.parsedate_tz(if_modified_since)
-                if parsed_date:
-                    cached_timestamp = email.utils.mktime_tz(parsed_date)  # type: ignore
-                    if cached_timestamp is not None and cached_timestamp >= file_mtime:
-                        return True
-            except (ValueError, TypeError, OverflowError):
-                pass
-
-        # Check If-None-Match (ETag)
-        if if_none_match:
-            client_etags = [tag.strip() for tag in if_none_match.split(",")]
-            if etag in client_etags or "*" in client_etags:
-                return True
-
-        return False
-
-    def _make_304_response(
-        self,
-        last_modified: str,
-        etag: str,
-        metadata: dict,
-    ) -> Response:
-        """
-        Create a 304 Not Modified response with appropriate headers.
-        """
-        response = make_response("", 304)
-        response.headers["Last-Modified"] = last_modified
-        response.headers["ETag"] = etag
-
-        article_language = metadata.get("language")
-        if article_language:
-            response.headers["Language"] = article_language
-        elif config.language:
-            response.headers["Language"] = config.language
-
-        return response
-
     def _get_page_interactions(
         self,
         md_file: str,
         metadata: dict,
     ) -> Tuple[str, str]:
         """
-        Retrieve webmentions and ActivityPub interactions for a page.
+        Retrieve Webmentions and ActivityPub interactions for a page.
 
         :return: Tuple of (webmentions_html, ap_interactions_html)
         """
-        mentions = self.webmentions_handler.render_webmentions(
-            self.webmentions_handler.retrieve_stored_webmentions(
-                config.link + metadata.get("uri", ""),
-                direction=WebmentionDirection.IN,
-            )
+        return (
+            self._get_rendered_webmentions(metadata),
+            self._get_rendered_ap_interactions(md_file),
         )
-
-        ap_interactions = ""
-        if hasattr(self, "_ap_integration"):
-            ap_object_url = self._ap_integration._file_to_url(md_file)
-            interactions = self.activitypub_handler.storage.get_interactions(
-                target_resource=ap_object_url
-            )
-            if interactions:
-                ap_interactions = self.activitypub_handler.render_interactions(
-                    interactions
-                )
-
-        return mentions, ap_interactions
 
     def _set_page_response_headers(
         self,
