@@ -525,6 +525,15 @@ server {
         proxy_pass http://madblog;
     }
 
+    # The well-known endpoint above links to /nodeinfo/2.1 on this domain;
+    # proxy the actual document so crawlers can follow the link.
+    location /nodeinfo/ {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass http://madblog;
+    }
+
     # Required for URL-based article search on Mastodon.
     # When someone searches for an article URL on the blog domain, Madblog
     # redirects AP clients to the canonical object URL on the AP domain.
