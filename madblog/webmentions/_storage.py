@@ -101,22 +101,32 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
 
         if change_type.value == "deleted":
             self._sync_unmark(source_url)
-            self._webmentions_handler.process_outgoing_webmentions(
-                source_url,
-                text="",
-                text_format=text_format,
-            )
+            try:
+                self._webmentions_handler.process_outgoing_webmentions(
+                    source_url,
+                    text="",
+                    text_format=text_format,
+                )
+            except ValueError as e:
+                logger.warning(
+                    "Skipping outgoing webmentions for %s: %s", source_url, e
+                )
         else:
             try:
                 with open(filepath, "r", encoding="utf-8") as fh:
                     text = fh.read()
             except OSError:
                 return
-            self._webmentions_handler.process_outgoing_webmentions(
-                source_url,
-                text=text,
-                text_format=text_format,
-            )
+            try:
+                self._webmentions_handler.process_outgoing_webmentions(
+                    source_url,
+                    text=text,
+                    text_format=text_format,
+                )
+            except ValueError as e:
+                logger.warning(
+                    "Skipping outgoing webmentions for %s: %s", source_url, e
+                )
             try:
                 mtime = os.path.getmtime(filepath)
             except OSError:
