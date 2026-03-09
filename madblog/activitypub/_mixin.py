@@ -81,6 +81,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
         key_path = os.path.abspath(os.path.expanduser(key_path))
         if not os.path.isfile(key_path):
+            Path(key_path).parent.mkdir(parents=True, exist_ok=True)
             private_key, _ = generate_rsa_keypair()
             pem = export_private_key_pem(private_key)
             with open(key_path, "w") as f:
