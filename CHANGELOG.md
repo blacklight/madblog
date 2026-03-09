@@ -3,6 +3,17 @@
 ## Unreleased
 
 **Added**
+- **Mastodon-compatible API**:
+  - Read-only subset of the Mastodon REST API, automatically registered when
+    ActivityPub is enabled. Powered by Pubby's `bind_mastodon_api()` adapter.
+  - Pubby-provided endpoints: `/api/v1/instance`, `/api/v2/instance`,
+    `/api/v1/instance/peers`, `/api/v1/accounts/lookup`,
+    `/api/v1/accounts/:id`, `/api/v1/accounts/:id/statuses`,
+    `/api/v1/accounts/:id/followers`, `/api/v1/statuses/:id`,
+    `/nodeinfo/2.0[.json]`, `/nodeinfo/2.1.json`.
+  - Madblog-specific endpoints: `/api/v1/tags/:tag` (tag entity with 7-day
+    usage history from TagIndex), `/api/v2/search` (search accounts, hashtags,
+    and statuses).
 - **Moderation**:
   - New `blocked_actors` configuration option to block unwanted Webmentions
     and ActivityPub interactions by domain, URL, FQN, or regular expression.

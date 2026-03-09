@@ -12,6 +12,7 @@ from flask import Flask, Response, has_request_context, make_response, request
 from pubby import ActivityPubHandler
 from pubby.storage.adapters.file import FileActivityPubStorage
 from pubby.server.adapters.flask import bind_activitypub
+from pubby.server.adapters.flask_mastodon import bind_mastodon_api
 
 from ..config import config
 from ..moderation import BlocklistCache, is_blocked
@@ -205,6 +206,15 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
         app: Flask = self  # type: ignore
         bind_activitypub(app, self.activitypub_handler)
+        bind_mastodon_api(
+            app,
+            self.activitypub_handler,
+            title=config.title,
+            description=config.description,
+            contact_email=config.author_email or "",
+            software_name="madblog",
+            software_version=__version__,
+        )
         self._ap_integration = ActivityPubIntegration(
             handler=self.activitypub_handler,
             pages_dir=str(self.pages_dir),

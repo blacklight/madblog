@@ -446,6 +446,142 @@ def tag_posts_route(tag: str):
     return response
 
 
+# ---------------------------------------------------------------------------
+# Mastodon-compatible API — Madblog-specific endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/v1/tags/<tag>", methods=["GET"])
+def mastodon_tag_route(tag: str):
+    """Return a Mastodon Tag entity with usage history from the TagIndex."""
+    from .tags import normalize_tag as _normalize_tag
+
+    canonical = _normalize_tag(tag)
+    posts = app.tag_index.get_posts_for_tag(canonical)
+
+    if not posts:
+        return jsonify({"error": "Record not found"}), 404
+
+    # Build per-day usage history (last 7 days)
+    from collections import Counter
+
+    today = datetime.date.today()
+    day_counts: Counter = Counter()
+    for post in posts:
+        pub = post.get("published", "")
+        if not pub:
+            continue
+        try:
+            pub_date = datetime.date.fromisoformat(str(pub)[:10])
+        except (ValueError, TypeError):
+            continue
+        day_counts[pub_date] += 1
+
+    history = []
+    for i in range(7):
+        day = today - datetime.timedelta(days=i)
+        count = day_counts.get(day, 0)
+        history.append(
+            {
+                "day": str(
+                    int(
+                        datetime.datetime.combine(
+                            day, datetime.time.min, tzinfo=datetime.timezone.utc
+                        ).timestamp()
+                    )
+                ),
+                "uses": str(count),
+                "accounts": str(min(count, 1)),
+            }
+        )
+
+    base_url = (config.link or "").rstrip("/")
+    return jsonify(
+        {
+            "name": canonical,
+            "url": f"{base_url}/tags/{canonical}",
+            "history": history,
+            "following": False,
+        }
+    )
+
+
+@app.route("/api/v2/search", methods=["GET"])
+def mastodon_search_route():
+    """Mastodon-compatible search endpoint (read-only, local data only)."""
+    q = (request.args.get("q") or "").strip()
+    search_type = request.args.get("type", "")
+    limit = min(int(request.args.get("limit", 20)), 40)
+
+    if not q:
+        return jsonify({"accounts": [], "statuses": [], "hashtags": []})
+
+    accounts = []
+    statuses = []
+    hashtags = []
+
+    q_lower = q.lower()
+
+    # -- accounts --
+    if not search_type or search_type == "accounts":
+        if config.enable_activitypub and hasattr(app, "activitypub_handler"):
+            from pubby.server.mastodon import actor_to_account
+
+            username = config.activitypub_username.lower()
+            name = (
+                config.activitypub_name or config.author or config.title or ""
+            ).lower()
+            if q_lower in username or q_lower in name:
+                accounts.append(actor_to_account(app.activitypub_handler))
+
+    # -- hashtags --
+    if not search_type or search_type == "hashtags":
+        from .tags import normalize_tag as _normalize_tag
+
+        all_tags = app.tag_index.get_all_tags()
+        prefix = _normalize_tag(q)
+        for tag_name, _count in all_tags:
+            if tag_name.startswith(prefix):
+                base_url = (config.link or "").rstrip("/")
+                hashtags.append(
+                    {
+                        "name": tag_name,
+                        "url": f"{base_url}/tags/{tag_name}",
+                        "history": [],
+                    }
+                )
+            if len(hashtags) >= limit:
+                break
+
+    # -- statuses --
+    if not search_type or search_type == "statuses":
+        if config.enable_activitypub and hasattr(app, "activitypub_handler"):
+            from pubby.server.mastodon import activity_to_status, actor_to_account
+
+            handler = app.activitypub_handler
+            account = actor_to_account(handler)
+            activities = handler.storage.get_activities(limit=10000, offset=0)
+            for act in activities:
+                obj = act.get("object", {})
+                if isinstance(obj, dict):
+                    content = (obj.get("content") or "").lower()
+                    name = (obj.get("name") or "").lower()
+                    if q_lower in content or q_lower in name:
+                        statuses.append(
+                            activity_to_status(act, handler, account=account)
+                        )
+                if len(statuses) >= limit:
+                    break
+
+    return jsonify(
+        {
+            "accounts": accounts[:limit],
+            "statuses": statuses[:limit],
+            "hashtags": hashtags[:limit],
+        }
+    )
+
+
 @app.route("/followers", methods=["GET"])
 def followers_route():
     from flask import make_response, render_template

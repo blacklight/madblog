@@ -575,7 +575,33 @@ Great article by @alice@mastodon.social about federation!
 | `activitypub_manually_approves_followers` | `MADBLOG_ACTIVITYPUB_MANUALLY_APPROVES_FOLLOWERS` | `false` | Require manual approval for new followers. |
 | `activitypub_quote_control` | `MADBLOG_ACTIVITYPUB_QUOTE_CONTROL` | `public` | Quote policy for ActivityPub posts. Mastodon will refuse quote-boosts unless set to `public`. |
 
-## RSS syndication
+### Mastodon-compatible API
+
+When ActivityPub is enabled, Madblog exposes a read-only subset of the
+[Mastodon REST API](https://docs.joinmastodon.org/methods/) so that
+Mastodon-compatible clients and crawlers can discover the instance, look up the
+blog actor, list published statuses, and search content.
+
+No additional configuration is needed — the API is automatically registered
+alongside the ActivityPub endpoints and derives all settings from the existing
+`config.yaml`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/instance` | Instance metadata (v1) |
+| `GET` | `/api/v2/instance` | Instance metadata (v2) |
+| `GET` | `/api/v1/instance/peers` | Known peer domains |
+| `GET` | `/api/v1/accounts/lookup` | Resolve `acct:user@domain` to Account |
+| `GET` | `/api/v1/accounts/:id` | Account by ID (`1` = local actor) |
+| `GET` | `/api/v1/accounts/:id/statuses` | Paginated statuses |
+| `GET` | `/api/v1/accounts/:id/followers` | Paginated followers |
+| `GET` | `/api/v1/statuses/:id` | Single status by ID |
+| `GET` | `/api/v1/tags/:tag` | Tag entity with 7-day usage history |
+| `GET` | `/api/v2/search` | Search accounts, hashtags, and statuses |
+| `GET` | `/nodeinfo/2.0[.json]` | NodeInfo 2.0 aliases |
+| `GET` | `/nodeinfo/2.1.json` | NodeInfo 2.1 `.json` alias |
+
+## Feed syndication
 
 Feeds for the blog are provided under the `/feed.<type>` URL, with `type` one of `atom` or `rss` (e.g. `/feed.atom` or
 `/feed.rss`).
