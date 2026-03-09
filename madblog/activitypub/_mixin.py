@@ -233,7 +233,10 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             except Exception:
                 logger.warning("Failed to publish actor profile update", exc_info=True)
 
-        threading.Thread(target=_ap_startup_tasks, daemon=True).start()
+        self._ap_startup_thread = threading.Thread(
+            target=_ap_startup_tasks, daemon=True
+        )
+        self._ap_startup_thread.start()
 
     def _client_prefers_activitypub(self) -> bool:
         """

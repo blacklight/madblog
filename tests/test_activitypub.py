@@ -36,6 +36,33 @@ class ActivityPubConfigTest(unittest.TestCase):
         self.assertFalse(cfg.activitypub_manually_approves_followers)
         self.assertFalse(cfg.activitypub_description_only)
 
+    def test_actor_url_single_domain(self):
+        from madblog.config import Config
+
+        cfg = Config(
+            enable_activitypub=True,
+            link="https://example.com",
+            activitypub_username="blog",
+        )
+        self.assertEqual(cfg.activitypub_actor_url, "https://example.com/ap/actor")
+
+    def test_actor_url_split_domain(self):
+        from madblog.config import Config
+
+        cfg = Config(
+            enable_activitypub=True,
+            link="https://blog.example.com",
+            activitypub_link="https://ap.example.org",
+            activitypub_username="blog",
+        )
+        self.assertEqual(cfg.activitypub_actor_url, "https://ap.example.org/ap/actor")
+
+    def test_actor_url_none_when_disabled(self):
+        from madblog.config import Config
+
+        cfg = Config(enable_activitypub=False)
+        self.assertIsNone(cfg.activitypub_actor_url)
+
     def test_env_vars(self):
         from madblog.config import config, _init_config_from_env
 
@@ -438,6 +465,11 @@ class ActivityPubEnabledTest(unittest.TestCase):
                 view_mode="cards",
             )
 
+        # AP actor URL (the URL Mastodon caches and checks for verification)
+        self.assertIn(
+            '<link rel="me" href="https://ap.example.org/ap/actor">',
+            html,
+        )
         # Blog-domain links (always present)
         self.assertIn(
             '<link rel="me" href="https://blog.example.com/@blog">',

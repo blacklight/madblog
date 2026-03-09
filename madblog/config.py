@@ -104,6 +104,14 @@ class Config:
         return f"{base}/@{self.activitypub_username}"
 
     @property
+    def activitypub_actor_url(self) -> Optional[str]:
+        if not self.enable_activitypub:
+            return None
+
+        base = (self.activitypub_link or self.link).rstrip("/")
+        return f"{base}/ap/actor"
+
+    @property
     def webmention_url(self) -> Optional[str]:
         from flask import request
 

@@ -39,6 +39,7 @@
     {% endif %}
     {% if config.activitypub_profile_url %}
     <!-- ActivityPub actor profile links for Mastodon verification -->
+    <link rel="me" href="{{ config.activitypub_actor_url }}">
     <link rel="me" href="{{ config.activitypub_profile_url }}">
     <link rel="me" href="{{ config.link.rstrip('/') }}">
     {% if config.activitypub_link and config.activitypub_link.rstrip('/') != config.link.rstrip('/') %}
