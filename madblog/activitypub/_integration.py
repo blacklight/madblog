@@ -525,14 +525,20 @@ class ActivityPubIntegration(StartupSyncMixin):
     def build_object(
         self,
         filepath: str,
-        ap_url: str,
-        public_url: str,
+        url: str,
         actor_url: str,
+        public_url: str | None = None,
     ) -> tuple[Object, str]:
         """
         Parse a markdown file and return a fully-populated
         ``(Object, activity_type)`` pair ready for publishing.
+
+        :param url: Canonical AP object ``id`` (must share origin with actor).
+        :param public_url: Human-facing URL stored in the ``url`` field of the
+            AP object.  Defaults to *url* when the AP domain and blog domain
+            are the same.
         """
+        public_url = public_url or url
         metadata = self._parse_metadata(filepath)
         title = metadata.get("title") or self._extract_title(filepath)
         description = metadata.get("description", "")
@@ -574,7 +580,7 @@ class ActivityPubIntegration(StartupSyncMixin):
             f'href="{self.content_base_url}/tags/',
         )
 
-        activity_type = "Update" if self._is_published(ap_url) else "Create"
+        activity_type = "Update" if self._is_published(url) else "Create"
 
         quote_control = None
         quote_policy = None
@@ -598,7 +604,7 @@ class ActivityPubIntegration(StartupSyncMixin):
             interaction_policy = {"canQuote": can_quote}
 
         obj = Object(
-            id=ap_url,
+            id=url,
             type=config.activitypub_object_type,
             name=title,
             content=content,
@@ -631,7 +637,7 @@ class ActivityPubIntegration(StartupSyncMixin):
     def _handle_delete(self, filepath: str, url: str, actor_url: str) -> None:
         """Publish a Delete activity and clean up caches."""
         base_rel = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
-        self._mark_as_deleted(f"{self.base_url}/article/{base_rel}")
+        self._mark_as_deleted(f"{self.content_base_url}/article/{base_rel}")
         self._remove_file_url(filepath)
         self._sync_unmark(url)
 
@@ -653,7 +659,9 @@ class ActivityPubIntegration(StartupSyncMixin):
         """Build and publish a Create or Update activity."""
         base_rel = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
         public_url = f"{self.content_base_url}/article/{base_rel}"
-        obj, activity_type = self.build_object(filepath, url, public_url, actor_url)
+        obj, activity_type = self.build_object(
+            filepath, url, actor_url, public_url=public_url
+        )
 
         try:
             self.handler.publish_object(obj, activity_type=activity_type)

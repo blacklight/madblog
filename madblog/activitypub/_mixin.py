@@ -270,16 +270,32 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         if not accepts_ap:
             return None
 
+        ap_url = self._ap_integration.file_to_url(md_file)
+
+        # When the AP domain differs from the blog domain and the request
+        # arrived at the blog domain, redirect AP clients to the canonical
+        # AP-domain URL.  Mastodon follows redirects during URL resolution,
+        # so the remote instance will fetch the object at its canonical ``id``
+        # and pass the origin check.
+        ap_link = (config.activitypub_link or "").rstrip("/")
+        blog_link = (config.link or "").rstrip("/")
+        if ap_link and ap_link != blog_link:
+            ap_host = urlparse(ap_link).hostname
+            request_host = request.host.split(":")[0]
+            if request_host != ap_host:
+                from flask import redirect
+
+                return redirect(ap_url, code=302)  # type: ignore
+
         from pubby._model import AP_CONTEXT
 
         base_url = config.link or request.host_url.rstrip("/")
         public_url = base_url.rstrip("/") + metadata.get("uri", "")
-        ap_url = self._ap_integration.file_to_url(md_file)
         obj, _ = self._ap_integration.build_object(
             md_file,
             ap_url,
-            public_url,
             self.activitypub_handler.actor_id,
+            public_url=public_url,
         )
         doc = obj.to_dict()
         doc["@context"] = AP_CONTEXT

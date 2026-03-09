@@ -326,8 +326,8 @@ class ActivityPubEnabledTest(unittest.TestCase):
         self.assertEqual(data["id"], "https://example.com/article/test-post")
         self.assertEqual(data.get("url"), "https://example.com/article/test-post")
 
-    @skip_if_no_pubby
-    def test_article_activitypub_json_id_uses_activitypub_link_when_configured(self):
+    def _make_cross_domain_app(self):
+        """Create a BlogApp with split AP / blog domains and a test post."""
         from madblog.config import config
         from madblog.app import BlogApp
 
@@ -353,23 +353,58 @@ class ActivityPubEnabledTest(unittest.TestCase):
         )
 
         config.content_dir = str(root)
-
         config.link = "https://blog.example.com"
         config.activitypub_link = "https://ap.example.org"
         config.activitypub_domain = "example.org"
 
-        app = BlogApp(__name__)
+        return BlogApp(__name__)
+
+    @skip_if_no_pubby
+    def test_article_ap_json_via_ap_domain_proxy(self):
+        """When the request arrives via the AP domain proxy, serve AP JSON."""
+        app = self._make_cross_domain_app()
+
+        # Simulate a proxied request with Host: ap.example.org
         with app.test_request_context(
             "/article/test-post",
-            headers={"Accept": "application/activity+json"},
+            headers={
+                "Accept": "application/activity+json",
+                "Host": "ap.example.org",
+            },
         ):
             resp = app.get_page("test-post")
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.mimetype, "application/activity+json")
         data = resp.get_json()
+        # Object id must be on the AP domain (same origin as actor,
+        # required by Mastodon's origin check during inbox delivery).
         self.assertEqual(data["id"], "https://ap.example.org/article/test-post")
+        # The human-facing url points to the blog domain.
         self.assertEqual(data.get("url"), "https://blog.example.com/article/test-post")
+        # The actor (attributedTo) remains on the AP domain
+        self.assertEqual(data.get("attributedTo"), "https://ap.example.org/ap/actor")
+
+    @skip_if_no_pubby
+    def test_article_ap_request_at_blog_domain_redirects_to_ap_domain(self):
+        """When an AP client hits the blog domain, redirect to the AP domain."""
+        app = self._make_cross_domain_app()
+
+        # Request arrives at the blog domain (no proxy)
+        with app.test_request_context(
+            "/article/test-post",
+            headers={
+                "Accept": "application/activity+json",
+                "Host": "blog.example.com",
+            },
+        ):
+            resp = app.get_page("test-post")
+
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(
+            resp.headers["Location"],
+            "https://ap.example.org/article/test-post",
+        )
 
 
 class ActivityPubKeyPermissionsTest(unittest.TestCase):
@@ -629,7 +664,8 @@ class ActivityPubContentChangeTest(unittest.TestCase):
         handler.publish_object.assert_called_once()
         obj = handler.publish_object.call_args[0][0]
 
-        # Article ID should use AP base_url
+        # Article ID should use AP base_url (same origin as actor,
+        # required by Mastodon's origin check during inbox delivery).
         self.assertTrue(obj.id.startswith("https://ap.example.org/"))
 
         # If there are generated image attachments, they should use content_base_url
@@ -640,6 +676,65 @@ class ActivityPubContentChangeTest(unittest.TestCase):
                     att["url"].startswith("https://ap.example.org/"),
                     f"Attachment URL should use content_base_url: {att['url']}",
                 )
+
+
+class ActivityPubPublishSplitDomainTest(unittest.TestCase):
+    """Published objects use AP domain for id and blog domain for url."""
+
+    def setUp(self):
+        from madblog.monitor import ChangeType
+
+        self.ChangeType = ChangeType
+
+    @skip_if_no_pubby
+    def test_published_object_id_on_ap_domain_url_on_blog_domain(self):
+        from pubby import ActivityPubHandler
+        from pubby.crypto import generate_rsa_keypair
+        from pubby.storage.adapters.file import FileActivityPubStorage
+        from madblog.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+
+        root = Path(tmpdir.name)
+        pages_dir = root / "pages"
+        pages_dir.mkdir()
+        ap_dir = root / "ap"
+
+        config.content_dir = str(root)
+
+        priv, _ = generate_rsa_keypair()
+        storage = FileActivityPubStorage(data_dir=str(ap_dir))
+        handler = ActivityPubHandler(
+            storage=storage,
+            actor_config={
+                "base_url": "https://ap.example.org",
+                "username": "blog",
+            },
+            private_key=priv,
+        )
+
+        integration = ActivityPubIntegration(
+            handler=handler,
+            pages_dir=str(pages_dir),
+            base_url="https://ap.example.org",
+            content_base_url="https://blog.example.com",
+        )
+
+        test_file = pages_dir / "hello.md"
+        test_file.write_text("[//]: # (title: Hello)\n\n# Hello\n\nWorld.\n")
+
+        handler.publish_object = MagicMock()
+        integration.on_content_change(self.ChangeType.ADDED, str(test_file))
+
+        handler.publish_object.assert_called_once()
+        obj = handler.publish_object.call_args[0][0]
+
+        # id must be on the AP domain (same origin as actor) for delivery
+        self.assertEqual(obj.id, "https://ap.example.org/article/hello")
+        # url must be on the blog domain (human-facing, StatusFinder lookup)
+        self.assertEqual(obj.url, "https://blog.example.com/article/hello")
 
 
 class ActivityPubNotificationsTest(unittest.TestCase):
