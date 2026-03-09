@@ -45,7 +45,7 @@ docker build -f docker/minimal.Dockerfile -t madblog .
 
 #### Full installation
 
-Includes all plugins - including ActivityPub, LaTeX and Mermaid; &gt; 2 GB in size.
+Includes all plugins - including LaTeX and Mermaid; &gt; 2 GB in size.
 
 ```shell
 git clone https://git.fabiomanganiello.com/madblog
@@ -331,11 +331,9 @@ Madblog supports [ActivityPub](https://www.w3.org/TR/activitypub/) federation,
 allowing your blog posts to appear on Mastodon, Pleroma, and other fediverse
 platforms. Followers receive new and updated articles directly in their timelines.
 
-Install with the ActivityPub extra:
-
-```shell
-pip install 'madblog[activitypub]'
-```
+It uses [Pubby](https://git.fabiomanganiello.com/pubby) (also developed by me,
+and initially developed for this project) to easily add ActivityPub bindings to
+the Web application.
 
 Enable it in your `config.yaml`:
 
@@ -354,8 +352,7 @@ export MADBLOG_ACTIVITYPUB_PRIVATE_KEY_PATH=/path/to/private_key.pem
 
 ### Using a different domain for your ActivityPub handle
 
-Madblog (via the `pubby` integration) uses the configured `link` as the public
-base URL for ActivityPub.
+Madblog uses the configured `link` as the public base URL for ActivityPub.
 
 That means:
 

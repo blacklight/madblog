@@ -2,6 +2,7 @@ feedgen2
 feedparser
 flask
 markdown
+pubby
 pygments
 pyyaml
 requests

@@ -9,9 +9,13 @@ from logging import getLogger
 from pathlib import Path
 
 from flask import Flask, Response, has_request_context, make_response, request
+from pubby import ActivityPubHandler
+from pubby.storage.adapters.file import FileActivityPubStorage
+from pubby.server.adapters.flask import bind_activitypub
 
 from ..config import config
 from ..monitor import ContentMonitor
+from ._integration import ActivityPubIntegration
 from ._notifications import (
     SmtpConfig,
     build_activitypub_email_notifier,
@@ -96,18 +100,6 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
     def _init_activitypub(self):
         if not config.enable_activitypub:
-            return
-
-        try:
-            from pubby import ActivityPubHandler
-            from pubby.storage.adapters.file import FileActivityPubStorage
-            from pubby.server.adapters.flask import bind_activitypub
-            from ._integration import ActivityPubIntegration
-        except ImportError:
-            logger.error(
-                "ActivityPub is enabled but pubby is not installed. "
-                "Install it with: pip install 'madblog[activitypub]'"
-            )
             return
 
         from madblog import __version__
