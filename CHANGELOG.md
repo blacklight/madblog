@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **ActivityPub**:
+  - Added `rel=me` links for separate ActivityPub domains to ensure compatibility with Mastodon and other federated platforms.
+  - Make `pubby` a required dependency. ActivityPub integration is now natively provided by Madblog.
+
+## 0.8.3
+
 **Fixed**
 - **Webmentions**:
   - Store Webmention sync cache under `root_dir` to ensure consistency and avoid permission issues.
