@@ -1,4 +1,4 @@
-# madblog
+![Madblog logo](https://s3.fabiomanganiello.com/fabio/img/madblog.png)
 
 [![Build Status](https://ci-cd.platypush.tech/api/badges/blacklight/madblog/status.svg)](https://ci-cd.platypush.tech/blacklight/madblog)
 
