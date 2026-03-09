@@ -14,6 +14,7 @@ from pubby.storage.adapters.file import FileActivityPubStorage
 from pubby.server.adapters.flask import bind_activitypub
 
 from ..config import config
+from ..moderation import is_blocked
 from ..monitor import ContentMonitor
 from ._integration import ActivityPubIntegration
 from ._notifications import (
@@ -200,6 +201,8 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             software_version=__version__,
         )
 
+        self._install_activitypub_moderation()
+
         app: Flask = self  # type: ignore
         bind_activitypub(app, self.activitypub_handler)
         self._ap_integration = ActivityPubIntegration(
@@ -306,6 +309,23 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
         return response
 
+    def _install_activitypub_moderation(self):
+        """
+        Wrap the inbox activity processor so that activities from
+        blocked actors are silently dropped before signature
+        verification, storage, or Accept delivery.
+        """
+        original = self.activitypub_handler.process_inbox_activity
+
+        def _filtered_process(activity_data: dict, *args, **kwargs):
+            actor = activity_data.get("actor", "")
+            if actor and is_blocked(actor, config.blocked_actors):
+                logger.info("Blocked ActivityPub activity from %s", actor)
+                return None
+            return original(activity_data, *args, **kwargs)
+
+        self.activitypub_handler.process_inbox_activity = _filtered_process
+
     def _get_rendered_ap_interactions(self, md_file: str) -> str:
         """
         Retrieve ActivityPub interactions for a given page.
@@ -321,6 +341,13 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         interactions = self.activitypub_handler.storage.get_interactions(
             target_resource=ap_object_url
         )
+
+        if config.blocked_actors:
+            interactions = [
+                i
+                for i in interactions
+                if not is_blocked(i.source_actor_id, config.blocked_actors)
+            ]
 
         if interactions:
             ap_interactions = self.activitypub_handler.render_interactions(interactions)

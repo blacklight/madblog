@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**Added**
+- **Moderation**:
+  - New `blocked_actors` configuration option to block unwanted Webmentions
+    and ActivityPub interactions by domain, URL, FQN, or regular expression.
+  - Blocked actors are rejected at ingestion time (before storage or Accept
+    delivery) and also filtered at render time for pre-existing data.
+  - Configurable via `config.yaml` (list) or `MADBLOG_BLOCKED_ACTORS`
+    environment variable (comma/space-separated).
+
 **Fixed**
 - **Webmentions**:
   - Ignore malformed URLs when processing outgoing mentions.

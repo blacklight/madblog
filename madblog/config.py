@@ -68,6 +68,9 @@ class Config:
     activitypub_quote_control: str = "public"
     activitypub_auto_approve_quotes: bool = True
 
+    # Moderation
+    blocked_actors: List[str] = field(default_factory=list)
+
     @property
     def templates_dir(self) -> str:
         return os.path.join(self.basedir, "templates")
@@ -250,6 +253,10 @@ def _init_config_from_file(config_file: str):
         )
     config.categories = cfg.get("categories", [])
 
+    # Moderation
+    if cfg.get("blocked_actors"):
+        config.blocked_actors = list(cfg["blocked_actors"])
+
 
 def _init_config_from_env():
     if os.getenv("MADBLOG_TITLE"):
@@ -378,6 +385,12 @@ def _init_config_from_env():
         config.activitypub_auto_approve_quotes = (
             os.environ["MADBLOG_ACTIVITYPUB_AUTO_APPROVE_QUOTES"] == "1"
         )
+    # Moderation
+    if os.getenv("MADBLOG_BLOCKED_ACTORS"):
+        config.blocked_actors = re.split(
+            r"[,\s]+", os.environ["MADBLOG_BLOCKED_ACTORS"].strip()
+        )
+
     if os.getenv("MADBLOG_ACTIVITYPUB_PROFILE_FIELD_NAME"):
         config.activitypub_profile_field_name = os.environ[
             "MADBLOG_ACTIVITYPUB_PROFILE_FIELD_NAME"

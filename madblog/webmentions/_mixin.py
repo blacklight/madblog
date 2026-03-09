@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -7,10 +8,13 @@ from webmentions import WebmentionDirection, WebmentionsHandler
 from webmentions.server.adapters.flask import bind_webmentions
 
 from madblog.config import config
+from madblog.moderation import is_blocked
 from madblog.monitor import ContentMonitor
 
 from ._notifications import SmtpConfig, build_webmention_email_notifier
 from ._storage import FileWebmentionsStorage
+
+logger = logging.getLogger(__name__)
 
 
 class WebmentionsMixin(ABC):  # pylint: disable=too-few-public-methods
@@ -68,20 +72,44 @@ class WebmentionsMixin(ABC):  # pylint: disable=too-few-public-methods
         )
 
         self.webmentions_storage.set_handler(self.webmentions_handler)
+        self._install_webmention_moderation()
 
         if config.enable_webmentions:
             bind_webmentions(self._app, self.webmentions_handler)
             self.content_monitor.register(self.webmentions_storage.on_content_change)
             self.webmentions_storage.sync_on_startup()
 
+    def _install_webmention_moderation(self):
+        """
+        Wrap the incoming webmention processor so that mentions from
+        blocked actors are silently dropped before any storage or
+        network I/O.
+        """
+        original = self.webmentions_handler.process_incoming_webmention
+
+        def _filtered_process(source_url, target_url):
+            if source_url and is_blocked(source_url, config.blocked_actors):
+                logger.info("Blocked webmention from %s", source_url)
+                return None
+            return original(source_url, target_url)
+
+        self.webmentions_handler.process_incoming_webmention = _filtered_process
+
     def _get_rendered_webmentions(self, metadata: dict) -> Markup:
         """
         Retrieve a Markup object with rendered Webmentions for the given page
         metadata.
         """
-        return self.webmentions_handler.render_webmentions(
-            self.webmentions_handler.retrieve_stored_webmentions(
-                config.link + metadata.get("uri", ""),
-                direction=WebmentionDirection.IN,
-            )
+        mentions = self.webmentions_handler.retrieve_stored_webmentions(
+            config.link + metadata.get("uri", ""),
+            direction=WebmentionDirection.IN,
         )
+
+        if config.blocked_actors:
+            mentions = [
+                m
+                for m in mentions
+                if not is_blocked(m.source, config.blocked_actors)
+            ]
+
+        return self.webmentions_handler.render_webmentions(mentions)

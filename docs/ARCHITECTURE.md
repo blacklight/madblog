@@ -250,6 +250,12 @@ external dependency `pubby` is installed.
   - Generic mtime-tracking for “sync on startup” behavior.
   - Used by Webmentions storage and ActivityPub integration.
 
+- `madblog/moderation.py`
+  - Shared blocklist checker for both Webmentions and ActivityPub.
+  - Supports blocking by domain, URL, ActivityPub FQN, or regex.
+  - Used by `WebmentionsMixin` and `ActivityPubMixin` to wrap incoming
+    handlers and filter rendered interactions.
+
 - `madblog/notifications.py`
   - Shared SMTP helper (`send_email`) and `SmtpConfig`.
 

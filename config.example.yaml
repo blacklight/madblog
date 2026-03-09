@@ -203,3 +203,26 @@ link: https://myblog.example.com
 # of your posts. Without this, Mastodon keeps quotes in "pending" state.
 # (optional, default: true)
 # activitypub_auto_approve_quotes: true
+
+#### (Optional) Moderation ####
+
+# A list of blocked actors whose Webmentions and ActivityPub interactions
+# will be silently rejected and not stored or rendered.
+#
+# Each entry can be one of:
+#   - A domain name: e.g. "spammer.example.com"
+#     Blocks all URLs/actors from that domain.
+#   - A full URL: e.g. "https://mastodon.social/users/spammer"
+#     Blocks that exact actor/source.
+#   - An ActivityPub FQN: e.g. "@spammer@mastodon.social" or "spammer@mastodon.social"
+#     Blocks that specific federated identity by matching domain + username.
+#   - A regular expression: delimited by "/", e.g. "/spammer\.example\..*/"
+#     Matched against the full source URL / actor ID.
+#
+# Can also be specified via the MADBLOG_BLOCKED_ACTORS environment variable
+# as a comma- or space-separated list.
+#
+# blocked_actors:
+#   - spammer.example.com
+#   - "@troll@evil.social"
+#   - /spam-ring\.example\..*/

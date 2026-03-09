@@ -159,6 +159,36 @@ Webmentions configuration options:
 
 See the provided [`config.example.yaml`](./config.example.yaml) file for configuration options.
 
+### Moderation
+
+Madblog supports a shared blocklist that applies to both incoming Webmentions
+and ActivityPub interactions. Blocked actors' mentions and activities are
+silently rejected (never stored or rendered).
+
+Each entry in the `blocked_actors` list can be:
+
+- **Domain**: e.g. `spammer.example.com` — blocks all URLs/actors from that domain.
+- **Full URL**: e.g. `https://mastodon.social/users/spammer` — blocks that exact actor.
+- **ActivityPub FQN**: e.g. `@spammer@mastodon.social` or `spammer@mastodon.social` — blocks that federated identity by matching domain + username in the actor URL.
+- **Regular expression**: delimited by `/`, e.g. `/spammer\.example\..*/` — matched against the full source URL or actor ID.
+
+```yaml
+# config.yaml
+blocked_actors:
+  - spammer.example.com
+  - "@troll@evil.social"
+  - /spam-ring\.example\..*/
+```
+
+Or via environment variable (comma- or space-separated):
+
+```shell
+export MADBLOG_BLOCKED_ACTORS="spammer.example.com,@troll@evil.social"
+```
+
+Interactions already stored before a blocklist entry was added are also filtered
+at render time, so they will no longer appear on your pages.
+
 ### View mode
 
 The blog home page supports three view modes:
