@@ -94,7 +94,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         from . import __version__
 
         self.logger.info(
-            f"""
+            """
 ╭──────────────────────────────────────────────────────────────────╮
 │                                                                  │
 │   ███╗   ███╗ █████╗ ██████╗ ██████╗ ██╗      ██████╗  ██████╗   │
@@ -105,8 +105,9 @@ class BlogApp(  # pylint: disable=too-many-ancestors
 │   ╚═╝     ╚═╝╚═╝  ╚═╝╚═════╝ ╚═════╝ ╚══════╝ ╚═════╝  ╚═════╝   │
 │                                                                  │
 ╰──────────────────────────────────────────────────────────────────╯
-⚡ version: {__version__}
-              """
+⚡ version: {%s}
+              """,
+            __version__,
         )
 
         self.tag_index.build()
