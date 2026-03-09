@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+**Fixed**
+- **ActivityPub**:
+  - Fixed object ID/URL separation for cross-domain ActivityPub setups.
+  - Ensured proper separation of ActivityPub object IDs and public URLs for compatibility.
+
 ## 0.8.0
 
 **Added**
@@ -10,6 +17,7 @@
   - Support for `activitypub_link` and `activitypub_domain` configuration options to override ActivityPub actor/profile URLs and WebFinger domains.
   - Allow separate base URLs for ActivityPub content and assets (e.g., images).
   - Turn inline HTML/Markdown images into ActivityPub attachments for richer federated posts.
+  - Added support for configurable ActivityPub actor profile fields.
 - **UI/UX improvements**:
   - Moved followers and feed links into a hamburger menu for cleaner navigation.
   - Added tag pill styles for better visual hierarchy.
