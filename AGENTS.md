@@ -4,6 +4,8 @@
 A Python Markdown-based blogging platform with ActivityPub and Webmentions support.
 
 ## Context
+Read `./docs/ARCHITECTURE.md` for an overview of the design.
+
 Design decisions are documented under `./docs/agents`. Directories and files follow the `<nn>-title` naming convention, with `<nn>` being the number of the design decision.
 
 ## Correctness
