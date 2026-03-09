@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**Fixed**
+- **Webmentions**:
+  - Ignore malformed URLs when processing outgoing mentions.
+
+**Changed**
+- **Docker**:
+  - Full Dockerfile no longer explicitly installs Pubby.
+
+## 0.8.4
+
 - **ActivityPub**:
   - Added `rel=me` links for separate ActivityPub domains to ensure compatibility with Mastodon and other federated platforms.
   - Make `pubby` a required dependency. ActivityPub integration is now natively provided by Madblog.
