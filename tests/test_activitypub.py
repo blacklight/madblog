@@ -155,6 +155,11 @@ class ActivityPubEnabledTest(unittest.TestCase):
         self.app = BlogApp(__name__)
 
     def tearDown(self):
+        # Wait for the background startup thread to finish before cleaning up
+        # the temp directory, otherwise it may try to write to a deleted path.
+        if hasattr(self, "app") and hasattr(self.app, "_ap_startup_thread"):
+            self.app._ap_startup_thread.join(timeout=5)
+
         if hasattr(self, "config"):
             self.config.enable_activitypub = False
             self.config.activitypub_link = self._orig_activitypub_link
@@ -182,6 +187,7 @@ class ActivityPubEnabledTest(unittest.TestCase):
         config.activitypub_domain = "example.org"
         # Create a new app after setting the domain override
         app = BlogApp(__name__)
+        self.addCleanup(lambda: app._ap_startup_thread.join(timeout=5))
         client = app.test_client()
 
         resp = client.get("/.well-known/webfinger" "?resource=acct:blog@example.org")
@@ -214,6 +220,7 @@ class ActivityPubEnabledTest(unittest.TestCase):
         }
 
         app = BlogApp(__name__)
+        self.addCleanup(lambda: app._ap_startup_thread.join(timeout=5))
         client = app.test_client()
 
         resp = client.get("/ap/actor")
@@ -255,6 +262,7 @@ class ActivityPubEnabledTest(unittest.TestCase):
         config.activitypub_domain = "example.org"
 
         app = BlogApp(__name__)
+        self.addCleanup(lambda: app._ap_startup_thread.join(timeout=5))
         client = app.test_client()
 
         resp = client.get("/.well-known/webfinger" "?resource=acct:blog@example.org")
@@ -357,7 +365,9 @@ class ActivityPubEnabledTest(unittest.TestCase):
         config.activitypub_link = "https://ap.example.org"
         config.activitypub_domain = "example.org"
 
-        return BlogApp(__name__)
+        app = BlogApp(__name__)
+        self.addCleanup(lambda: app._ap_startup_thread.join(timeout=5))
+        return app
 
     @skip_if_no_pubby
     def test_article_ap_json_via_ap_domain_proxy(self):
