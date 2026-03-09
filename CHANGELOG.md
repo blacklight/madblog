@@ -3,6 +3,9 @@
 ## Unreleased
 
 **Fixed**
+- **Webmentions**:
+  - Store Webmention sync cache under `root_dir` to ensure consistency and avoid permission issues.
+
 - **ActivityPub**:
   - Fixed object ID/URL separation for cross-domain ActivityPub setups.
   - Ensured proper separation of ActivityPub object IDs and public URLs for compatibility.
