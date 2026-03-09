@@ -324,6 +324,52 @@ class ActivityPubEnabledTest(unittest.TestCase):
         self.assertEqual(resp.mimetype, "application/activity+json")
         data = resp.get_json()
         self.assertEqual(data["id"], "https://example.com/article/test-post")
+        self.assertEqual(data.get("url"), "https://example.com/article/test-post")
+
+    @skip_if_no_pubby
+    def test_article_activitypub_json_id_uses_activitypub_link_when_configured(self):
+        from madblog.config import config
+        from madblog.app import BlogApp
+
+        tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(tmpdir.cleanup)
+
+        root = Path(tmpdir.name)
+        markdown_dir = root / "markdown"
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+
+        (markdown_dir / "test-post.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (title: Test Post)",
+                    "[//]: # (description: A test post)",
+                    "[//]: # (published: 2026-01-01T00:00:00+00:00)",
+                    "",
+                    "# Test Post",
+                    "",
+                    "Hello world.",
+                ]
+            )
+        )
+
+        config.content_dir = str(root)
+
+        config.link = "https://blog.example.com"
+        config.activitypub_link = "https://ap.example.org"
+        config.activitypub_domain = "example.org"
+
+        app = BlogApp(__name__)
+        with app.test_request_context(
+            "/article/test-post",
+            headers={"Accept": "application/activity+json"},
+        ):
+            resp = app.get_page("test-post")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.mimetype, "application/activity+json")
+        data = resp.get_json()
+        self.assertEqual(data["id"], "https://ap.example.org/article/test-post")
+        self.assertEqual(data.get("url"), "https://blog.example.com/article/test-post")
 
 
 class ActivityPubKeyPermissionsTest(unittest.TestCase):

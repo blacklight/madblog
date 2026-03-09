@@ -525,7 +525,8 @@ class ActivityPubIntegration(StartupSyncMixin):
     def build_object(
         self,
         filepath: str,
-        url: str,
+        ap_url: str,
+        public_url: str,
         actor_url: str,
     ) -> tuple[Object, str]:
         """
@@ -545,7 +546,7 @@ class ActivityPubIntegration(StartupSyncMixin):
 
         content, summary, attachments = self._build_post_content(
             filepath,
-            url,
+            public_url,
             title,
             description,
         )
@@ -561,16 +562,19 @@ class ActivityPubIntegration(StartupSyncMixin):
         hashtag_tags = [
             {
                 "type": "Hashtag",
-                "href": f"{self.base_url}/tags/{tag}",
+                "href": f"{self.content_base_url}/tags/{tag}",
                 "name": f"#{tag}",
             }
             for tag in hashtags
         ]
 
         # Make hashtag links absolute in HTML content
-        content = content.replace('href="/tags/', f'href="{self.base_url}/tags/')
+        content = content.replace(
+            'href="/tags/',
+            f'href="{self.content_base_url}/tags/',
+        )
 
-        activity_type = "Update" if self._is_published(url) else "Create"
+        activity_type = "Update" if self._is_published(ap_url) else "Create"
 
         quote_control = None
         quote_policy = None
@@ -594,11 +598,11 @@ class ActivityPubIntegration(StartupSyncMixin):
             interaction_policy = {"canQuote": can_quote}
 
         obj = Object(
-            id=url,
+            id=ap_url,
             type=config.activitypub_object_type,
             name=title,
             content=content,
-            url=url,
+            url=public_url,
             attributed_to=actor_url,
             published=published or datetime.now(timezone.utc),
             updated=datetime.now(timezone.utc),
@@ -647,7 +651,9 @@ class ActivityPubIntegration(StartupSyncMixin):
 
     def _handle_publish(self, filepath: str, url: str, actor_url: str) -> None:
         """Build and publish a Create or Update activity."""
-        obj, activity_type = self.build_object(filepath, url, actor_url)
+        base_rel = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
+        public_url = f"{self.content_base_url}/article/{base_rel}"
+        obj, activity_type = self.build_object(filepath, url, public_url, actor_url)
 
         try:
             self.handler.publish_object(obj, activity_type=activity_type)

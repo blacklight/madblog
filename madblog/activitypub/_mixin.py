@@ -273,10 +273,12 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         from pubby._model import AP_CONTEXT
 
         base_url = config.link or request.host_url.rstrip("/")
-        url = base_url.rstrip("/") + metadata.get("uri", "")
+        public_url = base_url.rstrip("/") + metadata.get("uri", "")
+        ap_url = self._ap_integration.file_to_url(md_file)
         obj, _ = self._ap_integration.build_object(
             md_file,
-            url,
+            ap_url,
+            public_url,
             self.activitypub_handler.actor_id,
         )
         doc = obj.to_dict()
