@@ -150,7 +150,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             actor_attachment.append(
                 {
                     "type": "PropertyValue",
-                    "name": "Blog",
+                    "name": config.activitypub_profile_field_name,
                     "value": (
                         f'<a href="{config.link}" rel="me">'
                         + re.sub(r"^(https?://)(.*)/*$", r"\2", config.link)
@@ -158,6 +158,30 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                     ),
                 }
             )
+
+        if config.activitypub_profile_fields:
+            for name, value in config.activitypub_profile_fields.items():
+                value_str = str(value)
+                if re.match(r"^https?://", value_str):
+                    actor_attachment.append(
+                        {
+                            "type": "PropertyValue",
+                            "name": str(name),
+                            "value": (
+                                f'<a href="{value_str}" rel="me">'
+                                + re.sub(r"^(https?://)(.*)/*$", r"\2", value_str)
+                                + "</a>"
+                            ),
+                        }
+                    )
+                else:
+                    actor_attachment.append(
+                        {
+                            "type": "PropertyValue",
+                            "name": str(name),
+                            "value": value_str,
+                        }
+                    )
 
         ap_base_url = (config.activitypub_link or config.link).rstrip("/")
 

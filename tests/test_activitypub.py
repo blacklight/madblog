@@ -113,6 +113,12 @@ class ActivityPubEnabledTest(unittest.TestCase):
         self.config = config
         self._orig_activitypub_domain = config.activitypub_domain
         self._orig_activitypub_link = config.activitypub_link
+        self._orig_activitypub_profile_field_name = getattr(
+            config, "activitypub_profile_field_name", "Blog"
+        )
+        self._orig_activitypub_profile_fields = getattr(
+            config, "activitypub_profile_fields", {}
+        )
         self._tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self._tmpdir.cleanup)
 
@@ -153,6 +159,12 @@ class ActivityPubEnabledTest(unittest.TestCase):
             self.config.enable_activitypub = False
             self.config.activitypub_link = self._orig_activitypub_link
             self.config.activitypub_domain = self._orig_activitypub_domain
+            self.config.activitypub_profile_field_name = (
+                self._orig_activitypub_profile_field_name
+            )
+            self.config.activitypub_profile_fields = (
+                self._orig_activitypub_profile_fields
+            )
 
     @skip_if_no_pubby
     def test_webfinger(self):
@@ -189,6 +201,49 @@ class ActivityPubEnabledTest(unittest.TestCase):
         data = resp.get_json()
         self.assertEqual(data["type"], "Person")
         self.assertEqual(data["preferredUsername"], "blog")
+
+    @skip_if_no_pubby
+    def test_actor_profile_fields_are_configurable(self):
+        from madblog.config import config
+        from madblog.app import BlogApp
+
+        config.activitypub_profile_field_name = "Website"
+        config.activitypub_profile_fields = {
+            "Git repository": "https://git.example.com/myblog",
+            "About": "A personal blog",
+        }
+
+        app = BlogApp(__name__)
+        client = app.test_client()
+
+        resp = client.get("/ap/actor")
+        self.assertEqual(resp.status_code, 200)
+        actor = resp.get_json()
+
+        self.assertIn("attachment", actor)
+        attachments = actor.get("attachment") or []
+        self.assertTrue(attachments)
+
+        # Primary blog link field
+        primary = next((a for a in attachments if a.get("name") == "Website"), None)
+        self.assertIsNotNone(primary, attachments)
+        self.assertEqual(primary.get("type"), "PropertyValue")
+        self.assertIn('href="https://example.com"', primary.get("value", ""))
+        self.assertIn('rel="me"', primary.get("value", ""))
+
+        # Additional URL field rendered as rel="me" anchor
+        repo = next(
+            (a for a in attachments if a.get("name") == "Git repository"),
+            None,
+        )
+        self.assertIsNotNone(repo, attachments)
+        self.assertIn('href="https://git.example.com/myblog"', repo.get("value", ""))
+        self.assertIn('rel="me"', repo.get("value", ""))
+
+        # Additional non-URL field rendered as string
+        about = next((a for a in attachments if a.get("name") == "About"), None)
+        self.assertIsNotNone(about, attachments)
+        self.assertEqual(about.get("value"), "A personal blog")
 
     @skip_if_no_pubby
     def test_activitypub_link_override_changes_actor_id(self):

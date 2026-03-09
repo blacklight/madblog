@@ -514,6 +514,8 @@ Great article by @alice@mastodon.social about federation!
 | `activitypub_link` | `MADBLOG_ACTIVITYPUB_LINK` | unset (uses `link`) | Base URL used for ActivityPub actor/object IDs (e.g. actor `id` is `<base>/ap/actor`). Set this if you want the canonical ActivityPub identity to live on a different hostname than `link`. |
 | `activitypub_username` | `MADBLOG_ACTIVITYPUB_USERNAME` | `blog` | Fediverse username for the blog actor. |
 | `activitypub_domain` | `MADBLOG_ACTIVITYPUB_DOMAIN` | unset (uses `activitypub_link` hostname, else `link` hostname) | Domain used in WebFinger `acct:` handle discovery (e.g. `acct:blog@example.com`). This affects discovery/handle only, not where ActivityPub endpoints are hosted. |
+| `activitypub_profile_field_name` | `MADBLOG_ACTIVITYPUB_PROFILE_FIELD_NAME` | `Blog` | Label used for the primary ActivityPub profile field that points to your blog URL (`link`). |
+| `activitypub_profile_fields` | N/A | empty mapping | Additional profile fields to advertise on the ActivityPub actor as a name->value mapping. If a value is an http(s) URL it will be rendered as a `rel="me"` link. |
 | `activitypub_manually_approves_followers` | `MADBLOG_ACTIVITYPUB_MANUALLY_APPROVES_FOLLOWERS` | `false` | Require manual approval for new followers. |
 | `activitypub_quote_control` | `MADBLOG_ACTIVITYPUB_QUOTE_CONTROL` | `public` | Quote policy for ActivityPub posts. Mastodon will refuse quote-boosts unless set to `public`. |
 

@@ -2,7 +2,7 @@ import os
 import re
 from argparse import Namespace
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import yaml
 from webmentions import WebmentionStatus
@@ -57,6 +57,8 @@ class Config:
     activitypub_name: str | None = None
     activitypub_summary: str | None = None
     activitypub_icon_url: str | None = None
+    activitypub_profile_field_name: str = "Blog"
+    activitypub_profile_fields: Dict[str, str] = field(default_factory=dict)
     activitypub_private_key_path: str | None = None
     activitypub_manually_approves_followers: bool = False
     activitypub_description_only: bool = False
@@ -205,6 +207,23 @@ def _init_config_from_file(config_file: str):
         config.activitypub_summary = cfg["activitypub_summary"]
     if cfg.get("activitypub_icon_url"):
         config.activitypub_icon_url = cfg["activitypub_icon_url"]
+    if cfg.get("activitypub_profile_field_name"):
+        config.activitypub_profile_field_name = str(
+            cfg["activitypub_profile_field_name"]
+        )
+
+    if cfg.get("activitypub_profile_fields") is not None:
+        fields = cfg["activitypub_profile_fields"]
+        if isinstance(fields, dict):
+            config.activitypub_profile_fields = {
+                str(k): str(v)
+                for k, v in fields.items()
+                if k is not None and v is not None
+            }
+        else:
+            raise ValueError(
+                "activitypub_profile_fields must be a mapping of name->value"
+            )
     if cfg.get("activitypub_private_key_path"):
         config.activitypub_private_key_path = cfg["activitypub_private_key_path"]
     if cfg.get("activitypub_manually_approves_followers") is not None:
@@ -359,6 +378,10 @@ def _init_config_from_env():
         config.activitypub_auto_approve_quotes = (
             os.environ["MADBLOG_ACTIVITYPUB_AUTO_APPROVE_QUOTES"] == "1"
         )
+    if os.getenv("MADBLOG_ACTIVITYPUB_PROFILE_FIELD_NAME"):
+        config.activitypub_profile_field_name = os.environ[
+            "MADBLOG_ACTIVITYPUB_PROFILE_FIELD_NAME"
+        ]
 
 
 def _init_config_from_cli(args: Optional[Namespace]):

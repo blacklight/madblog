@@ -153,6 +153,20 @@ link: https://myblog.example.com
 # Avatar URL for the ActivityPub actor (optional, falls back to author_photo)
 # activitypub_icon_url: https://myblog.example.com/img/avatar.png
 
+# Label used for the primary profile field that points to your blog URL.
+# This will be advertised as a Mastodon-compatible "verified" profile field.
+# (optional, default: "Blog")
+# activitypub_profile_field_name: Blog
+
+# Additional profile fields to advertise via ActivityPub.
+# This is a mapping of field name -> field value.
+# If the value is an http(s) URL, it will be rendered as a rel="me" link.
+# (optional)
+# activitypub_profile_fields:
+#   Git repository: https://git.example.com/myblog
+#   Donate: https://liberapay.com/myprofile
+#   About: A personal blog about technology
+
 # Path to the RSA private key PEM file (optional).
 # If not set, a keypair will be auto-generated on first start.
 # The file must be readable only by the owner (chmod 600).
