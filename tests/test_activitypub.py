@@ -406,6 +406,47 @@ class ActivityPubEnabledTest(unittest.TestCase):
             "https://ap.example.org/article/test-post",
         )
 
+    @skip_if_no_pubby
+    def test_rel_me_links_include_ap_domain_when_split(self):
+        """When activitypub_link != link, rel='me' links for both domains."""
+        from flask import render_template
+        from madblog.config import config
+
+        app = self._make_cross_domain_app()
+
+        with app.test_request_context("/"):
+            html = render_template(
+                "common-head.html",
+                config=config,
+                title="Test",
+                description="",
+                image="",
+                url=config.link,
+                type="website",
+                tags=[],
+                styles=[],
+                view_mode="cards",
+            )
+
+        # Blog-domain links (always present)
+        self.assertIn(
+            '<link rel="me" href="https://blog.example.com/@blog">',
+            html,
+        )
+        self.assertIn(
+            '<link rel="me" href="https://blog.example.com">',
+            html,
+        )
+        # AP-domain links (only when domains differ)
+        self.assertIn(
+            '<link rel="me" href="https://ap.example.org/@blog">',
+            html,
+        )
+        self.assertIn(
+            '<link rel="me" href="https://ap.example.org">',
+            html,
+        )
+
 
 class ActivityPubKeyPermissionsTest(unittest.TestCase):
     """Test that Madblog refuses to start if the key file is world-readable."""
