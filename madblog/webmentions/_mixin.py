@@ -35,6 +35,7 @@ class WebmentionsMixin(ABC):  # pylint: disable=too-few-public-methods
             content_dir=self.pages_dir,
             mentions_dir=self.mentions_dir,
             base_url=config.link,
+            root_dir=config.content_dir,
             webmentions_hard_delete=config.webmentions_hard_delete,
         )
 

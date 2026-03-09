@@ -48,10 +48,12 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         mentions_dir: str | Path,
         *,
         base_url: str,
+        root_dir: str | Path | None = None,
         webmentions_hard_delete: bool = False,
         **_,
     ):
         self.content_dir = Path(content_dir).resolve()
+        self.root_dir = Path(root_dir).resolve() if root_dir else self.content_dir
         self.mentions_dir = Path(mentions_dir).resolve()
         self.mentions_dir.mkdir(exist_ok=True, parents=True)
         self.base_url = base_url
@@ -61,7 +63,7 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         self._webmentions_handler: WebmentionsHandler | None = None
 
         # StartupSyncMixin configuration
-        self._sync_cache_file = self.content_dir / ".madblog" / "webmentions_sync.json"
+        self._sync_cache_file = self.root_dir / ".madblog" / "webmentions_sync.json"
         self._sync_cache_file.parent.mkdir(exist_ok=True, parents=True)
         self._sync_pages_dir = str(self.content_dir)
 
