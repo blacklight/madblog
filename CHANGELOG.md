@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.5
+
+### Fixed
+- Prevent WebFinger mention resolution from blocking request handling by moving lookups to background publish threads.
+- Add a mention resolution cache and provide offline-safe fallback actor URLs (`https://{domain}/@{user}`) when the cache is empty.
+
+### Changed
+- Replace Pubby `extract_mentions` usage with explicit mention parsing + resolution via `Mention`/`resolve_actor_url`.
+- Remove the manual publish retry loop; rely on Pubby’s internal Outbox delivery retries/backoff.
+- Keep “mark as published” behavior before delivery to avoid re-queuing on restart after failures.
+
+### Tests
+- Update/replace publish retry tests to validate single publish call behavior, failure marking, mention caching, and bounded concurrency/non-blocking publish flow.
+
 ## 0.9.4
 
 ### Changed
