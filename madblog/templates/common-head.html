@@ -131,6 +131,9 @@
                     {% endif %}
                     <a href="/followers">&#128101; Followers <span class="nav-count">({{ followers_count }})</span></a>
                     {% endif %}
+                    {% if config.enable_guestbook %}
+                    <a href="/guestbook">&#128221; Guestbook</a>
+                    {% endif %}
                     <a href="/tags">&#127991; Tags</a>
                     <a href="/feed.atom" target="_blank">{% include 'icons/rss.html' %} Atom Feed</a>
                     <a href="/feed.rss" target="_blank">{% include 'icons/rss.html' %} RSS Feed</a>

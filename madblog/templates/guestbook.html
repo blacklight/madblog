@@ -1,0 +1,63 @@
+{% with title="Guestbook", url=config.link + "/guestbook", description="Guestbook - messages and mentions", type='page', image=None, skip_header=not config.header, styles=['/css/blog.css'] %}
+  {% include 'common-head.html' %}
+{% endwith %}
+
+<main>
+  <article class="container">
+    <div class="title">
+      <h1>&#128221; Guestbook</h1>
+    </div>
+
+    <div class="description">
+      <p>
+        Messages and mentions from across the web.
+        {% if config.enable_webmentions %}
+        You can mention this site via <a href="https://indieweb.org/Webmention" target="_blank" rel="noopener">Webmention</a>.
+        {% endif %}
+        {% if config.enable_activitypub and config.activitypub_profile_url %}
+        You can also mention <a href="{{ config.activitypub_profile_url }}">{{ activitypub_handle or '@' + config.activitypub_username }}</a> on the Fediverse.
+        {% endif %}
+      </p>
+    </div>
+
+    <div class="guestbook-entries">
+      {% if webmentions %}
+        <section class="guestbook-section webmentions-section">
+          {{ webmentions | safe }}
+        </section>
+      {% endif %}
+
+      {% if ap_interactions %}
+        <section class="guestbook-section activitypub-section">
+          {{ ap_interactions | safe }}
+        </section>
+      {% endif %}
+
+      {% if not webmentions and not ap_interactions %}
+        <div class="guestbook-empty">
+          <p>No messages yet. Be the first to leave a note!</p>
+        </div>
+      {% endif %}
+    </div>
+  </article>
+</main>
+
+<style>
+.guestbook-entries {
+  margin-top: 2em;
+}
+
+.guestbook-section h2 {
+  font-size: 1.2em;
+}
+
+.guestbook-empty {
+  text-align: center;
+  padding: 2em;
+  color: var(--color-fg-secondary);
+  font-style: italic;
+}
+</style>
+
+{% include 'footer.html' %}
+{% include 'common-tail.html' %}

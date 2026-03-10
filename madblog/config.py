@@ -68,6 +68,9 @@ class Config:
     activitypub_quote_control: str = "public"
     activitypub_auto_approve_quotes: bool = True
 
+    # Guestbook
+    enable_guestbook: bool = True
+
     # Moderation
     blocked_actors: List[str] = field(default_factory=list)
 
@@ -128,7 +131,9 @@ class Config:
 config = Config()
 
 
-def _init_config_from_file(config_file: str):
+def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statements
+    config_file: str,
+):
     cfg = {}
 
     if os.path.isfile(config_file):
@@ -261,12 +266,16 @@ def _init_config_from_file(config_file: str):
         )
     config.categories = cfg.get("categories", [])
 
+    # Guestbook
+    if cfg.get("enable_guestbook") is not None:
+        config.enable_guestbook = bool(cfg["enable_guestbook"])
+
     # Moderation
     if cfg.get("blocked_actors"):
         config.blocked_actors = list(cfg["blocked_actors"])
 
 
-def _init_config_from_env():
+def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-statements
     if os.getenv("MADBLOG_TITLE"):
         config.title = os.environ["MADBLOG_TITLE"]
     if os.getenv("MADBLOG_DESCRIPTION"):
@@ -393,6 +402,10 @@ def _init_config_from_env():
         config.activitypub_auto_approve_quotes = (
             os.environ["MADBLOG_ACTIVITYPUB_AUTO_APPROVE_QUOTES"] == "1"
         )
+    # Guestbook
+    if os.getenv("MADBLOG_ENABLE_GUESTBOOK"):
+        config.enable_guestbook = os.environ["MADBLOG_ENABLE_GUESTBOOK"] == "1"
+
     # Moderation
     if os.getenv("MADBLOG_BLOCKED_ACTORS"):
         config.blocked_actors = re.split(
@@ -422,6 +435,10 @@ def _init_config_from_cli(args: Optional[Namespace]):
 def init_config(
     config_file: str = "config.yaml", args: Optional[Namespace] = None
 ) -> Config:
+    """
+    Initialize the configuration, reading from a file and environment variables.
+    """
+
     config_file = os.path.abspath(os.path.expanduser(config_file))
     _init_config_from_file(config_file)
     _init_config_from_env()

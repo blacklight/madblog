@@ -20,6 +20,7 @@ from .activitypub import ActivityPubMixin
 from .cache import CacheMixin
 from .config import config
 from .feeds import FeedsMixin
+from .guestbook import GuestbookMixin
 from .markdown import MarkdownMixin
 from .monitor import ChangeType
 from .tags import TagIndex
@@ -28,7 +29,13 @@ from ._sorters import PagesSorter, PagesSortByTime
 
 
 class BlogApp(  # pylint: disable=too-many-ancestors
-    ActivityPubMixin, CacheMixin, FeedsMixin, MarkdownMixin, WebmentionsMixin, Flask
+    ActivityPubMixin,
+    CacheMixin,
+    FeedsMixin,
+    GuestbookMixin,
+    MarkdownMixin,
+    WebmentionsMixin,
+    Flask,
 ):
     """
     The main application class.

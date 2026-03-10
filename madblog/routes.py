@@ -582,6 +582,34 @@ def mastodon_search_route():
     )
 
 
+@app.route("/guestbook", methods=["GET"])
+def guestbook_route():
+    from flask import make_response, render_template
+
+    if not config.enable_guestbook:
+        return Response("Guestbook is not enabled", status=404, mimetype="text/plain")
+
+    webmentions_html = ""
+    ap_interactions_html = ""
+
+    if config.enable_webmentions:
+        webmentions_html = app.get_rendered_guestbook_webmentions()
+
+    if config.enable_activitypub:
+        ap_interactions_html = app.get_rendered_guestbook_ap_interactions()
+
+    response = make_response(
+        render_template(
+            "guestbook.html",
+            config=config,
+            webmentions=webmentions_html,
+            ap_interactions=ap_interactions_html,
+        )
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.route("/followers", methods=["GET"])
 def followers_route():
     from flask import make_response, render_template
