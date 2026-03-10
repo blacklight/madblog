@@ -24,7 +24,11 @@ from pubby import ActivityPubHandler, Mention, Object, resolve_actor_url
 from pubby.webfinger import _MENTION_RE
 
 from madblog.config import config
-from madblog.constants import REGEX_MARKDOWN_METADATA, REGEX_MERMAID_BLOCK
+from madblog.constants import (
+    REGEX_MARKDOWN_METADATA,
+    REGEX_MERMAID_BLOCK,
+    REGEX_TOC_MARKER,
+)
 from madblog.markdown import render_html
 from madblog.monitor import ChangeType
 from madblog.sync import StartupSyncMixin
@@ -272,6 +276,8 @@ class ActivityPubIntegration(StartupSyncMixin):
             ):
                 continue
             if re.match(r"^#\s+", line) and not cleaned:
+                continue
+            if REGEX_TOC_MARKER.match(line):
                 continue
             cleaned.append(line)
         return "".join(cleaned).strip()

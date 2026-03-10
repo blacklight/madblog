@@ -269,6 +269,7 @@ class ActivityPubEnabledTest(unittest.TestCase):
         # Primary blog link field
         primary = next((a for a in attachments if a.get("name") == "Website"), None)
         self.assertIsNotNone(primary, attachments)
+        assert primary  # For mypy
         self.assertEqual(primary.get("type"), "PropertyValue")
         self.assertIn('href="https://example.com"', primary.get("value", ""))
         self.assertIn('rel="me"', primary.get("value", ""))
@@ -279,12 +280,14 @@ class ActivityPubEnabledTest(unittest.TestCase):
             None,
         )
         self.assertIsNotNone(repo, attachments)
+        assert repo  # For mypy
         self.assertIn('href="https://git.example.com/myblog"', repo.get("value", ""))
         self.assertIn('rel="me"', repo.get("value", ""))
 
         # Additional non-URL field rendered as string
         about = next((a for a in attachments if a.get("name") == "About"), None)
         self.assertIsNotNone(about, attachments)
+        assert about  # For mypy
         self.assertEqual(about.get("value"), "A personal blog")
 
     @skip_if_no_pubby
@@ -378,8 +381,9 @@ class ActivityPubEnabledTest(unittest.TestCase):
         ):
             resp = self.app.get_page("test-post")
 
+        assert resp  # For mypy
         self.assertEqual(resp.status_code, 200)
-        self.assertIn("json", resp.mimetype)
+        self.assertIn("json", resp.mimetype or "")
         data = resp.get_json()
         self.assertEqual(data["id"], "https://example.com/article/test-post")
 
@@ -784,6 +788,91 @@ class ActivityPubContentChangeTest(unittest.TestCase):
                     att["url"].startswith("https://ap.example.org/"),
                     f"Attachment URL should use content_base_url: {att['url']}",
                 )
+
+
+class ActivityPubTocStrippingTest(unittest.TestCase):
+    """TOC markers must be stripped from federated posts."""
+
+    @skip_if_no_pubby
+    def test_toc_markers_stripped_from_ap_content(self):
+        from pubby import ActivityPubHandler
+        from pubby.crypto import generate_rsa_keypair
+        from pubby.storage.adapters.file import FileActivityPubStorage
+        from madblog.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+
+        root = Path(tmpdir.name)
+        pages_dir = root / "pages"
+        pages_dir.mkdir()
+        ap_dir = root / "ap"
+
+        config.content_dir = str(root)
+
+        priv, _ = generate_rsa_keypair()
+        storage = FileActivityPubStorage(data_dir=str(ap_dir))
+        handler = ActivityPubHandler(
+            storage=storage,
+            actor_config={
+                "base_url": "https://example.com",
+                "username": "blog",
+            },
+            private_key=priv,
+        )
+
+        integration = ActivityPubIntegration(
+            handler=handler,
+            pages_dir=str(pages_dir),
+            base_url="https://example.com",
+        )
+
+        for marker in ("[[TOC]]", "[TOC]", "{{ TOC }}", "<!-- TOC -->"):
+            test_file = pages_dir / "toc-post.md"
+            test_file.write_text(
+                "\n".join(
+                    [
+                        "[//]: # (title: TOC Post)",
+                        "[//]: # (published: 2025-02-13)",
+                        "",
+                        "# TOC Post",
+                        "",
+                        marker,
+                        "",
+                        "## Section 1",
+                        "Text",
+                        "",
+                        "## Section 2",
+                        "More text",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            handler.publish_object = MagicMock()
+            integration.on_content_change(
+                __import__("madblog.monitor", fromlist=["ChangeType"]).ChangeType.ADDED,
+                str(test_file),
+            )
+            _join_ap_publish_threads()
+
+            handler.publish_object.assert_called_once()
+            obj = handler.publish_object.call_args[0][0]
+
+            self.assertNotIn(
+                'class="toc"',
+                obj.content,
+                f"Generated TOC HTML found in AP content for marker {marker!r}",
+            )
+            self.assertNotIn(
+                marker,
+                obj.content,
+                f"Raw TOC marker {marker!r} found in AP content",
+            )
+
+            # Reset published state so the next iteration can re-publish
+            integration._sync_reset()
 
 
 class ActivityPubPublishSplitDomainTest(unittest.TestCase):
