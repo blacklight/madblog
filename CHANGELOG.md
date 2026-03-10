@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.9
+
+### Added
+- **Guestbook:** Include ActivityPub interactions that *mention* the local
+  actor (when storage supports `get_interactions_mentioning`), not just those
+  targeting the actor URL.
+
+### Changed
+- **ActivityPub email notifications:** Detect actor mentions via
+  `interaction.mentioned_actors` (instead of scanning HTML content) and notify
+  even when the interaction targets a non-local URL, as long as the local actor
+  is mentioned.
+
+### Fixed
+- **ActivityPub storage:** Limit stored interactions to local base URLs only
+  (to avoid persisting interactions for third-party resources on single-user
+  blogs); pass `local_base_urls` and `store_local_only` to the handler.
+- **Tests:** Update notification tests to use `mentioned_actors` and improve coverage for mention vs non-local target filtering.
+
 ## 0.9.8
 
 ## Fixed
