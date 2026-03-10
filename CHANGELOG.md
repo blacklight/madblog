@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.3
+
+### Changed
+- ActivityPub Create/Update deliveries now run in a background daemon thread to avoid blocking the content monitor loop.
+
+### Fixed
+- Added retry logic for Create/Update publishing: up to **3 attempts** with **60s backoff** between failures.
+- After exhausting retries, failed publishes are still marked as processed to prevent repeated retries during startup sync.
+
 ## 0.9.2
 
 ### Added
