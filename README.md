@@ -83,6 +83,23 @@ files):
 But the application can run from any folder that contains Markdown files
 (including e.g. your Obsidian vault, Nextcloud Notes folder or a git clone).
 
+### Running Madblog from a uWSGI wrapper
+
+Running Madblog directly from the command-line is fine for tests and very
+low-traffic use-cases, but for production you should run it from a uWSGI
+wrapper.
+
+Running it in Gunicorn:
+
+```bash
+# Note that a custom configuration file is passed via environment variable
+# in this case, to prevent clashes with gunicorn's own `--config` option.
+# In this case we bind to 127.0.0.1:8000, with 8 workers and a 5s timeout
+MADBLOG_CONFIG=/your/config.yaml gunicorn -w 8 -b 127.0.0.1:8000 madblog.uwsgi /your/content
+```
+
+### Running Madblog in Docker
+
 To run it from Docker:
 
 ```shell
