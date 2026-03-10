@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.7
+
+### Fixed
+- ActivityPub content negotiation now correctly matches `Accept:
+  application/ld+json` headers that include media type parameters (e.g.
+  `profile="…"`) by stripping parameters before comparing.
+
 ## 0.9.6
 
 ### Fixed
