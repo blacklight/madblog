@@ -30,11 +30,11 @@ Features:
   own blog. It also comes with a sensible implementation of the Mastodon API.
 
 - **File-based syndication**: no intermediate APIs, databases or services.
-  No heavy polling nor synchronization. Everything is based on plain text and
-  file system events. Updating your articles is as simple as editing a Markdown
-  file on your server. Wanna mention someone? Just put their website or
-  ActivityPub handle in your file, and they'll get a notification. Wanna clean
-  up your ActivityPub events? Just remove a JSON file.
+  No heavy polling nor synchronization. Everything is based on plain text files
+  and file system events. Updating your articles is as simple as editing a
+  Markdown file on your server. Wanna mention someone? Just put their website
+  or ActivityPub handle in your file, and they'll get a notification. Wanna
+  clean up your ActivityPub events? Just remove a JSON file.
 
 - **Guestbook mode**: a dedicated page that aggregates public mentions to your
   website and interactions from across the web.
@@ -55,20 +55,51 @@ This project powers the following blogs:
 - [Platypush](https://blog.platypush.tech)
 - [My personal blog](https://blog.fabiomanganiello.com)
 
+## Quickstart
+
+```
+mkdir -p ~/madblog/markdown
+cat <<EOF >~/madblog/markdown/article-1.md
+# My first article
+
+This is my first article!
+
+Welcome to [Madblog](https://git.fabiomanganiello.com/madblog)!
+EOF
+
+docker run -it \
+  -p 8000:8000 \
+  -v "$HOME/madblog:/data" \
+  quay.io/blacklight/madblog
+```
+
+Then open [http://localhost:8000](http://localhost:8000)
+
 ## Installation
 
 ### Local installation
+
+A base installation includes everything (including Webmentions and
+ActivityPub support) except LaTeX and Mermaid.
 
 ```shell
 pip install madblog
 ```
 
+### Full local installation
+
+- **Latex support**: requires any installation that provides `latex` and
+  `dvipng` (and preferably some good math fonts) on your system.
+- **Mermaid support**: requires `mermaid-cli` on your system, or `npx` so
+  Madblog can install it for you.
+
 ### Docker installation
 
-#### Minimal installation
+#### Minimal Docker installation
 
-A minimal installation doesn't include extra plugins, and it should be about 50
-MB in size.
+A minimal installation doesn't include extra plugins (but it still include
+support for Webmentions and ActivityPub), and it aims to always be less than
+100 MB in size.
 
 ##### Pre-built image (recommended)
 
@@ -85,7 +116,7 @@ cd madblog
 docker build -f docker/minimal.Dockerfile -t madblog .
 ```
 
-#### Full installation
+#### Full Docker installation
 
 Includes all plugins - including LaTeX and Mermaid; &gt; 2 GB in size.
 
@@ -137,7 +168,9 @@ Running it in Gunicorn:
 # Note that a custom configuration file is passed via environment variable
 # in this case, to prevent clashes with gunicorn's own `--config` option.
 # In this case we bind to 127.0.0.1:8000, with 8 workers and a 5s timeout
-MADBLOG_CONFIG=/your/config.yaml gunicorn -w 8 -b 127.0.0.1:8000 madblog.uwsgi /your/content
+MADBLOG_CONFIG=/your/config.yaml \
+  gunicorn -w 8 -b 127.0.0.1:8000 madblog.uwsgi \
+  /your/content
 ```
 
 ### Running Madblog in Docker
@@ -331,6 +364,18 @@ interactions are received. Configure SMTP settings to enable this:
 Webmentions allow other sites to notify your blog when they link to one of your
 articles. Madblog exposes a Webmention endpoint and stores inbound mentions under
 your `content_dir`.
+
+Madblog uses [Webmentions](https://git.fabiomanganiello.com/webmentions) to
+handle Webmentions ([blog
+article](https://blog.fabiomanganiello.com/article/webmentions-with-batteries-included)),
+a Python framework I build originally for Madblog itself but that can be used
+to easily enable support for Webmentions on any Python Web application.
+
+> **NOTE**: It is advised to explicitly _disable_ Webmentions (set
+> `enable_webmentions: false`, or `MADBLOG_ENABLE_WEBMENTIONS=0`) if you run
+> Madblog on e.g. your local machine or a development environment. Otherwise
+> each time a Markdown file is saved some notifications to an invalid URL may
+> actually be dispatched to real Web sites.
 
 Webmentions configuration options:
 
@@ -552,7 +597,7 @@ automatically switch based on the reader's system color scheme preference.
 No pre-existing system dependencies required beyond what pip provides:
 
 ```shell
-pip install madblog[mermaid]
+pip install "madblog[mermaid]"
 ```
 
 This installs a bundled Node.js runtime via
@@ -591,9 +636,11 @@ platforms. Followers receive new and updated articles directly in their timeline
 
 It uses [Pubby](https://git.fabiomanganiello.com/pubby) (also developed by me,
 and initially developed for this project) to easily add ActivityPub bindings to
-the Web application.
+the Web application. Pubby follows the same principles and patterns as
+[Webmentions](https://git.fabiomanganiello.com/webmentions), and it aims to
+make it easy to enable support for ActivityPub on any Python Web application.
 
-Enable it in your `config.yaml`:
+Enable ActivityPub in your `config.yaml` (it's disabled by default):
 
 ```yaml
 enable_activitypub: true
