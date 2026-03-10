@@ -387,6 +387,23 @@ class ActivityPubEnabledTest(unittest.TestCase):
         data = resp.get_json()
         self.assertEqual(data["id"], "https://example.com/article/test-post")
 
+    @skip_if_no_pubby
+    def test_article_fetched_with_parameterised_ld_json_accept_returns_ap(self):
+        """Accept with mimetype parameters (e.g. profile=) must still return AP JSON."""
+        with self.app.test_request_context(
+            "/article/test-post",
+            headers={
+                "Accept": 'application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
+            },
+        ):
+            resp = self.app.get_page("test-post")
+
+        assert resp  # For mypy
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("json", resp.mimetype or "")
+        data = resp.get_json()
+        self.assertEqual(data["id"], "https://example.com/article/test-post")
+
     def _make_cross_domain_app(self):
         """Create a BlogApp with split AP / blog domains and a test post."""
         from madblog.config import config

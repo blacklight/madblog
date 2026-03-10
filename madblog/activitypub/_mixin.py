@@ -244,6 +244,25 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         )
         self._ap_startup_thread.start()
 
+    @staticmethod
+    def _ap_accept_quality() -> float:
+        """
+        Return the highest quality value for ActivityPub-compatible
+        mimetypes in the current request's ``Accept`` header.
+
+        Werkzeug's ``MIMEAccept`` treats parameterised media types
+        (e.g. ``application/ld+json; profile="…"``) as distinct from
+        their bare counterparts, so a simple key lookup may miss them.
+        This helper strips parameters before comparing.
+        """
+        ap_types = {"application/activity+json", "application/ld+json"}
+        best: float = 0
+        for mimetype, quality in request.accept_mimetypes:
+            base = mimetype.split(";", 1)[0].strip()
+            if base in ap_types and quality > best:
+                best = quality
+        return best
+
     def _client_prefers_activitypub(self) -> bool:
         """
         Check if the client prefers ActivityPub format over HTML.
@@ -251,21 +270,8 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         if not has_request_context():
             return False
 
-        accepts_ap = (
-            request.accept_mimetypes["application/activity+json"]
-            or request.accept_mimetypes["application/ld+json"]
-        )
-
-        return bool(
-            accepts_ap
-            and (
-                max(
-                    request.accept_mimetypes["application/activity+json"],
-                    request.accept_mimetypes["application/ld+json"],
-                )
-                > request.accept_mimetypes["text/html"]
-            )
-        )
+        ap_quality = self._ap_accept_quality()
+        return bool(ap_quality and ap_quality > request.accept_mimetypes["text/html"])
 
     def _get_activitypub_page_response(
         self,
@@ -280,11 +286,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         ):
             return None
 
-        accepts_ap = (
-            request.accept_mimetypes["application/activity+json"]
-            or request.accept_mimetypes["application/ld+json"]
-        )
-        if not accepts_ap:
+        if not self._ap_accept_quality():
             return None
 
         ap_url = self._ap_integration.file_to_url(md_file)
