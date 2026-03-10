@@ -188,6 +188,11 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
         ap_base_url = (config.activitypub_link or config.link).rstrip("/")
 
+        # Build list of local base URLs for interaction filtering
+        local_base_urls = [ap_base_url]
+        if config.link and config.link.rstrip("/") != ap_base_url:
+            local_base_urls.append(config.link.rstrip("/"))
+
         # Create the ActivityPub handler
         self.activitypub_handler = ActivityPubHandler(
             storage=self.activitypub_storage,
@@ -207,6 +212,8 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             webfinger_domain=config.activitypub_domain,
             on_interaction_received=on_interaction,
             auto_approve_quotes=config.activitypub_auto_approve_quotes,
+            store_local_only=True,
+            local_base_urls=local_base_urls,
             software_name="madblog",
             software_version=__version__,
         )

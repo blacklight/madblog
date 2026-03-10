@@ -1032,7 +1032,7 @@ class ActivityPubNotificationsTest(unittest.TestCase):
         send_email.assert_called_once()
 
     @skip_if_no_pubby
-    def test_email_sent_when_content_mentions_actor(self):
+    def test_email_sent_when_mentioned_actors_includes_actor(self):
         from madblog.activitypub import build_activitypub_email_notifier
         from madblog.notifications import SmtpConfig
         from pubby import Interaction, InteractionType
@@ -1057,6 +1057,7 @@ class ActivityPubNotificationsTest(unittest.TestCase):
                 '<a href="https://example.com/ap/actor" class="u-url mention">'
                 "@<span>blog</span></a></span> great post!</p>"
             ),
+            mentioned_actors=["https://example.com/ap/actor"],
         )
 
         notifier(interaction)
