@@ -369,6 +369,20 @@ class ActivityPubEnabledTest(unittest.TestCase):
         self.assertEqual(data["id"], "https://example.com/article/test-post")
         self.assertEqual(data.get("url"), "https://example.com/article/test-post")
 
+    @skip_if_no_pubby
+    def test_article_fetched_with_ld_json_accept_returns_ap(self):
+        """Accept: application/ld+json should also return AP JSON, not HTML."""
+        with self.app.test_request_context(
+            "/article/test-post",
+            headers={"Accept": "application/ld+json"},
+        ):
+            resp = self.app.get_page("test-post")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("json", resp.mimetype)
+        data = resp.get_json()
+        self.assertEqual(data["id"], "https://example.com/article/test-post")
+
     def _make_cross_domain_app(self):
         """Create a BlogApp with split AP / blog domains and a test post."""
         from madblog.config import config

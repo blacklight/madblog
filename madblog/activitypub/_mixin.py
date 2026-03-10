@@ -259,7 +259,10 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         return bool(
             accepts_ap
             and (
-                request.accept_mimetypes["application/activity+json"]
+                max(
+                    request.accept_mimetypes["application/activity+json"],
+                    request.accept_mimetypes["application/ld+json"],
+                )
                 > request.accept_mimetypes["text/html"]
             )
         )
