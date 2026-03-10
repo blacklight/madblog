@@ -15,13 +15,13 @@ import shutil
 import subprocess
 import tempfile
 import threading
-import time
 import mimetypes
 
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pubby import ActivityPubHandler, Object, extract_mentions
+from pubby import ActivityPubHandler, Mention, Object, resolve_actor_url
+from pubby.webfinger import _MENTION_RE
 
 from madblog.config import config
 from madblog.constants import REGEX_MARKDOWN_METADATA, REGEX_MERMAID_BLOCK
@@ -32,8 +32,6 @@ from madblog.tags import extract_hashtags
 
 logger = logging.getLogger(__name__)
 
-_MAX_PUBLISH_RETRIES = 3
-_PUBLISH_RETRY_INTERVAL_SECS = 60
 _MAX_CONCURRENT_PUBLISHES = 4
 
 
@@ -74,6 +72,13 @@ class ActivityPubIntegration(StartupSyncMixin):
         self._publish_semaphore = threading.Semaphore(_MAX_CONCURRENT_PUBLISHES)
         self._active_publishes: set[str] = set()
         self._active_publishes_lock = threading.Lock()
+
+        # Cache for resolved WebFinger mention lookups.
+        # Maps ``(username_lower, domain_lower)`` → ``actor_url``.
+        # Populated by background publish threads; read (without HTTP)
+        # by the request-serving path.
+        self._mention_cache: dict[tuple[str, str], str] = {}
+        self._mention_cache_lock = threading.Lock()
 
     # -----------------------------------------------------------------
     # StartupSyncMixin hooks
@@ -534,12 +539,55 @@ class ActivityPubIntegration(StartupSyncMixin):
 
         return html, summary, attachments
 
+    def _resolve_mentions(
+        self, text: str, *, allow_network: bool = False
+    ) -> list[Mention]:
+        """
+        Extract ``@user@domain`` mentions from *text* and resolve them.
+
+        Results are cached so that subsequent calls for the same handle
+        never repeat the HTTP lookup.
+
+        :param allow_network: When ``True`` (background publish path),
+            perform a real WebFinger HTTP request for uncached handles
+            and store the result.  When ``False`` (default / request
+            path), return a fallback URL for uncached handles without
+            making any network call.
+        """
+        seen: set[tuple[str, str]] = set()
+        mentions: list[Mention] = []
+        for username, domain in _MENTION_RE.findall(text):
+            key = (username.lower(), domain.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+
+            with self._mention_cache_lock:
+                cached = self._mention_cache.get(key)
+
+            if cached is not None:
+                actor_url = cached
+            elif allow_network:
+                actor_url = resolve_actor_url(username, domain)
+                with self._mention_cache_lock:
+                    self._mention_cache[key] = actor_url
+            else:
+                # Request path: never block on HTTP
+                actor_url = f"https://{domain}/@{username}"
+
+            mentions.append(
+                Mention(username=username, domain=domain, actor_url=actor_url)
+            )
+        return mentions
+
     def build_object(
         self,
         filepath: str,
         url: str,
         actor_url: str,
         public_url: str | None = None,
+        *,
+        allow_network: bool = False,
     ) -> tuple["Object", str]:
         """
         Parse a markdown file and return a fully-populated
@@ -549,6 +597,10 @@ class ActivityPubIntegration(StartupSyncMixin):
         :param public_url: Human-facing URL stored in the ``url`` field of the
             AP object.  Defaults to *url* when the AP domain and blog domain
             are the same.
+        :param allow_network: When ``True``, WebFinger HTTP lookups are
+            permitted for uncached mentions.  Pass ``True`` only from
+            background threads; the request-serving path must use the
+            default (``False``) so it never blocks.
         """
         public_url = public_url or url
         metadata = self._parse_metadata(filepath)
@@ -569,9 +621,9 @@ class ActivityPubIntegration(StartupSyncMixin):
             description,
         )
 
-        # Resolve @user@domain mentions via WebFinger (Pubby utility)
+        # Resolve @user@domain mentions
         raw_text = self._clean_content(filepath)
-        mentions = extract_mentions(raw_text)
+        mentions = self._resolve_mentions(raw_text, allow_network=allow_network)
         mention_tags = [m.to_tag() for m in mentions]
         mention_cc = [m.actor_url for m in mentions]
 
@@ -671,14 +723,14 @@ class ActivityPubIntegration(StartupSyncMixin):
         """
         Build and publish a Create or Update activity.
 
-        The (potentially slow) object build — which includes WebFinger
-        mention resolution — is performed **once**.  Only the delivery
-        step is retried up to :data:`_MAX_PUBLISH_RETRIES` times with
-        :data:`_PUBLISH_RETRY_INTERVAL_SECS` seconds between attempts.
-
+        WebFinger mention resolution happens here (``allow_network=True``)
+        inside a background thread — never on the request-serving path.
         The file is marked as processed **before** delivery so that a
-        crash or restart during the fan-out will not cause the same
-        file to be re-queued by startup sync.
+        crash or restart will not re-queue it.
+
+        Delivery retries are handled internally by pubby's
+        ``OutboxProcessor`` (exponential back-off per inbox), so this
+        method does **not** add its own retry loop.
         """
         base_rel = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
         public_url = f"{self.content_base_url}/article/{base_rel}"
@@ -686,12 +738,14 @@ class ActivityPubIntegration(StartupSyncMixin):
         # ---- 1. Build the AP object (WebFinger lookups happen here) ----
         try:
             obj, activity_type = self.build_object(
-                filepath, url, actor_url, public_url=public_url
+                filepath,
+                url,
+                actor_url,
+                public_url=public_url,
+                allow_network=True,
             )
         except Exception:
-            logger.exception(
-                "Failed to build AP object for %s — giving up", url
-            )
+            logger.exception("Failed to build AP object for %s — giving up", url)
             try:
                 mtime = os.path.getmtime(filepath)
             except OSError:
@@ -706,28 +760,12 @@ class ActivityPubIntegration(StartupSyncMixin):
             mtime = 0
         self._mark_as_published(url, mtime)
 
-        # ---- 3. Deliver (retry only this step) -----------------------
-        for attempt in range(1, _MAX_PUBLISH_RETRIES + 1):
-            try:
-                self.handler.publish_object(obj, activity_type=activity_type)
-                logger.info("Published %s for %s", activity_type, url)
-                return
-            except Exception:
-                logger.warning(
-                    "Publish attempt %d/%d failed for %s",
-                    attempt,
-                    _MAX_PUBLISH_RETRIES,
-                    url,
-                    exc_info=True,
-                )
-                if attempt < _MAX_PUBLISH_RETRIES:
-                    time.sleep(_PUBLISH_RETRY_INTERVAL_SECS)
-
-        logger.error(
-            "All %d publish attempts failed for %s — giving up",
-            _MAX_PUBLISH_RETRIES,
-            url,
-        )
+        # ---- 3. Deliver (pubby handles per-inbox retries) ------------
+        try:
+            self.handler.publish_object(obj, activity_type=activity_type)
+            logger.info("Published %s for %s", activity_type, url)
+        except Exception:
+            logger.exception("Failed to deliver %s for %s", activity_type, url)
 
     def on_content_change(self, change_type: ChangeType, filepath: str) -> None:
         """
@@ -751,9 +789,7 @@ class ActivityPubIntegration(StartupSyncMixin):
         else:
             with self._active_publishes_lock:
                 if url in self._active_publishes:
-                    logger.debug(
-                        "Publish already in progress for %s, skipping", url
-                    )
+                    logger.debug("Publish already in progress for %s, skipping", url)
                     return
                 self._active_publishes.add(url)
 
