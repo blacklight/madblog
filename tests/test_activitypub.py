@@ -4,9 +4,17 @@ Tests for the ActivityPub integration in Madblog.
 
 import os
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+
+def _join_ap_publish_threads(timeout: float = 5) -> None:
+    """Wait for any background ``ap-publish-*`` threads to finish."""
+    for t in threading.enumerate():
+        if t.name.startswith("ap-publish-"):
+            t.join(timeout=timeout)
 
 
 def skip_if_no_pubby(test_func):
@@ -580,6 +588,7 @@ class ActivityPubContentChangeTest(unittest.TestCase):
         # Mock publish_object to capture the call
         handler.publish_object = MagicMock()
         integration.on_content_change(self.ChangeType.ADDED, str(test_file))
+        _join_ap_publish_threads()
 
         handler.publish_object.assert_called_once()
         obj = handler.publish_object.call_args[0][0]
@@ -684,6 +693,7 @@ class ActivityPubContentChangeTest(unittest.TestCase):
 
         handler.publish_object = MagicMock()
         integration.on_content_change(self.ChangeType.ADDED, str(test_file))
+        _join_ap_publish_threads()
 
         handler.publish_object.assert_called_once()
         obj = handler.publish_object.call_args[0][0]
@@ -743,6 +753,7 @@ class ActivityPubContentChangeTest(unittest.TestCase):
 
         handler.publish_object = MagicMock()
         integration.on_content_change(self.ChangeType.ADDED, str(test_file))
+        _join_ap_publish_threads()
 
         handler.publish_object.assert_called_once()
         obj = handler.publish_object.call_args[0][0]
@@ -810,6 +821,7 @@ class ActivityPubPublishSplitDomainTest(unittest.TestCase):
 
         handler.publish_object = MagicMock()
         integration.on_content_change(self.ChangeType.ADDED, str(test_file))
+        _join_ap_publish_threads()
 
         handler.publish_object.assert_called_once()
         obj = handler.publish_object.call_args[0][0]
@@ -928,6 +940,150 @@ class FollowersRouteTest(unittest.TestCase):
         self.config.enable_activitypub = False
         resp = self.client.get("/followers")
         self.assertEqual(resp.status_code, 404)
+
+
+class ActivityPubPublishRetryTest(unittest.TestCase):
+    """Test non-blocking retry logic in _handle_publish."""
+
+    def setUp(self):
+        from madblog.monitor import ChangeType
+
+        self.ChangeType = ChangeType
+
+    def _make_integration(self):
+        """Create an ActivityPubIntegration with a mock handler in a temp dir."""
+        from pubby import ActivityPubHandler
+        from pubby.crypto import generate_rsa_keypair
+        from pubby.storage.adapters.file import FileActivityPubStorage
+        from madblog.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+
+        root = Path(tmpdir.name)
+        pages_dir = root / "pages"
+        pages_dir.mkdir()
+        ap_dir = root / "ap"
+
+        config.content_dir = str(root)
+
+        priv, _ = generate_rsa_keypair()
+        storage = FileActivityPubStorage(data_dir=str(ap_dir))
+        handler = ActivityPubHandler(
+            storage=storage,
+            actor_config={
+                "base_url": "https://example.com",
+                "username": "blog",
+            },
+            private_key=priv,
+        )
+
+        integration = ActivityPubIntegration(
+            handler=handler,
+            pages_dir=str(pages_dir),
+            base_url="https://example.com",
+        )
+
+        test_file = pages_dir / "retry-test.md"
+        test_file.write_text("[//]: # (title: Retry Test)\n\n# Retry Test\n\nHello.\n")
+
+        return integration, handler, test_file
+
+    @skip_if_no_pubby
+    @patch("madblog.activitypub._integration.time.sleep")
+    def test_publish_succeeds_on_first_attempt(self, mock_sleep):
+        """No retries when publish succeeds immediately."""
+        integration, handler, test_file = self._make_integration()
+        handler.publish_object = MagicMock()
+
+        url = integration.file_to_url(str(test_file))
+        actor_url = f"{integration.base_url}{integration.handler.actor_path}"
+        integration._handle_publish(str(test_file), url, actor_url)
+
+        handler.publish_object.assert_called_once()
+        mock_sleep.assert_not_called()
+
+    @skip_if_no_pubby
+    @patch("madblog.activitypub._integration.time.sleep")
+    def test_publish_retries_then_succeeds(self, mock_sleep):
+        """Publish retries on failure and succeeds on a later attempt."""
+        integration, handler, test_file = self._make_integration()
+
+        call_count = 0
+
+        def _fail_then_succeed(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise RuntimeError("simulated delivery failure")
+
+        handler.publish_object = MagicMock(side_effect=_fail_then_succeed)
+
+        url = integration.file_to_url(str(test_file))
+        actor_url = f"{integration.base_url}{integration.handler.actor_path}"
+        integration._handle_publish(str(test_file), url, actor_url)
+
+        self.assertEqual(handler.publish_object.call_count, 3)
+        # Two sleeps between attempts 1→2 and 2→3
+        self.assertEqual(mock_sleep.call_count, 2)
+        mock_sleep.assert_called_with(60)
+
+    @skip_if_no_pubby
+    @patch("madblog.activitypub._integration.time.sleep")
+    def test_publish_gives_up_after_max_retries(self, mock_sleep):
+        """After 3 failures, publish gives up and marks file as processed."""
+        integration, handler, test_file = self._make_integration()
+        handler.publish_object = MagicMock(side_effect=RuntimeError("always fails"))
+
+        url = integration.file_to_url(str(test_file))
+        actor_url = f"{integration.base_url}{integration.handler.actor_path}"
+        integration._handle_publish(str(test_file), url, actor_url)
+
+        self.assertEqual(handler.publish_object.call_count, 3)
+        # File must still be marked as published so startup sync won't retry
+        self.assertTrue(integration._is_published(url))
+
+    @skip_if_no_pubby
+    @patch("madblog.activitypub._integration.time.sleep")
+    def test_failed_publish_not_retried_on_startup_sync(self, mock_sleep):
+        """A permanently failed publish is not retried by startup sync."""
+        integration, handler, test_file = self._make_integration()
+        handler.publish_object = MagicMock(side_effect=RuntimeError("always fails"))
+
+        url = integration.file_to_url(str(test_file))
+        actor_url = f"{integration.base_url}{integration.handler.actor_path}"
+        integration._handle_publish(str(test_file), url, actor_url)
+
+        # Reset mock to track new calls
+        handler.publish_object.reset_mock()
+
+        # Simulate startup sync — it should NOT re-publish this file
+        integration.sync_on_startup()
+        handler.publish_object.assert_not_called()
+
+    @skip_if_no_pubby
+    def test_on_content_change_is_non_blocking(self):
+        """on_content_change returns immediately; publish runs in background."""
+        integration, handler, test_file = self._make_integration()
+
+        # Make publish_object block until we release it
+        barrier = threading.Event()
+        handler.publish_object = MagicMock(
+            side_effect=lambda *a, **k: barrier.wait(timeout=5)
+        )
+
+        integration.on_content_change(self.ChangeType.ADDED, str(test_file))
+
+        # on_content_change must have returned already — the thread is blocked
+        # on the barrier.  publish_object should not have completed yet.
+        handler.publish_object.assert_not_called()
+
+        # Release the thread and wait for it to finish
+        barrier.set()
+        _join_ap_publish_threads()
+
+        handler.publish_object.assert_called_once()
 
 
 if __name__ == "__main__":

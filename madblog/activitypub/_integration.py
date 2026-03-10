@@ -14,6 +14,8 @@ import json
 import shutil
 import subprocess
 import tempfile
+import threading
+import time
 import mimetypes
 
 from datetime import datetime, timezone
@@ -29,6 +31,9 @@ from madblog.sync import StartupSyncMixin
 from madblog.tags import extract_hashtags
 
 logger = logging.getLogger(__name__)
+
+_MAX_PUBLISH_RETRIES = 3
+_PUBLISH_RETRY_INTERVAL_SECS = 60
 
 
 class ActivityPubIntegration(StartupSyncMixin):
@@ -657,29 +662,61 @@ class ActivityPubIntegration(StartupSyncMixin):
             logger.exception("Failed to publish Delete for %s", url)
 
     def _handle_publish(self, filepath: str, url: str, actor_url: str) -> None:
-        """Build and publish a Create or Update activity."""
+        """
+        Build and publish a Create or Update activity.
+
+        Retries up to :data:`_MAX_PUBLISH_RETRIES` times with
+        :data:`_PUBLISH_RETRY_INTERVAL_SECS` seconds between attempts.
+        On permanent failure the file is still marked as processed so
+        that startup sync will not retry it.
+        """
         base_rel = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
         public_url = f"{self.content_base_url}/article/{base_rel}"
-        obj, activity_type = self.build_object(
-            filepath, url, actor_url, public_url=public_url
-        )
 
-        try:
-            self.handler.publish_object(obj, activity_type=activity_type)
+        for attempt in range(1, _MAX_PUBLISH_RETRIES + 1):
             try:
-                mtime = os.path.getmtime(filepath)
-            except OSError:
-                mtime = 0
-            self._mark_as_published(url, mtime)
-            logger.info("Published %s for %s", activity_type, url)
-        except Exception:
-            logger.exception("Failed to publish %s for %s", activity_type, url)
+                obj, activity_type = self.build_object(
+                    filepath, url, actor_url, public_url=public_url
+                )
+                self.handler.publish_object(obj, activity_type=activity_type)
+                try:
+                    mtime = os.path.getmtime(filepath)
+                except OSError:
+                    mtime = 0
+                self._mark_as_published(url, mtime)
+                logger.info("Published %s for %s", activity_type, url)
+                return
+            except Exception:
+                logger.warning(
+                    "Publish attempt %d/%d failed for %s",
+                    attempt,
+                    _MAX_PUBLISH_RETRIES,
+                    url,
+                    exc_info=True,
+                )
+                if attempt < _MAX_PUBLISH_RETRIES:
+                    time.sleep(_PUBLISH_RETRY_INTERVAL_SECS)
+
+        # All retries exhausted — mark as processed so startup sync
+        # will not re-attempt unless the file is modified again.
+        logger.error(
+            "All %d publish attempts failed for %s — giving up",
+            _MAX_PUBLISH_RETRIES,
+            url,
+        )
+        try:
+            mtime = os.path.getmtime(filepath)
+        except OSError:
+            mtime = 0
+        self._mark_as_published(url, mtime)
 
     def on_content_change(self, change_type: ChangeType, filepath: str) -> None:
         """
         Callback for :class:`ContentMonitor`.
 
-        On create/edit: publish a Note/Article to followers.
+        On create/edit: publish a Note/Article to followers in a
+        background thread so that slow WebFinger look-ups or delivery
+        failures do not block the content-monitor loop.
         On delete: send a Delete activity.
         """
         url = self.file_to_url(filepath)
@@ -688,4 +725,9 @@ class ActivityPubIntegration(StartupSyncMixin):
         if change_type.value == "deleted":
             self._handle_delete(filepath, url, actor_url)
         else:
-            self._handle_publish(filepath, url, actor_url)
+            threading.Thread(
+                target=self._handle_publish,
+                args=(filepath, url, actor_url),
+                daemon=True,
+                name=f"ap-publish-{os.path.basename(filepath)}",
+            ).start()
