@@ -409,6 +409,37 @@ Key architectural choice:
    - ActivityPub integration: publish updates
    - Tag index: reindex the changed file
 
+## Progressive Web App (PWA)
+
+Madblog is installable as a Progressive Web App, providing offline access and an
+app-like experience on supported devices.
+
+### Components
+
+- **Web App Manifest** (`/manifest.json`)
+  - Served by `madblog/routes.py`.
+  - If a custom `manifest.json` exists in `content_dir`, it is used directly;
+    otherwise a default manifest is generated from `config.title` with standard
+    icon sizes and standalone display mode.
+
+- **Service Worker** (`madblog/static/js/pwabuilder-sw.js`)
+  - Uses [Workbox](https://developer.chrome.com/docs/workbox/) for caching.
+  - Implements a **stale-while-revalidate** strategy: cached assets are served
+    immediately while fetching fresh versions in the background.
+  - Background sync plugin retries failed requests for up to 24 hours.
+
+- **Registration** (`madblog/static/js/pwabuilder-sw-register.js`)
+  - Registers the service worker and adds a `<pwa-update>` component to notify
+    users when a new version is available.
+
+### Timeline notifications
+
+When ActivityPub is enabled, followers on Mastodon and other fediverse platforms
+receive new and updated articles directly in their home timelines. This provides
+a push-like notification experience without requiring browser push APIs — users
+simply follow the blog's ActivityPub actor and see new posts appear alongside
+their regular fediverse feed.
+
 ## Notes and operational considerations
 
 - ActivityPub and Mermaid rendering depend on optional external tooling:

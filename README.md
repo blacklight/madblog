@@ -689,3 +689,11 @@ When the guestbook is enabled, a separate feed is available at
 This feed contains guestbook entries (Webmentions and ActivityPub mentions) and
 supports `?limit=n` (default 25) and `?offset=n` query parameters for
 pagination.
+
+## PWA
+
+The application is also available as a **Progressive Web App (PWA)**, allowing readers
+to install it on their devices for offline access and native-like experience.
+
+When combined with ActivityPub federation, followers (will soon) receive
+notifications of new articles directly in their fediverse timelines (WIP)
