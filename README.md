@@ -29,6 +29,13 @@ Features:
   Fediverse instances, and receive notifications and replies rendered on your
   own blog. It also comes with a sensible implementation of the Mastodon API.
 
+- **File-based syndication**: no intermediate APIs, databases or services.
+  No heavy polling nor synchronization. Everything is based on plain text and
+  file system events. Updating your articles is as simple as editing a Markdown
+  file on your server. Wanna mention someone? Just put their website or
+  ActivityPub handle in your file, and they'll get a notification. Wanna clean
+  up your ActivityPub events? Just remove a JSON file.
+
 - **Guestbook mode**: a dedicated page that aggregates public mentions to your
   website and interactions from across the web.
 
@@ -37,6 +44,9 @@ Features:
 
 - **Flexible moderation**: smart moderation rules can be set on domains,
   usernames, URLs, with support for regular expressions.
+
+- **Tags and categories**: organize your content with hashtags in your articles.
+  Folders on the filesystem are categories.
 
 ## Demos
 
@@ -170,6 +180,72 @@ docker run -it \
 Set `activitypub_private_key_path: /etc/madblog/ap_key.pem` in your
 `config.yaml`. The key file must be readable only by the owner (`chmod 600`).
 
+## Markdown files
+
+Metadata for articles is stored directly in the Markdown files, as comments in
+the format:
+
+```markdown
+[//]: # (key: value)
+```
+
+Supported metadata:
+
+| Key | Type | Default |
+|-----|------|---------|
+| `title` | String | Inferred either from the first heading or the filename |
+| `description` | String | Inferred from the second heading, if present |
+| `image` | String | — |
+| `author` | String | Inherited from the configured `author` |
+| `author_photo` | String | Inherited from the configured `author_photo` |
+| `language` | String | Inherited from the configured `language` or `en-US` |
+| `published` | Date | Inferred from the creation time of the file |
+| `tags` | List of strings | — |
+
+
+Example Markdown header:
+
+```markdown
+[//]: # (title: Title of the article)
+[//]: # (description: Short description of the content)
+[//]: # (image: /img/some-header-image.png)
+[//]: # (author: Author Name <https://author.me>)
+[//]: # (author_photo: https://author.me/avatar.png)
+[//]: # (language: en-US)
+[//]: # (published: 2022-01-01)
+
+...your article goes here...
+```
+
+Or, if you want to pass an email rather than a URL for the author:
+
+```markdown
+[//]: # (author: Author Name <mailto:email@author.me>)
+```
+
+Optional:
+
+```markdown
+[//]: # (title: Title of the article)
+[//]: # (description: Short description of the content)
+[//]: # (image: /img/some-header-image.png)
+[//]: # (author: Author Name <https://author.me>)
+[//]: # (author_photo: https://author.me/avatar.png)
+[//]: # (language: en-US)
+[//]: # (published: 2022-01-01)
+```
+
+You can also tag your articles:
+
+```markdown
+[//]: # (tags: #python, #webdev, #tutorial)
+```
+
+Tags declared in the metadata header are shown in the article header as links and
+contribute to the tag index available at `/tags`. Hashtags written directly in the
+article body (e.g. `#python`) are also detected and rendered as links to the
+corresponding tag page.
+
 ## Configuration
 
 See [config.example.yaml](./config.example.yaml) for an example configuration
@@ -181,6 +257,74 @@ the prefix `MADBLOG_`.
 
 For example, the `title` configuration option can be set through the `MADBLOG_TITLE`
 environment variable.
+
+### Server settings
+
+| Option | Env var | Default | Description |
+|--------|---------|---------|-------------|
+| `host` | `MADBLOG_HOST` | `0.0.0.0` | Listening address for the built-in web server. |
+| `port` | `MADBLOG_PORT` | `8000` | Listening port for the built-in web server. |
+| `content_dir` | `MADBLOG_CONTENT_DIR` | `.` | Path to the directory containing blog posts and assets. |
+
+### Site metadata
+
+| Option | Env var | Default | Description |
+|--------|---------|---------|-------------|
+| `title` | `MADBLOG_TITLE` | — | Title of the blog (strongly recommended). |
+| `description` | `MADBLOG_DESCRIPTION` | — | Short description of the blog. |
+| `link` | `MADBLOG_LINK` | — | Public base URL of the blog (required for Webmentions and ActivityPub). |
+| `home_link` | `MADBLOG_HOME_LINK` | unset (uses `link`) | URL for the "Home" link in the header, if different from `link`. |
+| `logo` | `MADBLOG_LOGO` | — | URL to a logo image for the blog. |
+| `language` | `MADBLOG_LANGUAGE` | `en-US` | Default language for the blog (can be overridden per article). |
+| `header` | `MADBLOG_HEADER` | `true` | Whether to show the blog header in generated pages. |
+
+### Author settings
+
+| Option | Env var | Default | Description |
+|--------|---------|---------|-------------|
+| `author` | `MADBLOG_AUTHOR` | — | Default author name when not specified in article metadata. |
+| `author_url` | `MADBLOG_AUTHOR_URL` | — | Default author URL (supports `mailto:` links). |
+| `author_photo` | `MADBLOG_AUTHOR_PHOTO` | — | Default author photo URL. |
+| `author_email` | `MADBLOG_AUTHOR_EMAIL` | — | Author email address for mention notifications. |
+
+### External links
+
+You can add external profile links that will be rendered as `<link rel="me">` on
+each page, useful for profile verification:
+
+```yaml
+external_links:
+  - https://mastodon.social/@myprofile
+  - https://github.com/myprofile
+```
+
+Or via environment variable (comma-separated):
+
+```shell
+export MADBLOG_EXTERNAL_LINKS="https://mastodon.social/@myprofile,https://github.com/myprofile"
+```
+
+### Feed settings
+
+| Option | Env var | Default | Description |
+|--------|---------|---------|-------------|
+| `short_feed` | `MADBLOG_SHORT_FEED` | `false` | If true, feeds contain only article descriptions instead of full content. |
+| `max_entries_per_feed` | `MADBLOG_MAX_ENTRIES_PER_FEED` | `10` | Maximum number of entries returned by RSS/Atom feeds. |
+| `feeds_cache_expiry_secs` | `MADBLOG_FEEDS_CACHE_EXPIRY_SECS` | `300` | Cache duration for external feeds (in seconds). Set to `0` to disable caching. |
+
+### Email notifications
+
+Madblog can send email notifications when new Webmentions or ActivityPub
+interactions are received. Configure SMTP settings to enable this:
+
+| Option | Env var | Default | Description |
+|--------|---------|---------|-------------|
+| `smtp_server` | `MADBLOG_SMTP_SERVER` | — | SMTP server hostname. |
+| `smtp_port` | `MADBLOG_SMTP_PORT` | `587` | SMTP server port. |
+| `smtp_username` | `MADBLOG_SMTP_USERNAME` | — | SMTP authentication username. |
+| `smtp_password` | `MADBLOG_SMTP_PASSWORD` | — | SMTP authentication password. |
+| `smtp_starttls` | `MADBLOG_SMTP_STARTTLS` | `true` | Use STARTTLS for SMTP connection. |
+| `smtp_enable_starttls_auto` | `MADBLOG_SMTP_ENABLE_STARTTLS_AUTO` | `true` | Automatically enable STARTTLS if supported. |
 
 ### Webmentions
 
@@ -206,7 +350,12 @@ Webmentions configuration options:
   - Inbound Webmentions are stored as Markdown files under:
     `content_dir/mentions/incoming/<post-slug>/`.
 
-See the provided [`config.example.yaml`](./config.example.yaml) file for configuration options.
+Additional Webmentions options:
+
+| Option | Env var | Default | Description |
+|--------|---------|---------|-------------|
+| `webmentions_hard_delete` | `MADBLOG_WEBMENTIONS_HARD_DELETE` | `false` | If true, deleted Webmentions are removed from disk; otherwise they are marked as deleted. |
+| `webmentions_default_status` | `MADBLOG_WEBMENTIONS_DEFAULT_STATUS` | `confirmed` | Default status for incoming Webmentions (`confirmed` or `pending`). Pending mentions require manual approval. |
 
 ### Moderation
 
@@ -332,44 +481,27 @@ external_feeds:
   - https://colleaguesblog.example.com/feed.atom
 ```
 
-## Markdown files
+### Tags
 
-For an article to be correctly rendered, you need to start the Markdown file
-with the following metadata header:
+Madblog provides a tag index at `/tags` that lists all tags used across your
+articles. Each tag links to `/tags/<tag>`, which shows all articles tagged with
+that hashtag.
 
-```markdown
-[//]: # (title: Title of the article)
-[//]: # (description: Short description of the content)
-[//]: # (image: /img/some-header-image.png)
-[//]: # (author: Author Name <https://author.me>)
-[//]: # (author_photo: https://author.me/avatar.png)
-[//]: # (language: en-US)
-[//]: # (published: 2022-01-01)
+Tags are extracted from:
+
+- The `tags` metadata field (comma-separated)
+- Hashtags in the title, description, or body text
+- Hashtags in incoming Webmentions for the article
+
+### Raw Markdown
+
+You can retrieve the raw Markdown source of any article by appending `.md` to
+the article URL:
+
+```
+https://myblog.example.com/article/my-post.md
 ```
 
-Or, if you want to pass an email rather than a URL for the author:
-
-```markdown
-[//]: # (author: Author Name <mailto:email@author.me>)
-```
-
-You can also tag your articles:
-
-```markdown
-[//]: # (tags: #python, #webdev, #tutorial)
-```
-
-Tags declared in the metadata header are shown in the article header as links and
-contribute to the tag index available at `/tags`. Hashtags written directly in the
-article body (e.g. `#python`) are also detected and rendered as links to the
-corresponding tag page.
-
-If these metadata headers are missing, some of them can be inferred
-from the file itself:
-
-- `title` is either the first main heading or the file name
-- `published` is the creation date of the file
-- `author` is inferred from the configured `author` and `author_email`
 
 ### Folders
 
@@ -660,15 +792,22 @@ Great article by @alice@mastodon.social about federation!
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
+| `activitypub_private_key_path` | `MADBLOG_ACTIVITYPUB_PRIVATE_KEY_PATH` | — | Path to RSA private key PEM file. Auto-generated on first start if not set. Must be readable only by owner (`chmod 600`). |
+| `activitypub_username` | `MADBLOG_ACTIVITYPUB_USERNAME` | `blog` | Fediverse username for the blog actor. |
+| `activitypub_name` | `MADBLOG_ACTIVITYPUB_NAME` | (falls back to `author` or `title`) | Display name for the ActivityPub actor. |
+| `activitypub_summary` | `MADBLOG_ACTIVITYPUB_SUMMARY` | (falls back to `description`) | Summary/bio for the ActivityPub actor. |
+| `activitypub_icon_url` | `MADBLOG_ACTIVITYPUB_ICON_URL` | (falls back to `author_photo`) | Avatar URL for the ActivityPub actor. |
+| `activitypub_link` | `MADBLOG_ACTIVITYPUB_LINK` | unset (uses `link`) | Base URL used for ActivityPub actor/object IDs (e.g. actor `id` is `<base>/ap/actor`). Set this if you want the canonical ActivityPub identity to live on a different hostname than `link`. |
+| `activitypub_domain` | `MADBLOG_ACTIVITYPUB_DOMAIN` | unset (uses `activitypub_link` hostname, else `link` hostname) | Domain used in WebFinger `acct:` handle discovery (e.g. `acct:blog@example.com`). This affects discovery/handle only, not where ActivityPub endpoints are hosted. |
 | `activitypub_object_type` | `MADBLOG_ACTIVITYPUB_OBJECT_TYPE` | `Note` | ActivityPub object type (`Note` or `Article`). `Note` renders inline on Mastodon; `Article` shows as a link preview. |
 | `activitypub_description_only` | `MADBLOG_ACTIVITYPUB_DESCRIPTION_ONLY` | `false` | Only send the article description instead of the full rendered content. |
-| `activitypub_link` | `MADBLOG_ACTIVITYPUB_LINK` | unset (uses `link`) | Base URL used for ActivityPub actor/object IDs (e.g. actor `id` is `<base>/ap/actor`). Set this if you want the canonical ActivityPub identity to live on a different hostname than `link`. |
-| `activitypub_username` | `MADBLOG_ACTIVITYPUB_USERNAME` | `blog` | Fediverse username for the blog actor. |
-| `activitypub_domain` | `MADBLOG_ACTIVITYPUB_DOMAIN` | unset (uses `activitypub_link` hostname, else `link` hostname) | Domain used in WebFinger `acct:` handle discovery (e.g. `acct:blog@example.com`). This affects discovery/handle only, not where ActivityPub endpoints are hosted. |
+| `activitypub_posts_content_wrapped` | `MADBLOG_ACTIVITYPUB_POSTS_CONTENT_WRAPPED` | `false` | If true, the article title is sent as the ActivityPub "summary" field (Content Warning). When false, title and description are rendered inline. |
 | `activitypub_profile_field_name` | `MADBLOG_ACTIVITYPUB_PROFILE_FIELD_NAME` | `Blog` | Label used for the primary ActivityPub profile field that points to your blog URL (`link`). |
 | `activitypub_profile_fields` | N/A | empty mapping | Additional profile fields to advertise on the ActivityPub actor as a name->value mapping. If a value is an http(s) URL it will be rendered as a `rel="me"` link. |
 | `activitypub_manually_approves_followers` | `MADBLOG_ACTIVITYPUB_MANUALLY_APPROVES_FOLLOWERS` | `false` | Require manual approval for new followers. |
 | `activitypub_quote_control` | `MADBLOG_ACTIVITYPUB_QUOTE_CONTROL` | `public` | Quote policy for ActivityPub posts. Mastodon will refuse quote-boosts unless set to `public`. |
+| `activitypub_auto_approve_quotes` | `MADBLOG_ACTIVITYPUB_AUTO_APPROVE_QUOTES` | `true` | Automatically send QuoteAuthorization when a remote actor quotes your posts. Without this, Mastodon keeps quotes in "pending" state. |
+| `activitypub_email_notifications` | `MADBLOG_ACTIVITYPUB_EMAIL_NOTIFICATIONS` | `true` | Send email notifications for ActivityPub interactions (requires SMTP configuration and `author_email`). |
 
 ### Mastodon-compatible API
 
