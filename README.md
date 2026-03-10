@@ -6,6 +6,38 @@
 
 A minimal but capable blog and Web framework that you can directly run from a Markdown folder.
 
+Features:
+
+- **No database required**: just a folder with your Markdown files. An Obsidian
+  vault, a Nextcloud Notes folder or share point, a git clone, a folder on your
+  phone synchronized over SyncThing...it can be anything.
+
+- **LaTeX support**: support for rendering LaTeX equations in your Markdown
+  files.
+
+- **Mermaid support**: support for rendering Mermaid diagrams in your Markdown
+  files.
+
+- **Webmentions support**: native support for
+  [Webmentions](https://indieweb.org/Webmentions). Get mentioned by other blogs
+  or link aggregators, and receive notifications and replies rendered on your
+  own blog.
+
+- **ActivityPub support**: native support for
+  [ActivityPub](https://indieweb.org/ActivityPub). Get mentioned by other
+  ActivityPub servers, get followers for your blog from Mastodon and other
+  Fediverse instances, and receive notifications and replies rendered on your
+  own blog. It also comes with a sensible implementation of the Mastodon API.
+
+- **Guestbook mode**: a dedicated page that aggregates public mentions to your
+  website and interactions from across the web.
+
+- **Aggregator mode**: render external RSS or Atom feeds directly in your blog.
+  Great for affiliated blogs, or even self-hosted news readers.
+
+- **Flexible moderation**: smart moderation rules can be set on domains,
+  usernames, URLs, with support for regular expressions.
+
 ## Demos
 
 This project powers the following blogs:
