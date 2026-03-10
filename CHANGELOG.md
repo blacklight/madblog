@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.4
+
+### Changed
+- ActivityPub publishing now builds the AP object only once (including WebFinger/mention resolution) and retries **delivery only**
+.
+- Published entries are marked as processed **before** delivery to prevent startup sync re-queuing after crashes/restarts.
+
+### Fixed
+- Prevent runaway background publishing by capping concurrent publish threads (max 4) and de-duplicating publishes for the same UR
+L (drops overlapping requests).
+
+### Tests
+- Added coverage for single-build behavior across retries, marking-as-published timing, build failures, URL de-dupe, and concurren
+cy limits.
+
 ## 0.9.3
 
 ### Changed
