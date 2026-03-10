@@ -130,9 +130,11 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             and config.smtp_server
             and config.activitypub_email_notifications
         ):
+            ap_base_url = (config.activitypub_link or config.link).rstrip("/")
             on_interaction = build_activitypub_email_notifier(
                 recipient=config.author_email,
                 blog_base_url=config.link,
+                ap_base_url=ap_base_url,
                 smtp=SmtpConfig(
                     server=config.smtp_server,
                     port=config.smtp_port,

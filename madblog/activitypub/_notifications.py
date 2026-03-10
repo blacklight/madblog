@@ -11,6 +11,7 @@ def build_activitypub_email_notifier(
     recipient: str,
     blog_base_url: str,
     smtp: SmtpConfig,
+    ap_base_url: Optional[str] = None,
     sender: Optional[str] = None,
     send_email: Callable[..., None] = _send_email,
 ) -> Callable:
@@ -32,8 +33,17 @@ def build_activitypub_email_notifier(
         sender=sender or smtp.sender,
     )
 
+    base_url = blog_base_url.rstrip("/")
+    ap_url = (ap_base_url or "").rstrip("/")
+    valid_prefixes = tuple({p + "/" for p in (base_url, ap_url) if p})
+
     def _on_interaction_received(interaction: Interaction) -> None:
         if getattr(interaction, "status", None) == InteractionStatus.DELETED:
+            return
+
+        target = interaction.target_resource or ""
+        if valid_prefixes and not target.startswith(valid_prefixes):
+            logger.debug("Skipping notification for non-local target: %s", target)
             return
 
         itype = str(interaction.interaction_type.value).capitalize()

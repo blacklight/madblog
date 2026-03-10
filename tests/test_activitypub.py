@@ -982,6 +982,55 @@ class ActivityPubNotificationsTest(unittest.TestCase):
         self.assertIn("Like", call_kwargs["subject"])
         self.assertIn("Alice", call_kwargs["body"])
 
+    @skip_if_no_pubby
+    def test_no_email_for_non_local_target(self):
+        from madblog.activitypub import build_activitypub_email_notifier
+        from madblog.notifications import SmtpConfig
+        from pubby import Interaction, InteractionType
+
+        send_email = MagicMock()
+        notifier = build_activitypub_email_notifier(
+            recipient="test@example.com",
+            blog_base_url="https://example.com",
+            smtp=SmtpConfig(server="smtp.example.com"),
+            send_email=send_email,
+        )
+
+        interaction = Interaction(
+            source_actor_id="https://someone.social/user1",
+            target_resource="https://someone.else.social/users/user2/statuses/12345",
+            interaction_type=InteractionType.REPLY,
+            author_name="Joe",
+        )
+
+        notifier(interaction)
+        send_email.assert_not_called()
+
+    @skip_if_no_pubby
+    def test_email_sent_for_ap_base_url_target(self):
+        from madblog.activitypub import build_activitypub_email_notifier
+        from madblog.notifications import SmtpConfig
+        from pubby import Interaction, InteractionType
+
+        send_email = MagicMock()
+        notifier = build_activitypub_email_notifier(
+            recipient="test@example.com",
+            blog_base_url="https://example.com",
+            ap_base_url="https://ap.example.com",
+            smtp=SmtpConfig(server="smtp.example.com"),
+            send_email=send_email,
+        )
+
+        interaction = Interaction(
+            source_actor_id="https://remote.example/user/bob",
+            target_resource="https://ap.example.com/article/test",
+            interaction_type=InteractionType.REPLY,
+            author_name="Bob",
+        )
+
+        notifier(interaction)
+        send_email.assert_called_once()
+
 
 class FollowersRouteTest(unittest.TestCase):
     """Test /followers HTML route and followers bar on home page."""
