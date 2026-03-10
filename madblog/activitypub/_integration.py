@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_PUBLISH_RETRIES = 3
 _PUBLISH_RETRY_INTERVAL_SECS = 60
+_MAX_CONCURRENT_PUBLISHES = 4
 
 
 class ActivityPubIntegration(StartupSyncMixin):
@@ -68,6 +69,11 @@ class ActivityPubIntegration(StartupSyncMixin):
         # StartupSyncMixin configuration
         self._sync_cache_file = self.workdir / "published_objects.json"
         self._sync_pages_dir = self.pages_dir
+
+        # Concurrency controls for background publish threads
+        self._publish_semaphore = threading.Semaphore(_MAX_CONCURRENT_PUBLISHES)
+        self._active_publishes: set[str] = set()
+        self._active_publishes_lock = threading.Lock()
 
     # -----------------------------------------------------------------
     # StartupSyncMixin hooks
@@ -665,25 +671,45 @@ class ActivityPubIntegration(StartupSyncMixin):
         """
         Build and publish a Create or Update activity.
 
-        Retries up to :data:`_MAX_PUBLISH_RETRIES` times with
+        The (potentially slow) object build — which includes WebFinger
+        mention resolution — is performed **once**.  Only the delivery
+        step is retried up to :data:`_MAX_PUBLISH_RETRIES` times with
         :data:`_PUBLISH_RETRY_INTERVAL_SECS` seconds between attempts.
-        On permanent failure the file is still marked as processed so
-        that startup sync will not retry it.
+
+        The file is marked as processed **before** delivery so that a
+        crash or restart during the fan-out will not cause the same
+        file to be re-queued by startup sync.
         """
         base_rel = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
         public_url = f"{self.content_base_url}/article/{base_rel}"
 
+        # ---- 1. Build the AP object (WebFinger lookups happen here) ----
+        try:
+            obj, activity_type = self.build_object(
+                filepath, url, actor_url, public_url=public_url
+            )
+        except Exception:
+            logger.exception(
+                "Failed to build AP object for %s — giving up", url
+            )
+            try:
+                mtime = os.path.getmtime(filepath)
+            except OSError:
+                mtime = 0
+            self._mark_as_published(url, mtime)
+            return
+
+        # ---- 2. Mark as processed BEFORE delivery --------------------
+        try:
+            mtime = os.path.getmtime(filepath)
+        except OSError:
+            mtime = 0
+        self._mark_as_published(url, mtime)
+
+        # ---- 3. Deliver (retry only this step) -----------------------
         for attempt in range(1, _MAX_PUBLISH_RETRIES + 1):
             try:
-                obj, activity_type = self.build_object(
-                    filepath, url, actor_url, public_url=public_url
-                )
                 self.handler.publish_object(obj, activity_type=activity_type)
-                try:
-                    mtime = os.path.getmtime(filepath)
-                except OSError:
-                    mtime = 0
-                self._mark_as_published(url, mtime)
                 logger.info("Published %s for %s", activity_type, url)
                 return
             except Exception:
@@ -697,18 +723,11 @@ class ActivityPubIntegration(StartupSyncMixin):
                 if attempt < _MAX_PUBLISH_RETRIES:
                     time.sleep(_PUBLISH_RETRY_INTERVAL_SECS)
 
-        # All retries exhausted — mark as processed so startup sync
-        # will not re-attempt unless the file is modified again.
         logger.error(
             "All %d publish attempts failed for %s — giving up",
             _MAX_PUBLISH_RETRIES,
             url,
         )
-        try:
-            mtime = os.path.getmtime(filepath)
-        except OSError:
-            mtime = 0
-        self._mark_as_published(url, mtime)
 
     def on_content_change(self, change_type: ChangeType, filepath: str) -> None:
         """
@@ -717,7 +736,12 @@ class ActivityPubIntegration(StartupSyncMixin):
         On create/edit: publish a Note/Article to followers in a
         background thread so that slow WebFinger look-ups or delivery
         failures do not block the content-monitor loop.
-        On delete: send a Delete activity.
+
+        At most :data:`_MAX_CONCURRENT_PUBLISHES` threads run in
+        parallel, and duplicate requests for the same URL are dropped.
+
+        On delete: send a Delete activity (synchronous — no mentions
+        involved).
         """
         url = self.file_to_url(filepath)
         actor_url = f"{self.base_url}{self.handler.actor_path}"
@@ -725,9 +749,25 @@ class ActivityPubIntegration(StartupSyncMixin):
         if change_type.value == "deleted":
             self._handle_delete(filepath, url, actor_url)
         else:
+            with self._active_publishes_lock:
+                if url in self._active_publishes:
+                    logger.debug(
+                        "Publish already in progress for %s, skipping", url
+                    )
+                    return
+                self._active_publishes.add(url)
+
+            def _guarded_publish():
+                self._publish_semaphore.acquire()
+                try:
+                    self._handle_publish(filepath, url, actor_url)
+                finally:
+                    self._publish_semaphore.release()
+                    with self._active_publishes_lock:
+                        self._active_publishes.discard(url)
+
             threading.Thread(
-                target=self._handle_publish,
-                args=(filepath, url, actor_url),
+                target=_guarded_publish,
                 daemon=True,
                 name=f"ap-publish-{os.path.basename(filepath)}",
             ).start()
