@@ -1,7 +1,7 @@
 import logging
 from typing import Callable, Optional
 
-from madblog.notifications import SmtpConfig, send_email as _send_email
+from madblog.notifications import SmtpConfig, html_to_text, send_email as _send_email
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,8 @@ def build_activitypub_email_notifier(
             )
 
         if interaction.content:
-            lines.extend(["", "Content:", interaction.content])
+            content_text = html_to_text(interaction.content)
+            lines.extend(["", "Content:", content_text])
 
         try:
             send_email(
