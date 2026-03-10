@@ -1031,6 +1031,64 @@ class ActivityPubNotificationsTest(unittest.TestCase):
         notifier(interaction)
         send_email.assert_called_once()
 
+    @skip_if_no_pubby
+    def test_email_sent_when_content_mentions_actor(self):
+        from madblog.activitypub import build_activitypub_email_notifier
+        from madblog.notifications import SmtpConfig
+        from pubby import Interaction, InteractionType
+
+        send_email = MagicMock()
+        notifier = build_activitypub_email_notifier(
+            recipient="test@example.com",
+            blog_base_url="https://blog.example.com",
+            ap_base_url="https://example.com",
+            actor_url="https://example.com/ap/actor",
+            smtp=SmtpConfig(server="smtp.example.com"),
+            send_email=send_email,
+        )
+
+        interaction = Interaction(
+            source_actor_id="https://remote.social/users/alice",
+            target_resource="https://other.instance/objects/some-uuid",
+            interaction_type=InteractionType.REPLY,
+            author_name="Alice",
+            content=(
+                '<p><span class="h-card">'
+                '<a href="https://example.com/ap/actor" class="u-url mention">'
+                "@<span>blog</span></a></span> great post!</p>"
+            ),
+        )
+
+        notifier(interaction)
+        send_email.assert_called_once()
+
+    @skip_if_no_pubby
+    def test_no_email_for_non_local_target_without_mention(self):
+        from madblog.activitypub import build_activitypub_email_notifier
+        from madblog.notifications import SmtpConfig
+        from pubby import Interaction, InteractionType
+
+        send_email = MagicMock()
+        notifier = build_activitypub_email_notifier(
+            recipient="test@example.com",
+            blog_base_url="https://blog.example.com",
+            ap_base_url="https://example.com",
+            actor_url="https://example.com/ap/actor",
+            smtp=SmtpConfig(server="smtp.example.com"),
+            send_email=send_email,
+        )
+
+        interaction = Interaction(
+            source_actor_id="https://remote.social/users/alice",
+            target_resource="https://other.instance/users/bob/statuses/999",
+            interaction_type=InteractionType.REPLY,
+            author_name="Alice",
+            content="<p>@bob just a random reply in a thread</p>",
+        )
+
+        notifier(interaction)
+        send_email.assert_not_called()
+
 
 class FollowersRouteTest(unittest.TestCase):
     """Test /followers HTML route and followers bar on home page."""

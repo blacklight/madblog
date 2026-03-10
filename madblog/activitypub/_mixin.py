@@ -135,6 +135,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                 recipient=config.author_email,
                 blog_base_url=config.link,
                 ap_base_url=ap_base_url,
+                actor_url=config.activitypub_actor_url,
                 smtp=SmtpConfig(
                     server=config.smtp_server,
                     port=config.smtp_port,
