@@ -610,6 +610,134 @@ def guestbook_route():
     return response
 
 
+def _get_guestbook_feed(request: Request, feed_type: Optional[str] = None):
+    """
+    Generate an RSS/Atom feed for guestbook entries.
+    """
+    if not config.enable_guestbook:
+        return Response("Guestbook is not enabled", status=404, mimetype="text/plain")
+
+    if not feed_type:
+        feed_type = request.args.get("type", "atom")
+
+    feed_type = feed_type.lower().strip()
+    if feed_type not in {"rss", "atom"}:
+        return Response("Invalid feed type", status=400, mimetype="text/plain")
+
+    limit = int(request.args.get("limit", 25))
+    offset = int(request.args.get("offset", 0))
+
+    # Collect guestbook entries from both sources
+    entries = []
+
+    if config.enable_webmentions:
+        for wm in app.get_guestbook_webmentions():
+            entries.append(
+                {
+                    "id": wm.source,
+                    "url": wm.source,
+                    "title": wm.title or wm.excerpt or "Webmention",
+                    "content": wm.content or wm.excerpt or "",
+                    "published": wm.published or wm.created_at,
+                    "author_name": wm.author_name,
+                    "author_url": wm.author_url,
+                    "type": "webmention",
+                }
+            )
+
+    if config.enable_activitypub:
+        for interaction in app.get_guestbook_ap_interactions():
+            obj_id = getattr(interaction, "object_id", None) or getattr(
+                interaction, "activity_id", ""
+            )
+            entries.append(
+                {
+                    "id": obj_id,
+                    "url": obj_id,
+                    "title": getattr(interaction, "source_actor_name", None)
+                    or "Fediverse mention",
+                    "content": getattr(interaction, "content", "") or "",
+                    "published": getattr(interaction, "published", None)
+                    or getattr(interaction, "created_at", None),
+                    "author_name": getattr(interaction, "source_actor_name", None),
+                    "author_url": getattr(interaction, "source_actor_id", None),
+                    "type": "activitypub",
+                }
+            )
+
+    # Sort by published date (most recent first) and apply pagination
+    entries.sort(key=lambda x: x["published"] or datetime.datetime.min, reverse=True)
+    entries = entries[offset : offset + limit]
+
+    # Build the feed
+    fg = FeedGenerator()
+    guestbook_url = _get_absolute_url("/guestbook")
+    fg.id(guestbook_url)
+    fg.title(f"{config.title} - Guestbook")
+    fg.link(href=guestbook_url, rel="alternate")
+    fg.description(f"Guestbook entries for {config.title}")
+    fg.language(config.language)
+
+    fg.author(
+        **_parse_author_info(author=config.author, author_url=config.author_url),
+    )
+
+    self_url = _get_absolute_url(f"/guestbook/feed.{feed_type}")
+    fg.link(href=self_url, rel="self")
+
+    if entries:
+        updated = _to_feed_datetime(entries[0].get("published"))
+        if updated:
+            fg.updated(updated)
+
+    for entry in entries:
+        fe = fg.add_entry()
+        entry_id = entry.get("id", "")
+        if entry_id:
+            fe.id(entry_id)
+            fe.link(href=entry_id, rel="alternate")
+
+        fe.title(_to_feed_text(entry.get("title", "Guestbook entry")))
+
+        published = _to_feed_datetime(entry.get("published"))
+        if published:
+            fe.published(published)
+            fe.updated(published)
+
+        content = entry.get("content", "")
+        if content:
+            fe.content(_to_feed_text(content), type="html")
+
+        author_name = entry.get("author_name")
+        author_url = entry.get("author_url")
+        if author_name or author_url:
+            fe.author(**_parse_author_info(author=author_name, author_url=author_url))
+
+    # Create response with appropriate content type
+    response = (
+        Response(fg.atom_str(pretty=True), mimetype="application/atom+xml")
+        if feed_type == "atom"
+        else Response(fg.rss_str(pretty=True), mimetype="application/rss+xml")
+    )
+
+    response.headers["Cache-Control"] = "no-store"
+
+    if config.language:
+        response.headers["Language"] = config.language
+
+    return response
+
+
+@app.route("/guestbook/feed.<type>", methods=["GET"])
+def guestbook_feed_route(type: str):
+    return _get_guestbook_feed(request, type)
+
+
+@app.route("/guestbook/feed", methods=["GET"])
+def guestbook_feed_default_route():
+    return _get_guestbook_feed(request)
+
+
 @app.route("/followers", methods=["GET"])
 def followers_route():
     from flask import make_response, render_template

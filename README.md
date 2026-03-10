@@ -663,3 +663,12 @@ For backwards compatibility, `/rss` is still available as a shortcut to `/feed.r
 If you want the short feed (i.e. without the fully rendered article as a
 description) to be always returned, then you can specify `short_feed=true` in
 your configuration.
+
+### Guestbook feed
+
+When the guestbook is enabled, a separate feed is available at
+`/guestbook/feed.<type>` (e.g. `/guestbook/feed.atom` or `/guestbook/feed.rss`).
+
+This feed contains guestbook entries (Webmentions and ActivityPub mentions) and
+supports `?limit=n` (default 25) and `?offset=n` query parameters for
+pagination.

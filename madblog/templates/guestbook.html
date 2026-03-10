@@ -18,6 +18,10 @@
         You can also mention <a href="{{ config.activitypub_profile_url }}">{{ activitypub_handle or '@' + config.activitypub_username }}</a> on the Fediverse.
         {% endif %}
       </p>
+      <p class="guestbook-feeds">
+        <a href="/guestbook/feed.atom" target="_blank" title="Atom Feed">{% include 'icons/rss.html' %} Atom</a>
+        <a href="/guestbook/feed.rss" target="_blank" title="RSS Feed">{% include 'icons/rss.html' %} RSS</a>
+      </p>
     </div>
 
     <div class="guestbook-entries">
@@ -56,6 +60,30 @@
   padding: 2em;
   color: var(--color-fg-secondary);
   font-style: italic;
+}
+
+.guestbook-feeds {
+  display: flex;
+  gap: 1em;
+  margin-top: 0.5em;
+}
+
+.guestbook-feeds a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  color: var(--color-fg-secondary);
+  text-decoration: none;
+  font-size: 0.9em;
+}
+
+.guestbook-feeds a:hover {
+  color: var(--color-fg-primary);
+}
+
+.guestbook-feeds svg {
+  width: 16px;
+  height: 16px;
 }
 </style>
 

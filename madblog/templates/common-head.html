@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="{{ config.language | default('en') }}">
 {% set is_home_page = '/'.join((url or config.link or '').rstrip('/').split('/')[3:]).split('?')[0].split('#')[0] == '' %}
+{% set is_guestbook_page = (url or '').rstrip('/').endswith('/guestbook') %}
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -20,8 +21,13 @@
     <!-- Orientation  -->
     <meta name="screen-orientation" content="portrait">
     <!-- RSS feed -->
+    {% if is_guestbook_page %}
+    <link rel="alternate" type="application/atom+xml" title="{{ config.title }} - Guestbook (Atom)" href="/guestbook/feed.atom" />
+    <link rel="alternate" type="application/rss+xml" title="{{ config.title }} - Guestbook (RSS)" href="/guestbook/feed.rss" />
+    {% else %}
     <link rel="alternate" type="application/atom+xml" title="{{ config.title }} (Atom)" href="/feed.atom" />
     <link rel="alternate" type="application/rss+xml" title="{{ config.title }} (RSS)" href="/feed.rss" />
+    {% endif %}
     <!-- Fonts & Styles -->
     <link rel="stylesheet" href="/fonts/lora.css">
     <link rel="stylesheet" href="/fonts/poppins.css">

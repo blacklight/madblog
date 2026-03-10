@@ -129,12 +129,25 @@ Important invariant:
     - **Articles** (`/article/...`): render a Markdown file as HTML.
     - **Raw Markdown** (`/article/... .md`): returns Markdown source.
     - **Assets** (`/img`, `/css`, `/js`, `/fonts`, `/manifest.json`).
-    - **Feeds** (`/feed.rss`, `/feed.atom`, `/rss`).
+    - **Feeds** (`/feed.rss`, `/feed.atom`, `/rss`): blog article feeds.
+    - **Guestbook feeds** (`/guestbook/feed.rss`, `/guestbook/feed.atom`).
     - **Tags** (`/tags`, `/tags/<tag>`).
+    - **Guestbook** (`/guestbook`): aggregated mentions page.
     - **ActivityPub helpers** (`/@<username>` redirect, `/followers`).
 
 Routes delegate most content and caching logic back to `BlogApp` methods such as
 `get_page()` and `get_pages_response()`.
+
+### Feed generation
+
+Feed routes use `feedgen.FeedGenerator` to produce RSS 2.0 and Atom 1.0 feeds:
+
+- `_get_feed()`: Generates blog article feeds from `app.get_pages()`. Supports
+  `?limit`, `?short` query parameters and HTTP cache validation
+  (`If-Modified-Since`, `If-None-Match`).
+- `_get_guestbook_feed()`: Generates guestbook feeds from
+  `app.get_guestbook_webmentions()` and `app.get_guestbook_ap_interactions()`.
+  Supports `?limit` (default 25) and `?offset` query parameters.
 
 ## Markdown subsystem
 
