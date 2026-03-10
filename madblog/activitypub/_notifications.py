@@ -44,7 +44,8 @@ def build_activitypub_email_notifier(
 
         target = interaction.target_resource or ""
         is_local_target = bool(valid_prefixes and target.startswith(valid_prefixes))
-        mentions_actor = bool(actor_url and actor_url in (interaction.content or ""))
+        mentioned_actors = getattr(interaction, "mentioned_actors", None) or []
+        mentions_actor = bool(actor_url and actor_url in mentioned_actors)
 
         if not is_local_target and not mentions_actor:
             logger.debug("Skipping notification for non-local target: %s", target)
