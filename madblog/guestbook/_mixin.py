@@ -148,6 +148,14 @@ class GuestbookMixin(ABC):
         try:
             actor_url = self.activitypub_handler.actor_id
             interactions = list(storage.get_interactions(target_resource=actor_url))
+
+            # Also include interactions that mention the actor but target other URLs
+            # (e.g. replies to reshares on other instances that mention the blog)
+            if hasattr(storage, "get_interactions_mentioning"):
+                mention_interactions = list(
+                    storage.get_interactions_mentioning(actor_url)
+                )
+                interactions.extend(mention_interactions)
         except Exception:
             logger.debug("Failed to get AP interactions for guestbook", exc_info=True)
             return []
