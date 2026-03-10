@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.9.2
+
+### Added
+- **Guestbook page** (`/guestbook`) aggregating homepage Webmentions and non-reply ActivityPub mentions, with `enable_guestbook` config/env t
+oggle.
+- **Guestbook feeds**: `/guestbook/feed.atom` and `/guestbook/feed.rss` with `limit`/`offset` pagination, plus template/header feed links.
+- **Moderation allowlist mode** via `allowed_actors` (config/env), including shared permission checks, cached moderation lists, and follower 
+reconciliation behavior.
+
+### Changed
+- Moderation semantics generalized from blocklist-only to **blocklist or allowlist** (mutually exclusive), applied consistently across Activi
+tyPub, Webmentions, and guestbook rendering/processing.
+- README/architecture docs expanded: feature overview, quickstart, installation clarifications, Markdown metadata/tags, configuration referen
+ce, PWA notes, and guestbook documentation.
+
+### Fixed
+- **Email notifications**: strip HTML from ActivityPub/Webmention content/excerpts for plaintext emails (new `html_to_text` + tests).
+- **Webmentions metadata parsing**: capture remaining Markdown body text as `content`.
+- **ActivityPub key generation**: ensure private key directory exists before writing.
+
 ## 0.9.1
 
 **Added**
