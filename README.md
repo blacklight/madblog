@@ -199,6 +199,43 @@ the next application start.
 The blocklist is cached in memory with a 5-minute TTL to avoid filesystem
 round-trips during publish.
 
+### Guestbook
+
+The guestbook feature provides a dedicated page (`/guestbook`) that aggregates
+public mentions and interactions from across the web, serving as a "guest
+registry" for your blog.
+
+Guestbook entries are collected from two sources:
+
+- **Webmentions** targeting the home page (when `enable_webmentions` is enabled)
+- **ActivityPub mentions** of your blog actor that are not replies to articles
+  (when `enable_activitypub` is enabled)
+
+The guestbook is enabled by default. To disable it:
+
+```yaml
+# config.yaml
+enable_guestbook: false
+```
+
+Or via environment variable:
+
+```shell
+export MADBLOG_ENABLE_GUESTBOOK=0
+```
+
+When enabled, a "Guestbook" link appears in the navigation menu. The page
+displays messages chronologically (most recent first). Blocked actors (via
+`blocked_actors`) are automatically filtered out.
+
+**How visitors can leave a message:**
+
+- **Via Webmention:** Send a Webmention with your blog's home page URL as the
+  target.
+- **Via Fediverse:** Mention your blog's ActivityPub handle (e.g.
+  `@blog@example.com`) in a public post that is not a reply to one of your
+  articles.
+
 ### View mode
 
 The blog home page supports three view modes:

@@ -14,29 +14,35 @@ that composes independent feature areas via mixins:
 - `FeedsMixin` for aggregating remote RSS/Atom feeds into the homepage
 - `WebmentionsMixin` for inbound/outbound Webmentions storage and processing
 - `ActivityPubMixin` for ActivityPub actor + object publishing (optional)
+- `GuestbookMixin` for aggregating public mentions into a guestbook page
 
 The runtime app is created in `madblog/app.py` and routes are registered in
 `madblog/routes.py`.
 
 ## Package map
 
-Top-level Python package:
+Top-level Python modules:
 
-- `madblog/`
-  - `app.py`
-  - `routes.py`
-  - `config.py`
-  - `cli.py`, `__main__.py`, `uwsgi.py`
-  - `markdown/`
-  - `activitypub/`
-  - `webmentions/`
-  - `feeds/`
-  - `tags/`
-  - `cache/`
-  - `monitor.py`
-  - `sync.py`
-  - `notifications.py`
-  - `constants/`
+| Module | Description |
+|---|---|
+| `activitypub` | Optional ActivityPub support |
+| `app` | Main application class |
+| `cache` | Cache handling + HTTP headers |
+| `cli` | Command-line interface |
+| `config` | Configuration handling |
+| `constants` | Constants and regular expressions |
+| `feeds` | RSS+Atom feed handling |
+| `guestbook` | Guestbook support |
+| `markdown` | Markdown subsystem |
+| `monitor` | Background filesystem monitor |
+| `notifications` | Notifications handling |
+| `routes` | Flask routes |
+| `sync` | Background sync tasks |
+| `tags` | Tags subsystem |
+| `uwsgi.py` | uWSGI entry point |
+| `webmentions` | Webmentions subsystem |
+| `__main__.py` | CLI entry point |
+
 
 The `static/` and `templates/` directories under `madblog/` provide the default
 UI assets.
@@ -87,8 +93,8 @@ Configuration controls:
 - `madblog/app.py`
   - Defines `BlogApp`, which inherits:
     - `flask.Flask`
-    - `ActivityPubMixin`, `CacheMixin`, `FeedsMixin`, `MarkdownMixin`,
-      `WebmentionsMixin`
+    - `ActivityPubMixin`, `CacheMixin`, `FeedsMixin`, `GuestbookMixin`,
+      `MarkdownMixin`, `WebmentionsMixin`
   - Establishes content directory layout:
     - Markdown pages: `<content_dir>/markdown` (fallback: `<content_dir>`)
     - Assets: `<content_dir>/{img,css,js,fonts,templates}` with fallback to
@@ -237,6 +243,63 @@ external dependency `pubby` is installed.
 
 - `madblog/activitypub/_notifications.py`
   - Optional email notifications for ActivityPub interactions.
+
+## Guestbook subsystem
+
+The guestbook provides a dedicated page (`/guestbook`) aggregating public
+mentions from Webmentions and ActivityPub into a single "guest registry" view.
+
+- `madblog/guestbook/_mixin.py` (`GuestbookMixin`)
+  - Mixed into `BlogApp` to provide guestbook functionality.
+  - **Data sources:**
+    - Webmentions where the target URL is the home page (`get_guestbook_webmentions()`)
+    - ActivityPub mentions targeting the actor that are not replies to articles
+      (`get_guestbook_ap_interactions()`)
+  - **Key methods:**
+    - `get_guestbook_webmentions()`: Queries `webmentions_handler` for mentions
+      targeting the base URL (with and without trailing slash), deduplicates by
+      source URL, filters blocked actors, and sorts by published date.
+    - `get_guestbook_ap_interactions()`: Queries `activitypub_handler.storage`
+      for interactions with `target_resource` set to the actor ID, filters to
+      `interaction_type == "mention"`, applies blocklist, deduplicates by
+      activity/object ID, and sorts by published date.
+    - `get_rendered_guestbook_webmentions()`: Returns rendered HTML via
+      `webmentions_handler.render_webmentions()`.
+    - `get_rendered_guestbook_ap_interactions()`: Returns rendered HTML via
+      `activitypub_handler.render_interactions()`.
+    - `get_guestbook_count()`: Returns total entry count (webmentions + AP).
+
+- `madblog/guestbook/__init__.py`
+  - Exports `GuestbookMixin`.
+
+### Route
+
+- `madblog/routes.py` (`/guestbook`)
+  - Returns 404 if `config.enable_guestbook` is false.
+  - Calls `app.get_rendered_guestbook_webmentions()` and
+    `app.get_rendered_guestbook_ap_interactions()`.
+  - Renders `guestbook.html` template with rendered HTML sections.
+  - Sets `Cache-Control: no-store` to ensure fresh data.
+
+### Frontend
+
+- `madblog/templates/guestbook.html`
+  - Displays title, description with interaction instructions (Webmention and/or
+    Fediverse mention links depending on enabled features).
+  - Two `<section>` elements: one for webmentions, one for ActivityPub
+    interactions.
+  - Empty state message when no entries exist.
+  - Inline CSS for section styling.
+
+- `madblog/templates/common-head.html`
+  - Conditionally renders a "Guestbook" navigation link when
+    `config.enable_guestbook` is true.
+
+### Configuration
+
+- `config.enable_guestbook` (default: `true`)
+  - Config file: `enable_guestbook: true|false`
+  - Environment variable: `MADBLOG_ENABLE_GUESTBOOK=1|0`
 
 ## Shared infrastructure
 
