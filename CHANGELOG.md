@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.8
+
+## Fixed
+- ActivityPub email notifications now only trigger for **local targets**,
+  preventing emails for interactions aimed at remote resources.
+
 ## 0.9.7
 
 ### Fixed
