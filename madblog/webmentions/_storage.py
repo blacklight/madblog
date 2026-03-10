@@ -265,15 +265,28 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
     @staticmethod
     def _parse_metadata(content: str) -> dict:
         """
-        Parse metadata from Markdown comments.
+        Parse metadata from Markdown comments and extract body content.
         """
 
         metadata = {}
+        body_lines = []
+        in_body = False
+
         for line in content.splitlines():
             match = re.match(r"\[//]: # \(([^:]+): (.+)\)", line)
             if match:
                 key, value = match.groups()
                 metadata[key.strip()] = value.strip()
+            elif line.strip() or in_body:
+                # After metadata, collect body content
+                in_body = True
+                body_lines.append(line)
+
+        # Extract body content (full content stored after metadata)
+        if body_lines:
+            body = "\n".join(body_lines).strip()
+            if body:
+                metadata["content"] = body
 
         return metadata
 
