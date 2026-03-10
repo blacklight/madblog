@@ -327,16 +327,29 @@ mentions from Webmentions and ActivityPub into a single "guest registry" view.
   - Used by Webmentions storage and ActivityPub integration.
 
 - `madblog/moderation.py`
-  - Shared blocklist checker for both Webmentions and ActivityPub.
-  - Supports blocking by domain, URL, ActivityPub FQN, or regex.
-  - `BlocklistCache`: TTL-based cache (5 min) around `config.blocked_actors`
+  - Shared moderation checker for both Webmentions and ActivityPub.
+  - Supports two mutually exclusive modes:
+    - **Blocklist mode** (`blocked_actors`): actors matching patterns are rejected.
+    - **Allowlist mode** (`allowed_actors`): only actors matching patterns are
+      permitted; all others are rejected.
+  - Pattern matching supports domain, URL, ActivityPub FQN, or regex.
+  - `ModerationCache` (aliased as `BlocklistCache` for backwards compatibility):
+    TTL-based cache (5 min) around `config.blocked_actors`/`config.allowed_actors`
     to avoid filesystem lookups during fan-out delivery.
+  - `validate_moderation_config()`: raises `ModerationConfigError` if both
+    blocklist and allowlist are configured.
+  - `is_actor_permitted()`: convenience function that checks permission based
+    on the current moderation mode.
   - Used by `WebmentionsMixin` and `ActivityPubMixin` to wrap incoming
-    handlers, filter rendered interactions, and exclude blocked followers
+    handlers, filter rendered interactions, and exclude non-permitted followers
     from outgoing delivery.
-  - At startup, `ActivityPubMixin` reconciles follower JSON files: newly
-    blocked followers are marked `"blocked": true`; previously blocked
-    followers whose rule was removed are restored.
+  - At startup, `ActivityPubMixin` reconciles follower JSON files:
+    - In blocklist mode: followers matching the blocklist are marked
+      `"blocked": true`; previously blocked followers whose rule was removed
+      are restored.
+    - In allowlist mode: followers NOT matching the allowlist are marked
+      `"blocked": true`; previously blocked followers who now match the
+      allowlist are restored.
 
 - `madblog/notifications.py`
   - Shared SMTP helper (`send_email`) and `SmtpConfig`.

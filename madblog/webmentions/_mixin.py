@@ -8,7 +8,7 @@ from webmentions import WebmentionDirection, WebmentionsHandler
 from webmentions.server.adapters.flask import bind_webmentions
 
 from madblog.config import config
-from madblog.moderation import is_blocked
+from madblog.moderation import is_allowed, is_blocked, is_actor_permitted
 from madblog.monitor import ContentMonitor
 
 from ._notifications import SmtpConfig, build_webmention_email_notifier
@@ -82,14 +82,17 @@ class WebmentionsMixin(ABC):  # pylint: disable=too-few-public-methods
     def _install_webmention_moderation(self):
         """
         Wrap the incoming webmention processor so that mentions from
-        blocked actors are silently dropped before any storage or
+        non-permitted actors are silently dropped before any storage or
         network I/O.
+
+        In blocklist mode, mentions from blocked sources are rejected.
+        In allowlist mode, only mentions from allowed sources are accepted.
         """
         original = self.webmentions_handler.process_incoming_webmention
 
         def _filtered_process(source_url, target_url):
-            if source_url and is_blocked(source_url, config.blocked_actors):
-                logger.info("Blocked webmention from %s", source_url)
+            if source_url and not is_actor_permitted(source_url):
+                logger.info("Rejected webmention from %s", source_url)
                 return None
             return original(source_url, target_url)
 
@@ -107,9 +110,11 @@ class WebmentionsMixin(ABC):  # pylint: disable=too-few-public-methods
 
         if config.blocked_actors:
             mentions = [
-                m
-                for m in mentions
-                if not is_blocked(m.source, config.blocked_actors)
+                m for m in mentions if not is_blocked(m.source, config.blocked_actors)
+            ]
+        elif config.allowed_actors:
+            mentions = [
+                m for m in mentions if is_allowed(m.source, config.allowed_actors)
             ]
 
         return self.webmentions_handler.render_webmentions(mentions)

@@ -18,7 +18,7 @@ from pubby import ActivityPubHandler
 from webmentions import WebmentionDirection, WebmentionsHandler
 
 from madblog.config import config
-from madblog.moderation import is_blocked
+from madblog.moderation import is_allowed, is_blocked, is_actor_permitted
 
 logger = logging.getLogger(__name__)
 
@@ -106,12 +106,16 @@ class GuestbookMixin(ABC):
 
         all_mentions = list(mentions) + list(mentions_slash)
 
-        # Filter out blocked actors
+        # Filter out non-permitted actors
         if config.blocked_actors:
             all_mentions = [
                 m
                 for m in all_mentions
                 if not is_blocked(m.source, config.blocked_actors)
+            ]
+        elif config.allowed_actors:
+            all_mentions = [
+                m for m in all_mentions if is_allowed(m.source, config.allowed_actors)
             ]
 
         # Deduplicate by source URL
@@ -163,9 +167,9 @@ class GuestbookMixin(ABC):
                 if type_value != "mention":
                     continue
 
-            # Check if it's blocked
+            # Check if actor is permitted
             actor_id = getattr(interaction, "source_actor_id", "")
-            if actor_id and is_blocked(actor_id, config.blocked_actors):
+            if actor_id and not is_actor_permitted(actor_id):
                 continue
 
             guestbook_interactions.append(interaction)

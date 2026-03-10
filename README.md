@@ -404,16 +404,26 @@ Additional Webmentions options:
 
 ### Moderation
 
-Madblog supports a shared blocklist that applies to both incoming Webmentions
-and ActivityPub interactions. Blocked actors' mentions and activities are
-silently rejected (never stored or rendered).
+Madblog supports moderation rules that apply to both incoming Webmentions
+and ActivityPub interactions. There are two mutually exclusive modes:
 
-Each entry in the `blocked_actors` list can be:
+- **Blocklist mode** (`blocked_actors`): actors matching patterns are rejected.
+- **Allowlist mode** (`allowed_actors`): only actors matching patterns are
+  permitted; all others are rejected.
 
-- **Domain**: e.g. `spammer.example.com` — blocks all URLs/actors from that domain.
-- **Full URL**: e.g. `https://mastodon.social/users/spammer` — blocks that exact actor.
-- **ActivityPub FQN**: e.g. `@spammer@mastodon.social` or `spammer@mastodon.social` — blocks that federated identity by matching domain + username in the actor URL.
-- **Regular expression**: delimited by `/`, e.g. `/spammer\.example\..*/` — matched against the full source URL or actor ID.
+**You cannot enable both modes at the same time.** The application will raise
+an error at startup if both `blocked_actors` and `allowed_actors` are configured.
+
+Each entry in either list can be:
+
+- **Domain**: e.g. `trusted.example.com` — matches all URLs/actors from that domain.
+- **Full URL**: e.g. `https://mastodon.social/users/friend` — matches that exact actor.
+- **ActivityPub FQN**: e.g. `@friend@mastodon.social` or `friend@mastodon.social` — matches that federated identity by domain + username in the actor URL.
+- **Regular expression**: delimited by `/`, e.g. `/trusted\.example\..*/` — matched against the full source URL or actor ID.
+
+#### Blocklist mode
+
+Block specific actors while allowing everyone else:
 
 ```yaml
 # config.yaml
@@ -429,17 +439,41 @@ Or via environment variable (comma- or space-separated):
 export MADBLOG_BLOCKED_ACTORS="spammer.example.com,@troll@evil.social"
 ```
 
-Interactions already stored before a blocklist entry was added are also filtered
+#### Allowlist mode
+
+Allow only specific actors while blocking everyone else:
+
+```yaml
+# config.yaml
+allowed_actors:
+  - trusted-friend.example.com
+  - "@friend@good.social"
+  - /.*\.trusted-org\.com/
+```
+
+Or via environment variable:
+
+```shell
+export MADBLOG_ALLOWED_ACTORS="trusted-friend.example.com,@friend@good.social"
+```
+
+#### Moderation behavior
+
+Interactions already stored before a moderation rule was added are also filtered
 at render time, so they will no longer appear on your pages.
 
-For ActivityPub, blocking also affects **outgoing** delivery: followers matching
-the blocklist are excluded from fan-out (they will not receive new posts), and
-are hidden from the public follower count. The follower records are kept on disk
-with a `"blocked"` marker so they can be restored automatically — if you later
-remove a blocklist entry that matched a follower, the follower is reinstated on
-the next application start.
+For ActivityPub, moderation also affects **outgoing** delivery: followers not
+permitted by the current rules are excluded from fan-out (they will not receive
+new posts) and are hidden from the public follower count. The follower records
+are kept on disk with a `"blocked"` marker so they can be restored automatically:
 
-The blocklist is cached in memory with a 5-minute TTL to avoid filesystem
+- **Blocklist mode**: if you remove a blocklist entry that matched a follower,
+  the follower is reinstated on the next application start.
+- **Allowlist mode**: if you add an allowlist entry that now matches a previously
+  blocked follower, or if you remove the allowlist entirely, the follower is
+  reinstated.
+
+The moderation lists are cached in memory with a 5-minute TTL to avoid filesystem
 round-trips during publish.
 
 ### Guestbook

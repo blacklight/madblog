@@ -15,7 +15,12 @@ from pubby.server.adapters.flask import bind_activitypub
 from pubby.server.adapters.flask_mastodon import bind_mastodon_api
 
 from ..config import config
-from ..moderation import BlocklistCache, is_blocked
+from ..moderation import (
+    ModerationCache,
+    is_allowed,
+    is_blocked,
+    validate_moderation_config,
+)
 from ..monitor import ContentMonitor
 from ._integration import ActivityPubIntegration
 from ._notifications import (
@@ -327,28 +332,29 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         """
         Install moderation hooks for ActivityPub:
 
-        1. Wrap the inbox processor so that activities from blocked
+        1. Validate that blocklist and allowlist are not both configured.
+        2. Wrap the inbox processor so that activities from non-permitted
            actors are silently dropped.
-        2. Wrap ``storage.get_followers()`` so that blocked followers
+        3. Wrap ``storage.get_followers()`` so that non-permitted followers
            are excluded from fan-out delivery and public counts.
-        3. Run a one-time startup reconciliation that marks newly
+        4. Run a one-time startup reconciliation that marks newly
            blocked followers (and restores previously blocked ones
            whose matching rule was removed).
 
-        The blocklist is held in a :class:`BlocklistCache` with a
+        The moderation lists are held in a :class:`ModerationCache` with a
         5-minute TTL so that fan-out delivery does not hit the
         filesystem on every publish.
         """
-        self._blocklist_cache = BlocklistCache()
+        validate_moderation_config()
+        self._blocklist_cache = ModerationCache()
 
         # --- 1. Wrap inbox ---
         original_inbox = self.activitypub_handler.process_inbox_activity
 
         def _filtered_process(activity_data: dict, *args, **kwargs):
             actor = activity_data.get("actor", "")
-            blocklist = self._blocklist_cache.get()
-            if actor and is_blocked(actor, blocklist):
-                logger.info("Blocked ActivityPub activity from %s", actor)
+            if actor and not self._blocklist_cache.is_permitted(actor):
+                logger.info("Rejected ActivityPub activity from %s", actor)
                 return None
             return original_inbox(activity_data, *args, **kwargs)
 
@@ -358,11 +364,10 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         original_get_followers = self.activitypub_storage.get_followers
 
         def _filtered_get_followers() -> list:
-            blocklist = self._blocklist_cache.get()
             followers = original_get_followers()
-            if not blocklist:
-                return followers
-            return [f for f in followers if not is_blocked(f.actor_id, blocklist)]
+            return [
+                f for f in followers if self._blocklist_cache.is_permitted(f.actor_id)
+            ]
 
         self.activitypub_storage.get_followers = _filtered_get_followers
 
@@ -372,12 +377,18 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
     def _reconcile_blocked_followers(self):
         """
         Synchronise the ``"blocked"`` flag stored in each follower's
-        JSON file with the current blocklist.
+        JSON file with the current moderation configuration.
 
-        - Followers that now match the blocklist are marked
-          ``"blocked": true``.
+        **Blocklist mode** (``blocked_actors`` configured):
+        - Followers that match the blocklist are marked ``"blocked": true``.
         - Followers previously marked blocked whose matching rule has
           been removed are restored (``"blocked"`` key is deleted).
+
+        **Allowlist mode** (``allowed_actors`` configured):
+        - Followers that do NOT match the allowlist are marked
+          ``"blocked": true``.
+        - Followers previously marked blocked who now match the allowlist
+          are restored.
         """
         storage = self.activitypub_storage
         followers_dir = storage.data_dir / "followers"
@@ -385,6 +396,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             return
 
         blocklist = list(config.blocked_actors)
+        allowlist = list(config.allowed_actors)
 
         for fpath in storage.list_json_files(followers_dir):
             data = storage.read_json(fpath)
@@ -393,7 +405,17 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
             actor_id = data.get("actor_id", "")
             is_currently_marked = data.get("blocked", False)
-            should_be_blocked = bool(blocklist) and is_blocked(actor_id, blocklist)
+
+            # Determine if the actor should be blocked
+            if allowlist:
+                # Allowlist mode: block those NOT matching the allowlist
+                should_be_blocked = not is_allowed(actor_id, allowlist)
+            elif blocklist:
+                # Blocklist mode: block those matching the blocklist
+                should_be_blocked = is_blocked(actor_id, blocklist)
+            else:
+                # No moderation configured
+                should_be_blocked = False
 
             if should_be_blocked and not is_currently_marked:
                 data["blocked"] = True
@@ -420,11 +442,22 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             target_resource=ap_object_url
         )
 
-        blocklist = getattr(self, "_blocklist_cache", None)
-        bl = blocklist.get() if blocklist else config.blocked_actors
-        if bl:
+        mod_cache = getattr(self, "_blocklist_cache", None)
+        if mod_cache:
             interactions = [
-                i for i in interactions if not is_blocked(i.source_actor_id, bl)
+                i for i in interactions if mod_cache.is_permitted(i.source_actor_id)
+            ]
+        elif config.blocked_actors:
+            interactions = [
+                i
+                for i in interactions
+                if not is_blocked(i.source_actor_id, config.blocked_actors)
+            ]
+        elif config.allowed_actors:
+            interactions = [
+                i
+                for i in interactions
+                if is_allowed(i.source_actor_id, config.allowed_actors)
             ]
 
         if interactions:

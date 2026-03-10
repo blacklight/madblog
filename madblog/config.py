@@ -73,6 +73,7 @@ class Config:
 
     # Moderation
     blocked_actors: List[str] = field(default_factory=list)
+    allowed_actors: List[str] = field(default_factory=list)
 
     @property
     def templates_dir(self) -> str:
@@ -273,6 +274,8 @@ def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statem
     # Moderation
     if cfg.get("blocked_actors"):
         config.blocked_actors = list(cfg["blocked_actors"])
+    if cfg.get("allowed_actors"):
+        config.allowed_actors = list(cfg["allowed_actors"])
 
 
 def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-statements
@@ -410,6 +413,10 @@ def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-state
     if os.getenv("MADBLOG_BLOCKED_ACTORS"):
         config.blocked_actors = re.split(
             r"[,\s]+", os.environ["MADBLOG_BLOCKED_ACTORS"].strip()
+        )
+    if os.getenv("MADBLOG_ALLOWED_ACTORS"):
+        config.allowed_actors = re.split(
+            r"[,\s]+", os.environ["MADBLOG_ALLOWED_ACTORS"].strip()
         )
 
     if os.getenv("MADBLOG_ACTIVITYPUB_PROFILE_FIELD_NAME"):

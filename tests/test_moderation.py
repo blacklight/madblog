@@ -13,7 +13,14 @@ from pubby._model import Interaction, InteractionType, InteractionStatus
 
 from madblog.app import BlogApp
 from madblog.config import Config, config, _init_config_from_env
-from madblog.moderation import is_blocked
+from madblog.moderation import (
+    is_allowed,
+    is_blocked,
+    is_actor_permitted,
+    validate_moderation_config,
+    ModerationCache,
+    ModerationConfigError,
+)
 from madblog.webmentions._mixin import WebmentionsMixin
 
 
@@ -209,6 +216,146 @@ class TestIsBlocked(unittest.TestCase):
         )
 
 
+class TestIsAllowed(unittest.TestCase):
+    """Unit tests for ``is_allowed``."""
+
+    def test_empty_allowlist_allows_everyone(self):
+        self.assertTrue(is_allowed("https://example.com", []))
+
+    def test_empty_identifier_not_allowed(self):
+        self.assertFalse(is_allowed("", ["example.com"]))
+
+    def test_domain_allows_url(self):
+        self.assertTrue(
+            is_allowed(
+                "https://trusted.example.com/post/123",
+                ["trusted.example.com"],
+            )
+        )
+
+    def test_domain_does_not_allow_different_domain(self):
+        self.assertFalse(
+            is_allowed(
+                "https://untrusted.example.com/post/1",
+                ["trusted.example.com"],
+            )
+        )
+
+    def test_fqn_allows_matching_actor(self):
+        self.assertTrue(
+            is_allowed(
+                "https://mastodon.social/users/friend",
+                ["@friend@mastodon.social"],
+            )
+        )
+
+    def test_fqn_does_not_allow_different_user(self):
+        self.assertFalse(
+            is_allowed(
+                "https://mastodon.social/users/stranger",
+                ["@friend@mastodon.social"],
+            )
+        )
+
+    def test_regex_allows_matching(self):
+        self.assertTrue(
+            is_allowed(
+                "https://trusted.example.com/post/123",
+                ["/trusted\\.example\\.com/"],
+            )
+        )
+
+    def test_regex_does_not_allow_non_matching(self):
+        self.assertFalse(
+            is_allowed(
+                "https://untrusted.example.com/post/1",
+                ["/^https:\\/\\/trusted\\.example\\.com/"],
+            )
+        )
+
+    def test_multiple_entries_first_matches(self):
+        allowlist = ["trusted.example.com", "other.example.com"]
+        self.assertTrue(is_allowed("https://trusted.example.com/post/1", allowlist))
+
+    def test_multiple_entries_second_matches(self):
+        allowlist = ["other.example.com", "trusted.example.com"]
+        self.assertTrue(is_allowed("https://trusted.example.com/post/1", allowlist))
+
+    def test_multiple_entries_none_matches(self):
+        allowlist = ["a.example.com", "b.example.com"]
+        self.assertFalse(is_allowed("https://untrusted.example.com/post/1", allowlist))
+
+
+class TestValidateModerationConfig(unittest.TestCase):
+    """Test that blocklist and allowlist mutual exclusion is enforced."""
+
+    def setUp(self):
+        self._orig_blocked = config.blocked_actors[:]
+        self._orig_allowed = config.allowed_actors[:]
+
+    def tearDown(self):
+        config.blocked_actors = self._orig_blocked
+        config.allowed_actors = self._orig_allowed
+
+    def test_empty_lists_pass_validation(self):
+        config.blocked_actors = []
+        config.allowed_actors = []
+        validate_moderation_config()  # Should not raise
+
+    def test_blocklist_only_passes_validation(self):
+        config.blocked_actors = ["evil.social"]
+        config.allowed_actors = []
+        validate_moderation_config()  # Should not raise
+
+    def test_allowlist_only_passes_validation(self):
+        config.blocked_actors = []
+        config.allowed_actors = ["trusted.social"]
+        validate_moderation_config()  # Should not raise
+
+    def test_both_lists_raises_error(self):
+        config.blocked_actors = ["evil.social"]
+        config.allowed_actors = ["trusted.social"]
+        with self.assertRaises(ModerationConfigError):
+            validate_moderation_config()
+
+
+class TestIsActorPermitted(unittest.TestCase):
+    """Test the convenience function is_actor_permitted."""
+
+    def setUp(self):
+        self._orig_blocked = config.blocked_actors[:]
+        self._orig_allowed = config.allowed_actors[:]
+
+    def tearDown(self):
+        config.blocked_actors = self._orig_blocked
+        config.allowed_actors = self._orig_allowed
+
+    def test_no_moderation_permits_all(self):
+        config.blocked_actors = []
+        config.allowed_actors = []
+        self.assertTrue(is_actor_permitted("https://anyone.example.com"))
+
+    def test_blocklist_mode_permits_non_blocked(self):
+        config.blocked_actors = ["evil.social"]
+        config.allowed_actors = []
+        self.assertTrue(is_actor_permitted("https://good.social/users/alice"))
+
+    def test_blocklist_mode_rejects_blocked(self):
+        config.blocked_actors = ["evil.social"]
+        config.allowed_actors = []
+        self.assertFalse(is_actor_permitted("https://evil.social/users/badguy"))
+
+    def test_allowlist_mode_permits_allowed(self):
+        config.blocked_actors = []
+        config.allowed_actors = ["trusted.social"]
+        self.assertTrue(is_actor_permitted("https://trusted.social/users/friend"))
+
+    def test_allowlist_mode_rejects_non_allowed(self):
+        config.blocked_actors = []
+        config.allowed_actors = ["trusted.social"]
+        self.assertFalse(is_actor_permitted("https://stranger.social/users/someone"))
+
+
 class TestBlockedActorsConfig(unittest.TestCase):
     """Test that the blocked_actors config field is parsed correctly."""
 
@@ -235,6 +382,102 @@ class TestBlockedActorsConfig(unittest.TestCase):
 
         # Reset
         config.blocked_actors = []
+
+
+class TestAllowedActorsConfig(unittest.TestCase):
+    """Test that the allowed_actors config field is parsed correctly."""
+
+    def test_default_is_empty(self):
+        cfg = Config()
+        self.assertEqual(cfg.allowed_actors, [])
+
+    def test_from_env_var(self):
+        env = {"MADBLOG_ALLOWED_ACTORS": "trusted.social,friend.example.com"}
+        with patch.dict(os.environ, env, clear=False):
+            _init_config_from_env()
+
+        self.assertEqual(
+            config.allowed_actors, ["trusted.social", "friend.example.com"]
+        )
+
+        # Reset
+        config.allowed_actors = []
+
+    def test_from_env_var_space_separated(self):
+        env = {"MADBLOG_ALLOWED_ACTORS": "trusted.social friend.example.com"}
+        with patch.dict(os.environ, env, clear=False):
+            _init_config_from_env()
+
+        self.assertEqual(
+            config.allowed_actors, ["trusted.social", "friend.example.com"]
+        )
+
+        # Reset
+        config.allowed_actors = []
+
+
+class TestModerationCache(unittest.TestCase):
+    """Tests for the TTL-based ModerationCache."""
+
+    def setUp(self):
+        self._orig_blocked = config.blocked_actors[:]
+        self._orig_allowed = config.allowed_actors[:]
+
+    def tearDown(self):
+        config.blocked_actors = self._orig_blocked
+        config.allowed_actors = self._orig_allowed
+
+    def test_returns_config_blocked_actors(self):
+        config.blocked_actors = ["evil.social", "spam.example.com"]
+        config.allowed_actors = []
+        cache = ModerationCache(ttl_seconds=60)
+        self.assertEqual(cache.get(), ["evil.social", "spam.example.com"])
+
+    def test_returns_config_allowed_actors(self):
+        config.blocked_actors = []
+        config.allowed_actors = ["trusted.social", "friend.example.com"]
+        cache = ModerationCache(ttl_seconds=60)
+        self.assertEqual(
+            cache.get_allowlist(), ["trusted.social", "friend.example.com"]
+        )
+
+    def test_is_permitted_blocklist_mode(self):
+        config.blocked_actors = ["evil.social"]
+        config.allowed_actors = []
+        cache = ModerationCache(ttl_seconds=60)
+        self.assertTrue(cache.is_permitted("https://good.social/users/alice"))
+        self.assertFalse(cache.is_permitted("https://evil.social/users/badguy"))
+
+    def test_is_permitted_allowlist_mode(self):
+        config.blocked_actors = []
+        config.allowed_actors = ["trusted.social"]
+        cache = ModerationCache(ttl_seconds=60)
+        self.assertTrue(cache.is_permitted("https://trusted.social/users/friend"))
+        self.assertFalse(cache.is_permitted("https://stranger.social/users/someone"))
+
+    def test_is_permitted_no_moderation(self):
+        config.blocked_actors = []
+        config.allowed_actors = []
+        cache = ModerationCache(ttl_seconds=60)
+        self.assertTrue(cache.is_permitted("https://anyone.example.com"))
+
+    def test_cache_does_not_reload_within_ttl(self):
+        config.blocked_actors = ["evil.social"]
+        config.allowed_actors = []
+        cache = ModerationCache(ttl_seconds=300)
+        cache.get()
+        config.blocked_actors = ["other.social"]
+        # Should still return the cached version
+        self.assertEqual(cache.get(), ["evil.social"])
+
+    def test_invalidate_forces_reload(self):
+        config.blocked_actors = ["evil.social"]
+        config.allowed_actors = []
+        cache = ModerationCache(ttl_seconds=300)
+        cache.get()
+        config.blocked_actors = ["other.social"]
+        cache.invalidate()
+        self.assertEqual(cache.get(), ["other.social"])
 
 
 class TestWebmentionModeration(unittest.TestCase):
@@ -691,6 +934,202 @@ class TestReconcileBlockedFollowers(unittest.TestCase):
         followers = storage.get_followers()
         actor_ids = [f.actor_id for f in followers]
         self.assertIn(actor_id, actor_ids)
+
+
+class TestAllowlistReconciliation(unittest.TestCase):
+    """Test startup reconciliation with allowlist mode."""
+
+    @_skip_if_no_pubby
+    def setUp(self):
+        from madblog.config import config
+
+        self._orig_blocked = config.blocked_actors[:]
+        self._orig_allowed = config.allowed_actors[:]
+        self._orig_enable_ap = config.enable_activitypub
+        self._orig_content_dir = config.content_dir
+        self._orig_link = config.link
+        self._orig_ap_link = config.activitypub_link
+        self._orig_ap_domain = config.activitypub_domain
+
+        self._tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self._tmpdir.cleanup)
+        root = Path(self._tmpdir.name)
+        md_dir = root / "markdown"
+        md_dir.mkdir(parents=True)
+
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+        config.enable_activitypub = True
+        config.activitypub_link = None
+        config.activitypub_domain = None
+        config.activitypub_private_key_path = None
+        config.blocked_actors = []
+        config.allowed_actors = ["trusted.social"]
+
+        from madblog.app import BlogApp
+
+        with patch("madblog.activitypub._mixin.threading.Thread"):
+            self.app = BlogApp(__name__)
+        self.config = config
+
+    def tearDown(self):
+        if hasattr(self, "config"):
+            self.config.blocked_actors = self._orig_blocked
+            self.config.allowed_actors = self._orig_allowed
+            self.config.enable_activitypub = self._orig_enable_ap
+            self.config.content_dir = self._orig_content_dir
+            self.config.link = self._orig_link
+            self.config.activitypub_link = self._orig_ap_link
+            self.config.activitypub_domain = self._orig_ap_domain
+
+    @_skip_if_no_pubby
+    def test_allowlist_blocks_non_matching_follower(self):
+        from pubby._model import Follower
+        from datetime import datetime, timezone
+
+        storage = self.app.activitypub_storage
+        actor_id = "https://stranger.social/users/unknown"
+        fpath = storage._follower_path(actor_id)
+
+        # Write a follower that doesn't match the allowlist
+        storage.write_json(
+            fpath,
+            Follower(
+                actor_id=actor_id,
+                inbox="https://stranger.social/users/unknown/inbox",
+                followed_at=datetime.now(timezone.utc),
+            ).to_dict(),
+        )
+
+        # Run reconciliation
+        self.app._reconcile_blocked_followers()
+
+        # Should now have "blocked": true
+        data = storage.read_json(fpath)
+        self.assertTrue(data.get("blocked"))
+
+    @_skip_if_no_pubby
+    def test_allowlist_permits_matching_follower(self):
+        from pubby._model import Follower
+        from datetime import datetime, timezone
+
+        storage = self.app.activitypub_storage
+        actor_id = "https://trusted.social/users/friend"
+        fpath = storage._follower_path(actor_id)
+
+        # Write a follower that matches the allowlist
+        storage.write_json(
+            fpath,
+            Follower(
+                actor_id=actor_id,
+                inbox="https://trusted.social/users/friend/inbox",
+                followed_at=datetime.now(timezone.utc),
+            ).to_dict(),
+        )
+
+        # Run reconciliation
+        self.app._reconcile_blocked_followers()
+
+        # Should NOT have "blocked" key
+        data = storage.read_json(fpath)
+        self.assertNotIn("blocked", data)
+
+    @_skip_if_no_pubby
+    def test_allowlist_restores_previously_blocked_matching_follower(self):
+        storage = self.app.activitypub_storage
+        actor_id = "https://trusted.social/users/friend"
+        fpath = storage._follower_path(actor_id)
+
+        # Write a follower that was previously blocked
+        data = {
+            "actor_id": actor_id,
+            "inbox": "https://trusted.social/users/friend/inbox",
+            "shared_inbox": "",
+            "blocked": True,
+        }
+        storage.write_json(fpath, data)
+
+        # Run reconciliation (trusted.social IS in allowlist)
+        self.app._reconcile_blocked_followers()
+
+        # "blocked" key should be removed
+        data = storage.read_json(fpath)
+        self.assertNotIn("blocked", data)
+
+    @_skip_if_no_pubby
+    def test_allowlist_excluded_from_get_followers(self):
+        from pubby._model import Follower
+        from datetime import datetime, timezone
+
+        storage = self.app.activitypub_storage
+
+        # Store a non-allowed and an allowed follower
+        storage.write_json(
+            storage._follower_path("https://stranger.social/users/unknown"),
+            Follower(
+                actor_id="https://stranger.social/users/unknown",
+                inbox="https://stranger.social/users/unknown/inbox",
+                followed_at=datetime.now(timezone.utc),
+            ).to_dict(),
+        )
+        storage.write_json(
+            storage._follower_path("https://trusted.social/users/friend"),
+            Follower(
+                actor_id="https://trusted.social/users/friend",
+                inbox="https://trusted.social/users/friend/inbox",
+                followed_at=datetime.now(timezone.utc),
+            ).to_dict(),
+        )
+
+        followers = storage.get_followers()
+        actor_ids = [f.actor_id for f in followers]
+        self.assertNotIn("https://stranger.social/users/unknown", actor_ids)
+        self.assertIn("https://trusted.social/users/friend", actor_ids)
+
+
+class TestMutualExclusionAtStartup(unittest.TestCase):
+    """Test that the app fails to start when both blocklist and allowlist are configured."""
+
+    @_skip_if_no_pubby
+    def test_both_lists_configured_raises_error(self):
+        from madblog.config import config
+        from madblog.moderation import ModerationConfigError
+
+        orig_blocked = config.blocked_actors[:]
+        orig_allowed = config.allowed_actors[:]
+        orig_enable_ap = config.enable_activitypub
+        orig_content_dir = config.content_dir
+        orig_link = config.link
+        tmpdir = None
+
+        try:
+            tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+            root = Path(tmpdir.name)
+            md_dir = root / "markdown"
+            md_dir.mkdir(parents=True)
+
+            config.content_dir = str(root)
+            config.link = "https://example.com"
+            config.enable_activitypub = True
+            config.activitypub_link = None
+            config.activitypub_domain = None
+            config.activitypub_private_key_path = None
+            config.blocked_actors = ["evil.social"]
+            config.allowed_actors = ["trusted.social"]
+
+            from madblog.app import BlogApp
+
+            with self.assertRaises(ModerationConfigError):
+                with patch("madblog.activitypub._mixin.threading.Thread"):
+                    BlogApp(__name__)
+        finally:
+            config.blocked_actors = orig_blocked
+            config.allowed_actors = orig_allowed
+            config.enable_activitypub = orig_enable_ap
+            config.content_dir = orig_content_dir
+            config.link = orig_link
+            if tmpdir:
+                tmpdir.cleanup()
 
 
 if __name__ == "__main__":
