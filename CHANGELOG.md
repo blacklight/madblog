@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.6
+
+### Fixed
+- **ActivityPub content cleanup:** Strip common TOC marker lines (e.g.
+  `[[TOC]]`, `[TOC]`, `{{ TOC }}`, `<!-- TOC -->`) from federated post content
+  to prevent TOC artifacts from being published.
+- **ActivityPub content negotiation:** Treat `Accept: application/ld+json` as
+  requesting ActivityPub JSON (alongside `application/activity+json`),
+  preferring AP JSON over `text/html` when appropriate.
+
+### Tests
+- Added coverage for TOC marker stripping across multiple formats.
+- Added test ensuring `application/ld+json` Accept returns ActivityPub JSON.
+- Tightened tests for mypy/nullability around attachments and response mimetype.
+
 ## 0.9.5
 
 ### Fixed
