@@ -19,7 +19,7 @@
       <button class="sort-btn active" data-sort="count">Sort by Count</button>
       <button class="sort-btn" data-sort="alpha">Sort Alphabetically</button>
     </div>
-    
+
     <div class="tags" id="tags-container">
       {% for tag, count in tags %}
         <a class="tag" href="/tags/{{ tag }}" data-tag="{{ tag }}" data-count="{{ count }}">
@@ -35,33 +35,45 @@
 </main>
 
 <script>
+function refreshSort() {
+  // Get active sort button
+  const sortButtons = document.querySelectorAll('.sort-btn');
+  const activeButton = Array.from(sortButtons).find(btn => btn.classList.contains('active'));
+
+  // Get all tag elements
+  const tags = Array.from(tagsContainer.querySelectorAll('.tag'));
+
+  // Sort based on selected method
+  const sortType = activeButton.dataset.sort;
+  tags.sort((a, b) => {
+    if (sortType === 'alpha') {
+      return a.dataset.tag.localeCompare(b.dataset.tag);
+    } else {
+      return parseInt(b.dataset.count) - parseInt(a.dataset.count);
+    }
+  });
+
+  // Re-append sorted elements
+  tags.forEach(tag => tagsContainer.appendChild(tag));
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   const sortButtons = document.querySelectorAll('.sort-btn');
   const tagsContainer = document.getElementById('tags-container');
-  
+
   sortButtons.forEach(button => {
-    button.addEventListener('click', function() {
+    button.addEventListener('click', () => {
       // Update active button
       sortButtons.forEach(btn => btn.classList.remove('active'));
       this.classList.add('active');
-      
-      // Get all tag elements
-      const tags = Array.from(tagsContainer.querySelectorAll('.tag'));
-      
-      // Sort based on selected method
-      const sortType = this.dataset.sort;
-      tags.sort((a, b) => {
-        if (sortType === 'alpha') {
-          return a.dataset.tag.localeCompare(b.dataset.tag);
-        } else {
-          return parseInt(b.dataset.count) - parseInt(a.dataset.count);
-        }
-      });
-      
-      // Re-append sorted elements
-      tags.forEach(tag => tagsContainer.appendChild(tag));
+
+      // Refresh sort
+      refreshSort();
     });
   });
+
+  // Initial sort
+  refreshSort();
 });
 </script>
 
