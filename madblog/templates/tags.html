@@ -62,10 +62,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const sortButtons = document.querySelectorAll('.sort-btn');
 
   sortButtons.forEach(button => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', (event) => {
       // Update active button
       sortButtons.forEach(btn => btn.classList.remove('active'));
-      this.classList.add('active');
+      event.target.classList.add('active');
 
       // Refresh sort
       refreshSort();
