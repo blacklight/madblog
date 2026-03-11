@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.9.13
+
+### Changed
+- **feat(config):** Add configurable `state_dir` (config file +
+  `MADBLOG_STATE_DIR`) with `resolved_state_dir` helper (default:
+  `<content_dir>/.madblog`).
+- **refactor(state):** Move all integration state under the resolved state directory:
+  - **ActivityPub** state now stored in `<state_dir>/activitypub/state/` and
+    keys default to `<state_dir>/activitypub/private_key.pem`.
+  - **Webmentions** data moved to `<state_dir>/mentions/` and sync cache to
+    `<state_dir>/webmentions_sync.json`.
+  - **Tags** index cache moved to `<state_dir>/cache/tags-index.json`.
+- **migration:** Automatically detect and migrate legacy layouts
+  (`<content_dir>/activitypub`, `<content_dir>/mentions`) to the new `.madblog
+  ` state directory, preserving file mtimes; runs early from CLI and uWSGI
+  entrypoints.
+- **tests/docs:** Add migration/state-dir resolution test coverage and update
+  documentation + Docker volume examples to mount `/data/.madblog` for
+  persistence.
+
 ## 0.9.10
 
 ### Fixed
