@@ -35,6 +35,10 @@ logging.basicConfig(
     format="%(levelname)s: %(message)s",
 )
 
+from .state import ensure_state_directory
+
+ensure_state_directory()
+
 from .app import app
 
 # For gunicorn/uWSGI compatibility
