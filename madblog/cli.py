@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import sys
+import threading
 
 
 def get_args(args):
@@ -70,10 +71,37 @@ The folder should have the following structure:
     return parser.parse_known_args(args)
 
 
+def _apply_memory_optimizations():
+    """
+    Limit glibc per-thread malloc arenas to reduce virtual memory
+    overhead.  Each arena reserves ~64 MB of address space; the
+    default (8 × number-of-cores) causes VmSize to balloon even
+    though actual RSS stays small.  mallopt() works at runtime;
+    the env-var is a fallback for any child processes.
+    """
+    try:
+        import ctypes
+        import ctypes.util
+
+        _libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+        _M_ARENA_MAX = -8
+        _libc.mallopt(_M_ARENA_MAX, 2)
+    except Exception:
+        pass
+
+    os.environ.setdefault("MALLOC_ARENA_MAX", "2")
+
+    # Shrink the default thread stack from 8 MB to 2 MB.  The daemon
+    # threads created by Madblog (content monitor, AP startup, etc.)
+    # need very little stack space.
+    threading.stack_size(2 * 1024 * 1024)
+
+
 def run():
     """
     Run the application.
     """
+    _apply_memory_optimizations()
 
     from .config import init_config
 
