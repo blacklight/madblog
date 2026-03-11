@@ -41,6 +41,7 @@ function refreshSort() {
   const activeButton = Array.from(sortButtons).find(btn => btn.classList.contains('active'));
 
   // Get all tag elements
+  const tagsContainer = document.getElementById('tags-container');
   const tags = Array.from(tagsContainer.querySelectorAll('.tag'));
 
   // Sort based on selected method
@@ -59,7 +60,6 @@ function refreshSort() {
 
 document.addEventListener('DOMContentLoaded', function() {
   const sortButtons = document.querySelectorAll('.sort-btn');
-  const tagsContainer = document.getElementById('tags-container');
 
   sortButtons.forEach(button => {
     button.addEventListener('click', () => {
