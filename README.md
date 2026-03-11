@@ -1,6 +1,15 @@
 ![Madblog logo](https://s3.fabiomanganiello.com/fabio/img/madblog.png)
 
 [![Build Status](https://ci-cd.platypush.tech/api/badges/blacklight/madblog/status.svg)](https://ci-cd.platypush.tech/blacklight/madblog)
+[![Issues](https://img.shields.io/gitea/issues/open/blacklight/madblog?gitea_url=https://git.platypush.tech)](https://git.platypush.tech/blacklight/madblog/issues)
+[![Github stars](https://img.shields.io/github/stars/blacklight/madblog?style=flat&logo=Github)](https://github.com/blacklight/madblog)
+[![Github forks](https://img.shields.io/github/forks/blacklight/madblog?style=flat&logo=Github)](https://github.com/blacklight/madblog)
+[![Last Commit](https://img.shields.io/github/last-commit/blacklight/madblog.svg)](https://git.fabiomanganiello.com/madblog/commits/branch/main)
+
+[![License](https://img.shields.io/github/license/blacklight/madblog.svg)](https://git.fabiomanganiello.com/madblog/src/branch/main/LICENSE.txt)
+[![pip version](https://img.shields.io/pypi/v/madblog.svg?style=flat)](https://pypi.python.org/pypi/madblog/)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/e4174c6be02146a5acf9ef255c3b1dc8)](https://app.codacy.com/gh/blacklight/madblog/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+[![Sponsor](https://img.shields.io/github/sponsors/blacklight)](https://github.com/sponsors/blacklight)
 
 [[TOC]]
 
