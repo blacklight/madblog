@@ -112,17 +112,17 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
         from madblog import __version__
 
-        ap_dir = os.path.join(config.content_dir, "activitypub")
-        os.makedirs(ap_dir, exist_ok=True)
+        ap_state_dir = config.resolved_state_dir / "activitypub" / "state"
+        ap_state_dir.mkdir(parents=True, exist_ok=True)
 
-        # Key management
+        # Key management (key stored at activitypub/ level, not inside state/)
+        default_key_path = config.resolved_state_dir / "activitypub" / "private_key.pem"
         key_path = os.path.expanduser(
-            config.activitypub_private_key_path
-            or os.path.join(ap_dir, "private_key.pem")
+            config.activitypub_private_key_path or str(default_key_path)
         )
 
         self._generate_or_check_ap_key(key_path)
-        self.activitypub_storage = FileActivityPubStorage(data_dir=ap_dir)
+        self.activitypub_storage = FileActivityPubStorage(data_dir=str(ap_state_dir))
 
         on_interaction = None
         if (

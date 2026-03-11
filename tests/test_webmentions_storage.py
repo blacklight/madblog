@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
+from madblog.config import config
 from madblog.webmentions._storage import FileWebmentionsStorage
 
 
@@ -22,6 +23,14 @@ class TestWebmentionsStateDirPlacement(unittest.TestCase):
         self.pages_dir.mkdir(parents=True, exist_ok=True)
         self.mentions_dir = self.root / "mentions"
 
+        # Set config.content_dir so resolved_state_dir points to the temp dir
+        self._old_content_dir = config.content_dir
+        config.content_dir = str(self.root)
+        self.addCleanup(self._restore_config)
+
+    def _restore_config(self):
+        config.content_dir = self._old_content_dir
+
     def test_state_dir_under_root_dir(self):
         """When root_dir is given, .madblog must be under root_dir."""
         storage = FileWebmentionsStorage(
@@ -38,14 +47,15 @@ class TestWebmentionsStateDirPlacement(unittest.TestCase):
         self.assertFalse(str(storage._sync_cache_file).startswith(str(self.pages_dir)))
 
     def test_state_dir_defaults_to_content_dir_when_no_root(self):
-        """When root_dir is omitted, .madblog falls back to content_dir."""
+        """When root_dir is omitted, .madblog falls back to config.resolved_state_dir."""
         storage = FileWebmentionsStorage(
             content_dir=self.pages_dir,
             mentions_dir=self.mentions_dir,
             base_url="https://example.com",
         )
 
-        expected = self.pages_dir / ".madblog" / "webmentions_sync.json"
+        # Now uses config.resolved_state_dir (self.root / ".madblog")
+        expected = self.root / ".madblog" / "webmentions_sync.json"
         self.assertEqual(storage._sync_cache_file, expected)
 
     def test_file_to_url_uses_content_dir(self):

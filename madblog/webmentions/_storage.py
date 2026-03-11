@@ -21,6 +21,7 @@ from webmentions import (
 )
 from webmentions.storage.adapters.file._watcher import ContentTextFormat
 
+from madblog.config import config
 from madblog.monitor import ChangeType
 from madblog.sync import StartupSyncMixin
 
@@ -63,7 +64,7 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         self._webmentions_handler: WebmentionsHandler | None = None
 
         # StartupSyncMixin configuration
-        self._sync_cache_file = self.root_dir / ".madblog" / "webmentions_sync.json"
+        self._sync_cache_file = config.resolved_state_dir / "webmentions_sync.json"
         self._sync_cache_file.parent.mkdir(exist_ok=True, parents=True)
         self._sync_pages_dir = str(self.content_dir)
 

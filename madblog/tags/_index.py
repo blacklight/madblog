@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from madblog.config import config
 from madblog.constants import REGEX_HASHTAG, REGEX_MARKDOWN_METADATA
 
 from ._parsers import extract_hashtags, normalize_tag, parse_metadata_tags
@@ -160,7 +161,7 @@ class TagIndex:
         self._content_dir = Path(content_dir)
         self._pages_dir = Path(pages_dir)
         self._mentions_dir = Path(mentions_dir)
-        self._cache_dir = self._content_dir / ".madblog" / "cache"
+        self._cache_dir = config.resolved_state_dir / "cache"
         self._index_path = self._cache_dir / "tags-index.json"
 
         self._lock = threading.RLock()

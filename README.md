@@ -186,7 +186,7 @@ docker run -it \
 ```
 
 If you have ActivityPub federation enabled, mount your private key and
-(optionally) the ActivityPub data directory for persistence:
+the state directory for persistence:
 
 ```shell
 docker run -it \
@@ -194,7 +194,7 @@ docker run -it \
   -v "/path/to/your/config.yaml:/etc/madblog/config.yaml" \
   -v "/path/to/your/content:/data" \
   -v "/path/to/your/private_key.pem:/etc/madblog/ap_key.pem:ro" \
-  -v "/path/to/your/activitypub-data:/data/activitypub" \
+  -v "/path/to/your/state:/data/.madblog" \
   madblog
 ```
 
@@ -206,7 +206,7 @@ docker run -it \
   -p 8000:8000 \
   -v "/path/to/your/config:/etc/madblog" \
   -v "/path/to/your/content:/data" \
-  -v "/path/to/your/activitypub-data:/data/activitypub" \
+  -v "/path/to/your/state:/data/.madblog" \
   madblog
 ```
 
@@ -298,6 +298,7 @@ environment variable.
 | `host` | `MADBLOG_HOST` | `0.0.0.0` | Listening address for the built-in web server. |
 | `port` | `MADBLOG_PORT` | `8000` | Listening port for the built-in web server. |
 | `content_dir` | `MADBLOG_CONTENT_DIR` | `.` | Path to the directory containing blog posts and assets. |
+| `state_dir` | `MADBLOG_STATE_DIR` | `<content_dir>/.madblog` | Path to the state directory where Madblog stores ActivityPub data, webmentions, and caches. |
 
 ### Site metadata
 
@@ -393,7 +394,7 @@ Webmentions configuration options:
 
 - **Storage**
   - Inbound Webmentions are stored as Markdown files under:
-    `content_dir/mentions/incoming/<post-slug>/`.
+    `<state_dir>/mentions/incoming/<post-slug>/` (default: `<content_dir>/.madblog/mentions/...`).
 
 Additional Webmentions options:
 
@@ -678,7 +679,8 @@ Enable ActivityPub in your `config.yaml` (it's disabled by default):
 
 ```yaml
 enable_activitypub: true
-# It will be created if it doesn't exist
+# Optional: custom path for the private key
+# Default: <state_dir>/activitypub/private_key.pem
 activitypub_private_key_path: /path/to/private_key.pem
 ```
 
@@ -873,7 +875,7 @@ Great article by @alice@mastodon.social about federation!
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
-| `activitypub_private_key_path` | `MADBLOG_ACTIVITYPUB_PRIVATE_KEY_PATH` | — | Path to RSA private key PEM file. Auto-generated on first start if not set. Must be readable only by owner (`chmod 600`). |
+| `activitypub_private_key_path` | `MADBLOG_ACTIVITYPUB_PRIVATE_KEY_PATH` | `<state_dir>/activitypub/private_key.pem` | Path to RSA private key PEM file. Auto-generated on first start if not set. Must be readable only by owner (`chmod 600`). |
 | `activitypub_username` | `MADBLOG_ACTIVITYPUB_USERNAME` | `blog` | Fediverse username for the blog actor. |
 | `activitypub_name` | `MADBLOG_ACTIVITYPUB_NAME` | (falls back to `author` or `title`) | Display name for the ActivityPub actor. |
 | `activitypub_summary` | `MADBLOG_ACTIVITYPUB_SUMMARY` | (falls back to `description`) | Summary/bio for the ActivityPub actor. |
