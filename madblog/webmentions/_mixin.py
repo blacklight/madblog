@@ -31,9 +31,7 @@ class WebmentionsMixin(ABC):  # pylint: disable=too-few-public-methods
     def _init_webmentions(self):
         from madblog import __version__
 
-        self.mentions_dir = (
-            Path(Path(config.content_dir) / "mentions").expanduser().resolve()
-        )
+        self.mentions_dir = config.resolved_state_dir / "mentions"
 
         self.webmentions_storage = FileWebmentionsStorage(
             content_dir=self.pages_dir,

@@ -62,7 +62,7 @@ class ActivityPubIntegration(StartupSyncMixin):
 
         # URL where images/assets are actually served (may differ from AP base_url)
         self.content_base_url = (content_base_url or base_url).rstrip("/")
-        self.workdir = Path(config.content_dir) / ".madblog" / "activitypub"
+        self.workdir = config.resolved_state_dir / "activitypub"
         self.workdir.mkdir(parents=True, exist_ok=True)
 
         self.deleted_urls_file = self.workdir / "deleted_urls.json"

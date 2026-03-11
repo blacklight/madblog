@@ -4,6 +4,7 @@ import time
 import unittest
 from pathlib import Path
 
+from madblog.config import config
 from madblog.tags import TagIndex, extract_hashtags, normalize_tag, parse_metadata_tags
 
 
@@ -538,6 +539,15 @@ class TagCacheTest(unittest.TestCase):
         self.mentions_dir.mkdir(parents=True, exist_ok=True)
         self.root = root
 
+        # Set config.content_dir so resolved_state_dir points to the temp dir
+        self._old_content_dir = config.content_dir
+        config.content_dir = str(root)
+        self.addCleanup(self._restore_config)
+
+    def _restore_config(self):
+        config.content_dir = self._old_content_dir
+
+    def _create_test_file(self):
         (self.markdown_dir / "cached.md").write_text(
             "\n".join(
                 [
@@ -555,6 +565,7 @@ class TagCacheTest(unittest.TestCase):
         )
 
     def test_index_persists_and_reloads(self):
+        self._create_test_file()
         # Build and save
         idx1 = TagIndex(
             content_dir=str(self.root),
@@ -580,6 +591,7 @@ class TagCacheTest(unittest.TestCase):
         self.assertTrue(any(t[0] == "cached" for t in tags2))
 
     def test_reindex_on_file_change(self):
+        self._create_test_file()
         idx = TagIndex(
             content_dir=str(self.root),
             pages_dir=str(self.markdown_dir),
@@ -630,6 +642,11 @@ class TagIncrementalBuildTest(unittest.TestCase):
         self.mentions_dir.mkdir(parents=True, exist_ok=True)
         self.root = root
 
+        # Set config.content_dir so resolved_state_dir points to the temp dir
+        self._old_content_dir = config.content_dir
+        config.content_dir = str(root)
+        self.addCleanup(self._restore_config)
+
         (self.markdown_dir / "old.md").write_text(
             "\n".join(
                 [
@@ -645,6 +662,9 @@ class TagIncrementalBuildTest(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+
+    def _restore_config(self):
+        config.content_dir = self._old_content_dir
 
     def test_build_skips_unchanged_files(self):
         idx = TagIndex(
