@@ -37,6 +37,7 @@ Top-level Python modules:
 | `monitor` | Background filesystem monitor |
 | `notifications` | Notifications handling |
 | `routes` | Flask routes |
+| `state` | State directory management and migrations |
 | `sync` | Background sync tasks |
 | `tags` | Tags subsystem |
 | `uwsgi.py` | uWSGI entry point |
@@ -198,7 +199,7 @@ Feed routes use `feedgen.FeedGenerator` to produce RSS 2.0 and Atom 1.0 feeds:
 
 - `madblog/tags/_index.py` (`TagIndex`)
   - Builds and persists a mapping `tag -> posts`.
-  - Stores its JSON index in: `<content_dir>/.madblog/cache/tags-index.json`.
+  - Stores its JSON index in: `<state_dir>/cache/tags-index.json`.
   - Extracts tags from multiple sources:
     - Metadata field `tags` (comma-separated)
     - Hashtags in title/description/body (with code/link protection)
@@ -224,7 +225,7 @@ file-based storage implementation.
 
 - `madblog/webmentions/_storage.py` (`FileWebmentionsStorage`)
   - Persists each webmention as a Markdown file under:
-    `<content_dir>/mentions/{incoming|outgoing}/<post-slug>/webmention-*.md`.
+    `<state_dir>/mentions/{incoming|outgoing}/<post-slug>/webmention-*.md`.
   - Implements outgoing webmention processing on content changes.
   - Implements startup resync via `StartupSyncMixin`.
 
@@ -248,8 +249,14 @@ external dependency `pubby` is installed.
 
 - `madblog/activitypub/_integration.py` (`ActivityPubIntegration`)
   - Bridges filesystem content changes to ActivityPub publishing.
-  - Tracks published objects and deleted URLs in
-    `<content_dir>/.madblog/activitypub/*`.
+  - Tracks published objects and deleted URLs in `<state_dir>/activitypub/`.
+
+- `madblog/activitypub/_mixin.py` (`ActivityPubMixin`)
+  - Validates/generates the ActivityPub RSA private key file at
+    `<state_dir>/activitypub/private_key.pem` (or custom path via
+    `activitypub_private_key_path` config).
+  - Stores pubby's `FileActivityPubStorage` data under
+    `<state_dir>/activitypub/state/`.
   - Renders Markdown to HTML via `madblog.markdown.render_html` for ActivityPub
     objects.
   - Uses `StartupSyncMixin` to publish new/changed content on startup.
