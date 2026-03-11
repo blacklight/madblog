@@ -2,6 +2,7 @@ import os
 import re
 from argparse import Namespace
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import yaml
@@ -74,6 +75,16 @@ class Config:
     # Moderation
     blocked_actors: List[str] = field(default_factory=list)
     allowed_actors: List[str] = field(default_factory=list)
+
+    # State directory
+    state_dir: str | None = None  # None means use default: <content_dir>/.madblog
+
+    @property
+    def resolved_state_dir(self) -> Path:
+        """Return the resolved state directory path."""
+        if self.state_dir:
+            return Path(self.state_dir).expanduser().resolve()
+        return Path(self.content_dir).expanduser().resolve() / ".madblog"
 
     @property
     def templates_dir(self) -> str:
@@ -277,6 +288,10 @@ def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statem
     if cfg.get("allowed_actors"):
         config.allowed_actors = list(cfg["allowed_actors"])
 
+    # State directory
+    if cfg.get("state_dir"):
+        config.state_dir = cfg["state_dir"]
+
 
 def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-statements
     if os.getenv("MADBLOG_TITLE"):
@@ -423,6 +438,10 @@ def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-state
         config.activitypub_profile_field_name = os.environ[
             "MADBLOG_ACTIVITYPUB_PROFILE_FIELD_NAME"
         ]
+
+    # State directory
+    if os.getenv("MADBLOG_STATE_DIR"):
+        config.state_dir = os.environ["MADBLOG_STATE_DIR"]
 
 
 def _init_config_from_cli(args: Optional[Namespace]):
