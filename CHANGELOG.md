@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.10
+
+### Fixed
+- Tags page now applies the selected client-side sort on initial load (not only
+  after clicking a sort button).
+
+### Performance
+- Reduced CLI/runtime memory overhead by capping glibc malloc arenas (apply
+  `mallopt(M_ARENA_MAX=2)` and default `MALLOC_ARENA_MAX=2` for child
+  processes).
+- Lowered default thread stack size from 8 MB to 2 MB for daemon threads.
+
 ## 0.9.9
 
 ### Added
