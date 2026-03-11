@@ -13,3 +13,10 @@ repos:
         files: ^(src/python|tests)/.*\.py$
         args:
           - --per-file-ignores=tests/*.py:E501,F401,E722,F541
+
+  - repo: https://github.com/frnmst/md-toc
+    rev: 9.0.0
+    hooks:
+      - id: md-toc
+        args: ["-p", "github", "-l", "6"]
+        files: ^README\.md$
