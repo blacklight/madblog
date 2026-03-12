@@ -90,6 +90,97 @@ class GuestbookMixinTest(unittest.TestCase):
         self.assertFalse(app._is_article_url(""))
 
 
+class GuestbookAPInteractionsTest(unittest.TestCase):
+    """Test that get_guestbook_ap_interactions filters interaction types correctly."""
+
+    def setUp(self):
+        from madblog.config import config
+
+        self.config = config
+        self._orig_link = config.link
+        self._orig_activitypub_link = config.activitypub_link
+        self._orig_blocked = config.blocked_actors
+        self._orig_allowed = config.allowed_actors
+        config.link = "https://example.com"
+        config.activitypub_link = None
+        config.blocked_actors = []
+        config.allowed_actors = []
+
+    def tearDown(self):
+        self.config.link = self._orig_link
+        self.config.activitypub_link = self._orig_activitypub_link
+        self.config.blocked_actors = self._orig_blocked
+        self.config.allowed_actors = self._orig_allowed
+
+    def _make_mixin(self, interactions, mentioning_interactions=None):
+        from madblog.guestbook._mixin import GuestbookMixin
+
+        storage = MagicMock()
+        storage.get_interactions.return_value = interactions
+        storage.get_interactions_mentioning.return_value = mentioning_interactions or []
+
+        handler = MagicMock()
+        handler.actor_id = "https://example.com/ap/actor"
+        handler.storage = storage
+
+        class MockApp(GuestbookMixin):
+            mentions_dir = Path("/tmp")
+            activitypub_handler = handler
+
+            @property
+            def _app(self):
+                return MagicMock()
+
+        return MockApp()
+
+    def _make_interaction(self, interaction_type, target_resource, object_id):
+        return MagicMock(
+            interaction_type=MagicMock(value=interaction_type),
+            target_resource=target_resource,
+            source_actor_id="https://remote.social/users/alice",
+            activity_id=f"https://remote.social/activity/{object_id}",
+            object_id=f"https://remote.social/objects/{object_id}",
+            published=None,
+            created_at=None,
+        )
+
+    def test_mention_included(self):
+        mention = self._make_interaction("mention", "https://example.com/ap/actor", "1")
+        app = self._make_mixin([mention])
+        result = app.get_guestbook_ap_interactions()
+        self.assertEqual(len(result), 1)
+
+    def test_reply_to_guestbook_entry_included(self):
+        """Replies to guestbook entries (non-article targets) should appear."""
+        reply = self._make_interaction(
+            "reply", "https://remote.social/users/alice/statuses/123", "2"
+        )
+        app = self._make_mixin([], mentioning_interactions=[reply])
+        result = app.get_guestbook_ap_interactions()
+        self.assertEqual(len(result), 1)
+
+    def test_reply_to_article_excluded(self):
+        """Replies to articles should NOT appear in the guestbook."""
+        reply = self._make_interaction(
+            "reply", "https://example.com/article/my-post", "3"
+        )
+        app = self._make_mixin([], mentioning_interactions=[reply])
+        result = app.get_guestbook_ap_interactions()
+        self.assertEqual(len(result), 0)
+
+    def test_like_excluded(self):
+        like = self._make_interaction("like", "https://example.com/ap/actor", "4")
+        app = self._make_mixin([like])
+        result = app.get_guestbook_ap_interactions()
+        self.assertEqual(len(result), 0)
+
+    def test_boost_excluded(self):
+        boost = self._make_interaction("boost", "https://example.com/ap/actor", "5")
+        app = self._make_mixin([boost])
+        result = app.get_guestbook_ap_interactions()
+        self.assertEqual(len(result), 0)
+
+
 class GuestbookRouteTest(unittest.TestCase):
     """Test the /guestbook route."""
 

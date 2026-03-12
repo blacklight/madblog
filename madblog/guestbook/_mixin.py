@@ -160,10 +160,9 @@ class GuestbookMixin(ABC):
             logger.debug("Failed to get AP interactions for guestbook", exc_info=True)
             return []
 
-        # Filter to only MENTION type interactions and apply blocklist
+        # Filter to mentions and replies-to-non-articles, apply blocklist
         guestbook_interactions = []
         for interaction in interactions:
-            # Only include mentions (not replies, likes, boosts targeting actor)
             interaction_type = getattr(interaction, "interaction_type", None)
             if interaction_type is not None:
                 # Handle both enum and string values
@@ -172,8 +171,16 @@ class GuestbookMixin(ABC):
                     if hasattr(interaction_type, "value")
                     else str(interaction_type)
                 )
-                if type_value != "mention":
-                    continue
+                if type_value == "mention":
+                    pass  # Always include direct mentions
+                elif type_value == "reply":
+                    # Include replies only if they are NOT targeting an article
+                    # (replies to articles are shown on the article page)
+                    target = getattr(interaction, "target_resource", "")
+                    if self._is_article_url(target):
+                        continue
+                else:
+                    continue  # Exclude likes, boosts, quotes
 
             # Check if actor is permitted
             actor_id = getattr(interaction, "source_actor_id", "")
