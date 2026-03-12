@@ -44,6 +44,17 @@ Generate ONLY the commit message - no introduction, no explanation, no quotes ar
 
 ## Execution style
 
+### Conclusion of an implementation phase
+
+An implementation phase is considered concluded when I have reviewed and acknowledged the changes in the chat, or, for large tasks (see next paragraphs), when all the phases have been completed and I have reviewed and acknowledged the work.
+
+- Any user-facing changes should be documented in the `README.md` (only if such changes are relevant to `README.md`).
+- Any architectural changes, API changes or additions/deletions of modules should be documented in `docs/ARCHITECTURE.md` (only if such changes are relevant for an architecture document).
+- Update the `CHANGELOG.md` by adding the new feature under the _Unreleased_ section (generate it if necessary).
+- At the end of an implementation phase, and upon acknowledgment from my side, write down a commit message in the chat after checking again the git status, following the guidelines specified previously in this document (but _do not_ commit_).
+
+### Large tasks
+
 When addressing large tasks that require several iterations and validation cycles, or when I explicitly say "this is a large task", use a structured approach:
 
 - **Context directory**: Document your process under `docs/<nnn>-feature`, where `<nn>` is the number of the feature. Add a `README.md` under that folder that briefly describes the feature at a very high level, and then proceed with adding relevant links in the README to additional sub-pages as they get added.
@@ -62,7 +73,7 @@ When addressing large tasks that require several iterations and validation cycle
 
 - **Implementation**: Re-read the plan document and proceed with coding. Implement one phase at the time, and proceed with the next point only when instructed with an `ok` from my side.
 
-- **Summary**: Upon mutual acknowledgment of the implementation, write down a summary of your implementation into `docs/<nnn>-feature/implementation/<nn>-<description>.md`. Also write down a commit message in the chat after checking again the commit, following the guidelines specified previously in this document (but _do not_ commit yet). When I say `ok` or `next` you can proceed with implementing the next phase. Keep iterating until the last phase.
+- **Summary**: Upon mutual acknowledgment of the implementation, write down a summary of your implementation into `docs/<nnn>-feature/implementation/<nn>-<description>.md`.  When I say `ok` or `next` you can proceed with implementing the next phase. Keep iterating until the last phase.
 
 - **Revise**: After all implementation phases are completed, go through the summaries generated under `docs/<nnn>-feature/implementation` and, if necessary, fill missing gaps either in the tests or in the documentation.
 

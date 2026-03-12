@@ -54,11 +54,13 @@ class ActivityPubIntegration(StartupSyncMixin):
         pages_dir: str | Path,
         base_url: str,
         content_base_url: str | None = None,
+        replies_dir: str | Path | None = None,
     ):
 
         self.handler = handler
         self.pages_dir = str(Path(pages_dir).resolve())
         self.base_url = base_url.rstrip("/")
+        self.replies_dir = str(Path(replies_dir).resolve()) if replies_dir else None
 
         # URL where images/assets are actually served (may differ from AP base_url)
         self.content_base_url = (content_base_url or base_url).rstrip("/")
@@ -787,6 +789,10 @@ class ActivityPubIntegration(StartupSyncMixin):
         On delete: send a Delete activity (synchronous — no mentions
         involved).
         """
+        # Skip files under replies/ - handled by on_reply_change
+        if self.replies_dir and filepath.startswith(self.replies_dir + os.sep):
+            return
+
         url = self.file_to_url(filepath)
         actor_url = f"{self.base_url}{self.handler.actor_path}"
 
