@@ -624,3 +624,43 @@ class InlineReactionsRenderingTest(unittest.TestCase):
         rsp = self.client.get("/article/article-with-reply")
         html = rsp.get_data(as_text=True)
         self.assertIn('id="reply-', html)
+
+
+class PermalinkNavigationTest(unittest.TestCase):
+    """Tests for reaction permalink and in-page navigation (Phase 3)."""
+
+    def test_anchor_id_format(self):
+        """Anchor IDs follow the expected format."""
+        from madblog.threading import reaction_anchor_id
+
+        wm_anchor = reaction_anchor_id("wm", "https://example.com/post/123")
+        ap_anchor = reaction_anchor_id("ap", "https://mastodon.social/statuses/456")
+        reply_anchor = reaction_anchor_id(
+            "reply", "https://blog.example.com/reply/art/r1"
+        )
+
+        self.assertTrue(wm_anchor.startswith("wm-"))
+        self.assertTrue(ap_anchor.startswith("ap-"))
+        self.assertTrue(reply_anchor.startswith("reply-"))
+
+        # All should have 12-char hex suffix
+        self.assertEqual(len(wm_anchor), len("wm-") + 12)
+        self.assertEqual(len(ap_anchor), len("ap-") + 12)
+        self.assertEqual(len(reply_anchor), len("reply-") + 12)
+
+    def test_anchor_ids_are_deterministic(self):
+        """Same input produces same anchor ID."""
+        from madblog.threading import reaction_anchor_id
+
+        url = "https://example.com/unique/post"
+        id1 = reaction_anchor_id("wm", url)
+        id2 = reaction_anchor_id("wm", url)
+        self.assertEqual(id1, id2)
+
+    def test_different_urls_produce_different_anchors(self):
+        """Different URLs produce different anchor IDs."""
+        from madblog.threading import reaction_anchor_id
+
+        id1 = reaction_anchor_id("wm", "https://example.com/post/1")
+        id2 = reaction_anchor_id("wm", "https://example.com/post/2")
+        self.assertNotEqual(id1, id2)

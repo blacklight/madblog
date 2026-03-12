@@ -1,24 +1,36 @@
 {# Recursive macro to render a thread node and its children #}
-{% macro render_thread_node(node, depth=0) %}
+{% macro render_thread_node(node, depth=0, parent_anchor=None) %}
   {% set max_indent = 5 %}
   {% set indent_depth = [depth, max_indent] | min %}
+  {% set current_anchor = get_anchor_id(node) %}
   <div class="reaction-thread depth-{{ indent_depth }}" style="margin-left: {{ indent_depth * 1.5 }}em;">
     {% if node.reaction_type.value == 'webmention' %}
-      {{ render_webmention(node.item, node.identity) }}
+      {{ render_webmention(node.item, node.identity, parent_anchor) }}
     {% elif node.reaction_type.value == 'ap_interaction' %}
-      {{ render_ap_interaction(node.item, node.identity) }}
+      {{ render_ap_interaction(node.item, node.identity, parent_anchor) }}
     {% elif node.reaction_type.value == 'author_reply' %}
-      {{ render_author_reply(node.item) }}
+      {{ render_author_reply(node.item, parent_anchor) }}
     {% endif %}
 
     {% for child in node.children %}
-      {{ render_thread_node(child, depth + 1) }}
+      {{ render_thread_node(child, depth + 1, current_anchor) }}
     {% endfor %}
   </div>
 {% endmacro %}
 
+{# Helper to get anchor ID for a node #}
+{% macro get_anchor_id(node) %}
+{%- if node.reaction_type.value == 'webmention' -%}
+wm-{{ node.identity | hash_id }}
+{%- elif node.reaction_type.value == 'ap_interaction' -%}
+ap-{{ node.identity | hash_id }}
+{%- elif node.reaction_type.value == 'author_reply' -%}
+reply-{{ node.item.full_url | hash_id }}
+{%- endif -%}
+{% endmacro %}
+
 {# Render a single Webmention #}
-{% macro render_webmention(wm, identity) %}
+{% macro render_webmention(wm, identity, parent_anchor=None) %}
   {% set anchor_id = 'wm-' ~ (identity | hash_id) %}
   <div class="reaction reaction-webmention wm-{{ wm.mention_type.value if wm.mention_type else 'mention' }}" id="{{ anchor_id }}">
     <div class="reaction-header">
@@ -35,6 +47,9 @@
         </span>
         {% if wm.mention_type and wm.mention_type.value != 'mention' and wm.mention_type.value != 'reply' %}
           <span class="reaction-type-badge">{{ wm.mention_type.value }}</span>
+        {% endif %}
+        {% if parent_anchor %}
+          <a href="#{{ parent_anchor }}" class="reaction-reply-to" title="In reply to">↩</a>
         {% endif %}
         {% if wm.published %}
           <time class="reaction-date" datetime="{{ wm.published.isoformat() }}">
@@ -61,7 +76,7 @@
 {% endmacro %}
 
 {# Render a single AP interaction #}
-{% macro render_ap_interaction(interaction, identity) %}
+{% macro render_ap_interaction(interaction, identity, parent_anchor=None) %}
   {% set anchor_id = 'ap-' ~ (identity | hash_id) %}
   <div class="reaction reaction-ap reaction-ap-{{ interaction.interaction_type.value }}" id="{{ anchor_id }}">
     <div class="reaction-header">
@@ -78,6 +93,9 @@
         </span>
         {% if interaction.interaction_type.value != 'reply' and interaction.interaction_type.value != 'mention' %}
           <span class="reaction-type-badge">{{ interaction.interaction_type.value }}</span>
+        {% endif %}
+        {% if parent_anchor %}
+          <a href="#{{ parent_anchor }}" class="reaction-reply-to" title="In reply to">↩</a>
         {% endif %}
         {% if interaction.published %}
           <time class="reaction-date" datetime="{{ interaction.published.isoformat() }}">
@@ -100,7 +118,7 @@
 {% endmacro %}
 
 {# Render an author reply #}
-{% macro render_author_reply(reply) %}
+{% macro render_author_reply(reply, parent_anchor=None) %}
   {% set anchor_id = 'reply-' ~ (reply.full_url | hash_id) %}
   <div class="reaction reaction-author-reply" id="{{ anchor_id }}">
     <div class="reaction-header">
@@ -116,6 +134,9 @@
           {% endif %}
           <span class="author-label">Author</span>
         </span>
+        {% if parent_anchor %}
+          <a href="#{{ parent_anchor }}" class="reaction-reply-to" title="In reply to">↩</a>
+        {% endif %}
         {% if reply.published %}
           <time class="reaction-date" datetime="{{ reply.published.isoformat() }}">
             {{ reply.published.strftime('%b %d, %Y') }}
