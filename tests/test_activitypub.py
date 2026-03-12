@@ -1309,7 +1309,7 @@ class ActivityPubPublishTest(unittest.TestCase):
         text = "Hello @alice@remote.example"
 
         with patch(
-            "madblog.activitypub._integration.resolve_actor_url",
+            "pubby.resolve_actor_url",
             return_value="https://remote.example/users/alice",
         ) as mock_resolve:
             # First call with allow_network=True — does HTTP, caches result
@@ -1333,7 +1333,7 @@ class ActivityPubPublishTest(unittest.TestCase):
         text = "Hello @bob@other.example"
 
         with patch(
-            "madblog.activitypub._integration.resolve_actor_url",
+            "pubby.resolve_actor_url",
         ) as mock_resolve:
             mentions = integration._resolve_mentions(text, allow_network=False)
             mock_resolve.assert_not_called()
@@ -1351,7 +1351,7 @@ class ActivityPubPublishTest(unittest.TestCase):
         )
 
         with patch(
-            "madblog.activitypub._integration.resolve_actor_url",
+            "pubby.resolve_actor_url",
         ) as mock_resolve:
             mentions = integration._resolve_mentions(text, allow_network=False)
             mock_resolve.assert_not_called()
@@ -1373,7 +1373,7 @@ class ActivityPubPublishTest(unittest.TestCase):
         actor_url = f"{integration.base_url}{integration.handler.actor_path}"
 
         with patch(
-            "madblog.activitypub._integration.resolve_actor_url",
+            "pubby.resolve_actor_url",
         ) as mock_resolve:
             obj, _ = integration.build_object(
                 str(mention_file), url, actor_url, allow_network=False
@@ -1400,7 +1400,7 @@ class ActivityPubPublishTest(unittest.TestCase):
         actor_url = f"{integration.base_url}{integration.handler.actor_path}"
 
         with patch(
-            "madblog.activitypub._integration.resolve_actor_url",
+            "pubby.resolve_actor_url",
             return_value="https://fedi.example/users/eve",
         ):
             integration._handle_publish(str(mention_file), url, actor_url)

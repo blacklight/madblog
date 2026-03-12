@@ -1,5 +1,5 @@
 """
-Tests for the Author Replies feature (Phase 1).
+Tests for the Author Replies feature.
 """
 
 import tempfile
@@ -368,7 +368,7 @@ class ReplyTitleInferenceTest(unittest.TestCase):
 
 
 class ThreadingModelTest(unittest.TestCase):
-    """Tests for the threading model (Phase 2)."""
+    """Tests for the threading model."""
 
     def test_build_thread_tree_empty(self):
         """Empty inputs return empty tree."""
@@ -442,7 +442,7 @@ class ThreadingModelTest(unittest.TestCase):
 
 
 class ArticleRepliesCollectionTest(unittest.TestCase):
-    """Tests for _get_article_replies() (Phase 2)."""
+    """Tests for _get_article_replies()."""
 
     def setUp(self):
         from madblog.app import app
@@ -544,7 +544,7 @@ class ArticleRepliesCollectionTest(unittest.TestCase):
 
 
 class InlineReactionsRenderingTest(unittest.TestCase):
-    """Tests for inline reactions rendering on article pages (Phase 2)."""
+    """Tests for inline reactions rendering on article pages."""
 
     def setUp(self):
         from madblog.app import app
@@ -627,7 +627,7 @@ class InlineReactionsRenderingTest(unittest.TestCase):
 
 
 class PermalinkNavigationTest(unittest.TestCase):
-    """Tests for reaction permalink and in-page navigation (Phase 3)."""
+    """Tests for reaction permalink and in-page navigation."""
 
     def test_anchor_id_format(self):
         """Anchor IDs follow the expected format."""
@@ -664,3 +664,112 @@ class PermalinkNavigationTest(unittest.TestCase):
         id1 = reaction_anchor_id("wm", "https://example.com/post/1")
         id2 = reaction_anchor_id("wm", "https://example.com/post/2")
         self.assertNotEqual(id1, id2)
+
+
+class ReplyFederationTest(unittest.TestCase):
+    """Tests for reply federation."""
+
+    def test_reply_file_to_url_activitypub(self):
+        """ActivityPubIntegration.reply_file_to_url generates correct URLs."""
+        from unittest.mock import MagicMock
+        from madblog.activitypub._integration import ActivityPubIntegration
+
+        handler = MagicMock()
+        integration = ActivityPubIntegration(
+            handler=handler,
+            pages_dir="/content/markdown",
+            base_url="https://example.com",
+            replies_dir="/content/replies",
+        )
+
+        url = integration.reply_file_to_url("/content/replies/my-post/reply-1.md")
+        self.assertEqual(url, "https://example.com/reply/my-post/reply-1")
+
+    def test_reply_file_to_url_webmentions(self):
+        """FileWebmentionsStorage.reply_file_to_url generates correct URLs."""
+        from madblog.webmentions._storage import FileWebmentionsStorage
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            content_dir = Path(tmpdir) / "markdown"
+            mentions_dir = Path(tmpdir) / "mentions"
+            replies_dir = Path(tmpdir) / "replies"
+            content_dir.mkdir()
+
+            storage = FileWebmentionsStorage(
+                content_dir=content_dir,
+                mentions_dir=mentions_dir,
+                base_url="https://example.com",
+                replies_dir=replies_dir,
+            )
+
+            url = storage.reply_file_to_url(
+                str(replies_dir / "article" / "my-reply.md")
+            )
+            self.assertEqual(url, "https://example.com/reply/article/my-reply")
+
+    def test_on_content_change_skips_replies(self):
+        """on_content_change skips files under replies_dir."""
+        from unittest.mock import MagicMock, patch
+        from madblog.activitypub._integration import ActivityPubIntegration
+        from madblog.monitor import ChangeType
+
+        handler = MagicMock()
+        integration = ActivityPubIntegration(
+            handler=handler,
+            pages_dir="/content/markdown",
+            base_url="https://example.com",
+            replies_dir="/content/replies",
+        )
+
+        # Mock file_to_url to track if it's called
+        integration.file_to_url = MagicMock(
+            return_value="https://example.com/article/test"
+        )
+
+        # Call with a reply file path
+        integration.on_content_change(
+            ChangeType.ADDED, "/content/replies/article/reply.md"
+        )
+
+        # file_to_url should NOT be called for reply files
+        integration.file_to_url.assert_not_called()
+
+    def test_build_reply_object_sets_note_type(self):
+        """build_reply_object creates a Note with in_reply_to."""
+        from unittest.mock import MagicMock, patch
+        from madblog.activitypub._integration import ActivityPubIntegration
+
+        handler = MagicMock()
+        handler.followers_url = "https://example.com/followers"
+        handler.storage.get_interactions.return_value = []
+
+        integration = ActivityPubIntegration(
+            handler=handler,
+            pages_dir="/content/markdown",
+            base_url="https://example.com",
+            replies_dir="/content/replies",
+        )
+
+        # Create a temp reply file
+        import tempfile
+        import os
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            reply_file = os.path.join(tmpdir, "reply.md")
+            with open(reply_file, "w") as f:
+                f.write(
+                    "[//]: # (reply-to: https://mastodon.social/status/123)\n\n"
+                    "Thank you for your comment!"
+                )
+
+            with patch.object(integration, "_clean_content", return_value="Thank you!"):
+                obj, activity_type = integration.build_reply_object(
+                    reply_file,
+                    "https://example.com/reply/art/r1",
+                    "https://example.com/actor",
+                )
+
+            self.assertEqual(obj.type, "Note")
+            self.assertIsNone(obj.name)
+            self.assertEqual(obj.in_reply_to, "https://mastodon.social/status/123")
+            self.assertEqual(activity_type, "Create")

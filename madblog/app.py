@@ -24,7 +24,7 @@ from .config import config
 from .feeds import FeedsMixin
 from .guestbook import GuestbookMixin
 from .markdown import MarkdownMixin
-from .monitor import ChangeType
+from .monitor import ChangeType, ContentMonitor
 from .tags import TagIndex
 from .threading import build_thread_tree
 from .webmentions import WebmentionsMixin
@@ -93,6 +93,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             pages_dir=str(self.pages_dir),
             mentions_dir=str(self.mentions_dir),
         )
+        self.replies_monitor: Optional[ContentMonitor] = None
 
     @property
     def _app(self) -> Flask:
@@ -134,8 +135,39 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         self.content_monitor.register(self._on_content_change_tags)
         self.content_monitor.start()
 
+        # Start replies monitor for federation
+        self._start_replies_monitor()
+
     def stop(self) -> None:
         self.content_monitor.stop()
+        if self.replies_monitor:
+            self.replies_monitor.stop()
+            self.replies_monitor = None
+
+    def _start_replies_monitor(self) -> None:
+        """
+        Create and start a ContentMonitor for the replies directory.
+
+        Registers callbacks for ActivityPub and Webmentions federation.
+        The directory is created if it doesn't exist so that replies
+        created after startup are immediately picked up.
+        """
+        self.replies_dir.mkdir(parents=True, exist_ok=True)
+
+        self.replies_monitor = ContentMonitor(
+            root_dir=str(self.replies_dir),
+            throttle_seconds=config.throttle_seconds_on_update,
+        )
+
+        # Register ActivityPub callback for reply federation
+        if config.enable_activitypub and hasattr(self, "_ap_integration"):
+            self.replies_monitor.register(self._ap_integration.on_reply_change)
+
+        # Register Webmentions callback for outgoing mentions from replies
+        if config.enable_webmentions:
+            self.replies_monitor.register(self.webmentions_storage.on_reply_change)
+
+        self.replies_monitor.start()
 
     def _get_page_interactions(
         self,

@@ -39,6 +39,7 @@ class WebmentionsMixin(ABC):  # pylint: disable=too-few-public-methods
             base_url=config.link,
             root_dir=config.content_dir,
             webmentions_hard_delete=config.webmentions_hard_delete,
+            replies_dir=getattr(self, "replies_dir", None),
         )
 
         on_mention_processed = None

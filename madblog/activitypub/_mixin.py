@@ -236,11 +236,13 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             pages_dir=str(self.pages_dir),
             base_url=ap_base_url,
             content_base_url=config.link,  # Images served at actual blog URL
+            replies_dir=getattr(self, "replies_dir", None),
         )
         self.content_monitor.register(self._ap_integration.on_content_change)
 
         def _ap_startup_tasks():
             self._ap_integration.sync_on_startup()
+            self._ap_integration.sync_replies_on_startup()
 
             # Push the current actor profile to all followers so remote
             # instances pick up attachment/field changes (e.g. verified links).

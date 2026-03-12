@@ -20,8 +20,7 @@ import mimetypes
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pubby import ActivityPubHandler, Mention, Object, resolve_actor_url
-from pubby.webfinger import _MENTION_RE
+from pubby import ActivityPubHandler, Object
 
 from madblog.config import config
 from madblog.constants import (
@@ -34,12 +33,14 @@ from madblog.monitor import ChangeType
 from madblog.sync import StartupSyncMixin
 from madblog.tags import extract_hashtags
 
+from ._replies import ActivityPubRepliesMixin
+
 logger = logging.getLogger(__name__)
 
 _MAX_CONCURRENT_PUBLISHES = 4
 
 
-class ActivityPubIntegration(StartupSyncMixin):
+class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
     """
     Bridges Madblog's content monitor to the pubby ActivityPub handler.
 
@@ -53,9 +54,11 @@ class ActivityPubIntegration(StartupSyncMixin):
         handler: ActivityPubHandler,
         pages_dir: str | Path,
         base_url: str,
+        *,
         content_base_url: str | None = None,
         replies_dir: str | Path | None = None,
     ):
+        super().__init__()
 
         self.handler = handler
         self.pages_dir = str(Path(pages_dir).resolve())
@@ -79,10 +82,7 @@ class ActivityPubIntegration(StartupSyncMixin):
         self._active_publishes: set[str] = set()
         self._active_publishes_lock = threading.Lock()
 
-        # Cache for resolved WebFinger mention lookups.
-        # Maps ``(username_lower, domain_lower)`` → ``actor_url``.
-        # Populated by background publish threads; read (without HTTP)
-        # by the request-serving path.
+        # Cache for resolved WebFinger mention lookups (from mixin)
         self._mention_cache: dict[tuple[str, str], str] = {}
         self._mention_cache_lock = threading.Lock()
 
@@ -547,47 +547,6 @@ class ActivityPubIntegration(StartupSyncMixin):
 
         return html, summary, attachments
 
-    def _resolve_mentions(
-        self, text: str, *, allow_network: bool = False
-    ) -> list[Mention]:
-        """
-        Extract ``@user@domain`` mentions from *text* and resolve them.
-
-        Results are cached so that subsequent calls for the same handle
-        never repeat the HTTP lookup.
-
-        :param allow_network: When ``True`` (background publish path),
-            perform a real WebFinger HTTP request for uncached handles
-            and store the result.  When ``False`` (default / request
-            path), return a fallback URL for uncached handles without
-            making any network call.
-        """
-        seen: set[tuple[str, str]] = set()
-        mentions: list[Mention] = []
-        for username, domain in _MENTION_RE.findall(text):
-            key = (username.lower(), domain.lower())
-            if key in seen:
-                continue
-            seen.add(key)
-
-            with self._mention_cache_lock:
-                cached = self._mention_cache.get(key)
-
-            if cached is not None:
-                actor_url = cached
-            elif allow_network:
-                actor_url = resolve_actor_url(username, domain)
-                with self._mention_cache_lock:
-                    self._mention_cache[key] = actor_url
-            else:
-                # Request path: never block on HTTP
-                actor_url = f"https://{domain}/@{username}"
-
-            mentions.append(
-                Mention(username=username, domain=domain, actor_url=actor_url)
-            )
-        return mentions
-
     def build_object(
         self,
         filepath: str,
@@ -637,20 +596,10 @@ class ActivityPubIntegration(StartupSyncMixin):
 
         # Extract #hashtags and build Hashtag tags
         hashtags = extract_hashtags(raw_text)
-        hashtag_tags = [
-            {
-                "type": "Hashtag",
-                "href": f"{self.content_base_url}/tags/{tag}",
-                "name": f"#{tag}",
-            }
-            for tag in hashtags
-        ]
+        hashtag_tags = self._build_hashtag_tags(hashtags)
 
         # Make hashtag links absolute in HTML content
-        content = content.replace(
-            'href="/tags/',
-            f'href="{self.content_base_url}/tags/',
-        )
+        content = self._make_hashtag_links_absolute(content)
 
         activity_type = "Update" if self._is_published(url) else "Create"
 
@@ -709,23 +658,17 @@ class ActivityPubIntegration(StartupSyncMixin):
     def _handle_delete(self, filepath: str, url: str, actor_url: str) -> None:
         """Publish a Delete activity and clean up caches."""
         base_rel = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
-        self._mark_as_deleted(f"{self.content_base_url}/article/{base_rel}")
-        self._remove_file_url(filepath)
-        self._sync_unmark(url)
 
-        obj = Object(
-            id=url,
-            type=config.activitypub_object_type,
-            attributed_to=actor_url,
-            to=["https://www.w3.org/ns/activitystreams#Public"],
-            cc=[self.handler.followers_url],
+        def _cleanup():
+            self._mark_as_deleted(f"{self.content_base_url}/article/{base_rel}")
+            self._remove_file_url(filepath)
+
+        self._publish_delete(
+            url,
+            actor_url,
+            config.activitypub_object_type,
+            extra_cleanup=_cleanup,
         )
-
-        try:
-            self.handler.publish_object(obj, activity_type="Delete")
-            logger.info("Published Delete for %s", url)
-        except Exception:
-            logger.exception("Failed to publish Delete for %s", url)
 
     def _handle_publish(self, filepath: str, url: str, actor_url: str) -> None:
         """
@@ -754,19 +697,11 @@ class ActivityPubIntegration(StartupSyncMixin):
             )
         except Exception:
             logger.exception("Failed to build AP object for %s — giving up", url)
-            try:
-                mtime = os.path.getmtime(filepath)
-            except OSError:
-                mtime = 0
-            self._mark_as_published(url, mtime)
+            self._mark_as_published(url, self._get_file_mtime(filepath))
             return
 
         # ---- 2. Mark as processed BEFORE delivery --------------------
-        try:
-            mtime = os.path.getmtime(filepath)
-        except OSError:
-            mtime = 0
-        self._mark_as_published(url, mtime)
+        self._mark_as_published(url, self._get_file_mtime(filepath))
 
         # ---- 3. Deliver (pubby handles per-inbox retries) ------------
         try:
@@ -799,23 +734,8 @@ class ActivityPubIntegration(StartupSyncMixin):
         if change_type.value == "deleted":
             self._handle_delete(filepath, url, actor_url)
         else:
-            with self._active_publishes_lock:
-                if url in self._active_publishes:
-                    logger.debug("Publish already in progress for %s, skipping", url)
-                    return
-                self._active_publishes.add(url)
-
-            def _guarded_publish():
-                self._publish_semaphore.acquire()
-                try:
-                    self._handle_publish(filepath, url, actor_url)
-                finally:
-                    self._publish_semaphore.release()
-                    with self._active_publishes_lock:
-                        self._active_publishes.discard(url)
-
-            threading.Thread(
-                target=_guarded_publish,
-                daemon=True,
-                name=f"ap-publish-{os.path.basename(filepath)}",
-            ).start()
+            self._spawn_guarded_publish(
+                url,
+                lambda: self._handle_publish(filepath, url, actor_url),
+                f"ap-publish-{os.path.basename(filepath)}",
+            )
