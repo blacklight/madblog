@@ -17,7 +17,7 @@ from flask import (
 )
 
 from .activitypub import ActivityPubMixin
-from .cache import CacheMixin
+from .cache import CachedPage, generate_etag
 from .config import config
 from .feeds import FeedsMixin
 from .guestbook import GuestbookMixin
@@ -30,7 +30,6 @@ from ._sorters import PagesSorter, PagesSortByTime
 
 class BlogApp(  # pylint: disable=too-many-ancestors
     ActivityPubMixin,
-    CacheMixin,
     FeedsMixin,
     GuestbookMixin,
     MarkdownMixin,
@@ -57,6 +56,8 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             # If the `markdown` subfolder does not exist, then the whole
             # `config.content_dir` is treated as the root for Markdown files.
             self.pages_dir = Path(config.content_dir).expanduser().resolve()
+
+        self.replies_dir = Path(config.content_dir).expanduser().resolve() / "replies"
 
         img_dir = os.path.join(config.content_dir, "img")
         if os.path.isdir(img_dir):
@@ -208,23 +209,18 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         metadata = self._parse_page_metadata(page)
         md_file = metadata.pop("md_file")
 
-        # Get file modification time for cache headers
-        file_stat = os.stat(md_file)
-        file_mtime = file_stat.st_mtime
-        last_modified = formatdate(file_mtime, usegmt=True)
-        etag = self._generate_etag(file_mtime)
-
         # Return 304 if client cache is valid
-        if self._check_cache_validity(file_mtime, etag):
-            return self._make_304_response(last_modified, etag, metadata)
+        cached_page = CachedPage(md_file, metadata=metadata)
+        if cached_page.is_client_cache_valid():
+            return cached_page.make_304_response()
 
         # Return ActivityPub response if client prefers it
         if self._client_prefers_activitypub():
             ap_response = self._get_activitypub_page_response(
                 md_file=md_file,
                 metadata=metadata,
-                last_modified=last_modified,
-                etag=etag,
+                last_modified=cached_page.last_modified,
+                etag=cached_page.etag,
             )
             if ap_response:
                 return ap_response
@@ -250,13 +246,98 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         response = make_response(output)
         self._set_page_response_headers(
             response,
-            last_modified=last_modified,
-            etag=etag,
+            last_modified=cached_page.last_modified,
+            etag=cached_page.etag,
             metadata=metadata,
             as_markdown=as_markdown,
         )
 
         return response
+
+    def get_reply(
+        self,
+        article_slug: str,
+        reply_slug: str,
+        *,
+        as_markdown: bool = False,
+    ) -> Response:
+        """
+        Get the HTML (or raw Markdown) for an author reply.
+
+        :param article_slug: The slug of the parent article (or ``_guestbook``).
+        :param reply_slug: The slug of the reply itself.
+        :param as_markdown: Return raw Markdown instead of rendered HTML.
+        """
+        metadata = self._parse_reply_metadata(article_slug, reply_slug)
+        md_file = metadata.pop("md_file")
+
+        # Return 304 if client cache is valid
+        cached_page = CachedPage(md_file, metadata=metadata)
+        if cached_page.is_client_cache_valid():
+            return cached_page.make_304_response()
+
+        title = metadata.get("title") or reply_slug
+        if as_markdown:
+            with open(md_file, "r") as f:
+                content = self._parse_markdown_content(f)
+            output = f"# {title}\n\n{content}"
+        else:
+            output = self._render_reply_html(
+                md_file=md_file,
+                metadata=metadata,
+                title=title,
+                article_slug=article_slug,
+            )
+
+        response = make_response(output)
+        self._set_page_response_headers(
+            response,
+            last_modified=cached_page.last_modified,
+            etag=cached_page.etag,
+            metadata=metadata,
+            as_markdown=as_markdown,
+        )
+
+        return response
+
+    def _render_reply_html(
+        self,
+        *,
+        md_file: str,
+        metadata: dict,
+        title: str,
+        article_slug: str,
+    ) -> str:
+        """
+        Render a reply Markdown file to HTML using the reply template.
+        """
+        from .markdown import render_html
+
+        with open(md_file, "r") as f:
+            content = self._parse_markdown_content(f)
+
+        author_info = self._parse_author(metadata)
+        reply_to = metadata.get("reply-to", "")
+
+        with contextlib.ExitStack() as stack:
+            if not has_app_context():
+                stack.enter_context(self._app.app_context())
+
+            return render_template(
+                "reply.html",
+                config=config,
+                title=title,
+                uri=metadata.get("uri"),
+                url=config.link + metadata.get("uri", ""),
+                image=metadata.get("image"),
+                description=metadata.get("description"),
+                published_datetime=metadata.get("published"),
+                published=metadata["published"].strftime("%b %d, %Y"),
+                content=render_html(content),
+                reply_to=reply_to,
+                article_slug=article_slug,
+                **author_info,
+            )
 
     def _get_page_content(self, page: str, **kwargs) -> str:
         """Return the HTML content of a page as a string (not a Response)."""
@@ -273,27 +354,37 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         skip_html_head: bool = False,
     ):
         pages_dir = str(self.pages_dir).rstrip("/")
-        return [
-            {
-                "path": os.path.join(root[len(pages_dir) + 1 :], f),
-                "folder": root[len(pages_dir) + 1 :],
-                "content": (
-                    self._get_page_content(
-                        os.path.join(root, f),
-                        skip_header=skip_header,
-                        skip_html_head=skip_html_head,
-                    )
-                    if with_content
-                    else ""
-                ),
-                **self._parse_page_metadata(
-                    os.path.join(root[len(pages_dir) + 1 :], f)
-                ),
-            }
-            for root, _, files in os.walk(pages_dir, followlinks=True)
-            for f in files
-            if f.endswith(".md")
-        ]
+        replies_dir = str(self.replies_dir)
+        pages = []
+
+        for root, dirs, files in os.walk(pages_dir, followlinks=True):
+            # Exclude the replies directory from the home page listing
+            dirs[:] = [d for d in dirs if os.path.join(root, d) != replies_dir]
+
+            for f in files:
+                if not f.endswith(".md"):
+                    continue
+
+                pages.append(
+                    {
+                        "path": os.path.join(root[len(pages_dir) + 1 :], f),
+                        "folder": root[len(pages_dir) + 1 :],
+                        "content": (
+                            self._get_page_content(
+                                os.path.join(root, f),
+                                skip_header=skip_header,
+                                skip_html_head=skip_html_head,
+                            )
+                            if with_content
+                            else ""
+                        ),
+                        **self._parse_page_metadata(
+                            os.path.join(root[len(pages_dir) + 1 :], f)
+                        ),
+                    }
+                )
+
+        return pages
 
     def get_pages(
         self,
@@ -364,7 +455,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         )
 
         # Generate ETag based on most recent modification time
-        etag = self._generate_etag(most_recent_mtime) if most_recent_mtime > 0 else None
+        etag = generate_etag(most_recent_mtime) if most_recent_mtime > 0 else None
 
         # Check if the client has a cached version that's still valid
         # Check both If-Modified-Since and If-None-Match headers

@@ -29,6 +29,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
     _email_regex = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
     _md_extensions: Sequence[str | Extension]
     pages_dir: Path
+    replies_dir: Path
 
     @property
     @abstractmethod
@@ -57,38 +58,62 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
     @staticmethod
     def _infer_title_and_url_from_markdown(handle: IO) -> Tuple[str, str]:
         for line in handle:
-            if not line:
+            # Skip blank lines, YAML front-matter delimiters, and
+            # metadata comment lines so that a heading appearing after
+            # them can still be detected.
+            if (
+                not line.strip()
+                or re.match(r"^---\s*$", line)
+                or re.match(r"^\[//\]: # \(", line)
+            ):
                 continue
 
             if not (m := re.match(r"^#\s+(\[?([^]]+)\]?(\((.*)\))?)\s*$", line)):
                 break
 
-            return m.group(2), m.group(4)
+            title = (m.group(2) or "").strip()
+            url = (m.group(4) or "").strip() if m.group(4) else m.group(4)
+            return title, url
 
         return "", ""
 
-    def _parse_page_metadata(self, page: str) -> dict:
+    def _resolve_and_parse_metadata(
+        self,
+        *,
+        base_dir: Path,
+        rel_path: str,
+        page_key: str,
+        uri: str | None = None,
+        title_fallback: str | None = None,
+    ) -> dict:
         """
-        Parse the metadata from a Markdown page
-        """
-        if not page.endswith(".md"):
-            page = page + ".md"
+        Shared helper: resolve a Markdown file under *base_dir*, guard
+        against path traversal, read metadata, infer title and published
+        date.
 
-        md_file = os.path.realpath(os.path.join(self.pages_dir, page))
-        if not os.path.isfile(md_file) or not md_file.startswith(str(self.pages_dir)):
+        :param base_dir: Root directory the file must reside under.
+        :param rel_path: Path relative to *base_dir* (must end in ``.md``).
+        :param page_key: Key passed to ``_parse_metadata_from_markdown``.
+        :param uri: If given, overrides the default ``/article/…`` URI.
+        :param title_fallback: Last-resort title when heading inference
+            also fails.  Defaults to the filename stem.
+        """
+        md_file = os.path.realpath(os.path.join(base_dir, rel_path))
+        if not os.path.isfile(md_file) or not md_file.startswith(str(base_dir)):
             abort(404)
 
         if not os.access(md_file, os.R_OK):
             abort(403)
 
         metadata: dict = {"md_file": md_file}
-
-        # Get file stats for both published date and cache headers
         file_stat = os.stat(md_file)
         metadata["file_mtime"] = file_stat.st_mtime
 
         with open(md_file, "r") as f:
-            metadata.update(self._parse_metadata_from_markdown(f, page))
+            metadata.update(self._parse_metadata_from_markdown(f, page_key))
+
+        if uri is not None:
+            metadata["uri"] = uri
 
         metadata["title_inferred"] = not metadata.get("title")
         if not metadata.get("title"):
@@ -99,15 +124,43 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 metadata["external_url"] = url
 
         if not metadata.get("title"):
-            metadata["title"] = os.path.splitext(os.path.basename(md_file))[0]
+            metadata["title"] = (
+                title_fallback
+                if title_fallback is not None
+                else os.path.splitext(os.path.basename(md_file))[0]
+            )
 
         if not metadata.get("published"):
-            # If the `published` header isn't available in the file,
-            # infer it from the file's creation date
             metadata["published"] = datetime.date.fromtimestamp(file_stat.st_ctime)
             metadata["published_inferred"] = True
 
         return metadata
+
+    def _parse_page_metadata(self, page: str) -> dict:
+        """
+        Parse the metadata from a Markdown page
+        """
+        if not page.endswith(".md"):
+            page = page + ".md"
+
+        return self._resolve_and_parse_metadata(
+            base_dir=self.pages_dir,
+            rel_path=page,
+            page_key=page,
+        )
+
+    def _parse_reply_metadata(self, article_slug: str, reply_slug: str) -> dict:
+        """
+        Parse the metadata from a reply Markdown file under ``replies_dir``.
+        """
+        rel_path = os.path.join(article_slug, reply_slug + ".md")
+        return self._resolve_and_parse_metadata(
+            base_dir=self.replies_dir,
+            rel_path=rel_path,
+            page_key=rel_path,
+            uri=f"/reply/{article_slug}/{reply_slug}",
+            title_fallback=reply_slug,
+        )
 
     @classmethod
     def _parse_author(cls, metadata: dict) -> dict:

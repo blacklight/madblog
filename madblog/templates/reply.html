@@ -1,0 +1,75 @@
+{% with title=title, description=description, image=image, url=url, type='article', styles=['/css/blog.css', '/css/code.css'] %}
+  {% include 'common-head.html' %}
+{% endwith %}
+
+<main>
+  <article class="container h-entry">
+    {% if reply_to %}
+    <div class="reply-backlink">
+      &#8617; In reply to <a href="{{ reply_to }}">{{ reply_to }}</a>
+    </div>
+    {% endif %}
+
+    {% if title %}
+      <div class="title">
+        <h1 class="p-name">
+          {{ title }}
+          <a class="u-url" href="{{ url }}" style="display: none;">{{ url }}</a>
+        </h1>
+      </div>
+    {% endif %}
+
+    <div class="raw-md-btn-container">
+      <a href="{{ url }}.md" title="Raw Markdown">&#128221;</a>
+    </div>
+
+    {% if description %}
+    <div class="description">
+      <h3 class="p-summary">{{ description }}</h3>
+    </div>
+    {% endif %}
+
+    {% if published or author %}
+    <div class="meta">
+      <div class="meta-row">
+        <span class="p-author h-card">
+          {% if author_photo %}
+            <img class="u-photo" src="{{ author_photo }}" alt="Author photo" loading="lazy">
+          {% endif %}
+          {% if author_url %}
+            <a class="p-url" rel="me" href="{{ author_url }}">
+          {% endif %}
+
+          <span class="p-name">
+            {{ author }}
+          </span>
+        </span>
+
+        {% if author_url %}
+          </a>
+        {% endif %}
+
+        {% if published %}
+          <div class="published-date">
+            <time class="dt-published" datetime="{{ published_datetime.isoformat() }}">{{ published }}</time>
+          </div>
+        </div>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    {% if image %}
+    <div class="main-image-container">
+      <img class="u-featured main-image" src="{{ image }}" alt=".">
+    </div>
+    {% endif %}
+
+    <div class="content e-content">
+      {{ content | safe }}
+    </div>
+
+  </article>
+</main>
+
+{% include 'footer.html' %}
+{% include 'common-tail.html' %}

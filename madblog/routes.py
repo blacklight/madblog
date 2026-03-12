@@ -167,6 +167,16 @@ def raw_article_route(article: str):
     return raw_article_with_path_route("", article)
 
 
+@app.route("/reply/<path:article_slug>/<reply_slug>", methods=["GET"])
+def reply_route(article_slug: str, reply_slug: str):
+    return app.get_reply(article_slug, reply_slug)
+
+
+@app.route("/reply/<path:article_slug>/<reply_slug>.md", methods=["GET"])
+def raw_reply_route(article_slug: str, reply_slug: str):
+    return app.get_reply(article_slug, reply_slug, as_markdown=True)
+
+
 def _get_absolute_url(url: str) -> str:
     if not url:
         return ""
