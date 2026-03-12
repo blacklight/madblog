@@ -8,7 +8,6 @@ import os
 import sys
 import tempfile
 import time
-from unittest.mock import patch
 
 # Add the madblog module to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -200,15 +199,17 @@ This is another article for ETag testing.
             # Test 9: ETag helper function
             print("\nTest 9: ETag helper function...")
 
+            from madblog.cache import generate_etag
+
             test_mtime = 1672531200.0  # Fixed timestamp for testing
-            generated_etag = app._generate_etag(test_mtime)
+            generated_etag = generate_etag(test_mtime)
 
             assert generated_etag.startswith('"') and generated_etag.endswith(
                 '"'
             ), "Generated ETag not properly quoted"
 
             # Should be consistent
-            generated_etag2 = app._generate_etag(test_mtime)
+            generated_etag2 = generate_etag(test_mtime)
             assert (
                 generated_etag == generated_etag2
             ), "ETag generation should be deterministic"
