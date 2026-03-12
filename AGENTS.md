@@ -14,7 +14,7 @@ Design decisions are documented under `./docs/agents`. Directories and files fol
 - **Do not commit** after implementing, unless prompted explicitly.
 
 ## Style
-- **Always run `pre-commit run --all-files`** after code modifications, before committing. Fix any issues it reports before proceeding.
+- **Always run `pre-commit run --all-files`** after code modifications, before committing. Fix any issues it reports before proceeding. Note that it's not required to run tests again after modifications triggered by `pre-commit`.
 
 ## Commit messages
 Generate a semantically correct git commit message with textwrap at 80 chars for the staged changes (and _ONLY_ for the staged changes).
@@ -41,3 +41,27 @@ Generate ONLY the commit message - no introduction, no explanation, no quotes ar
 - Write in the _Unreleased_ section a brief description of the changes made since the latest git tag, leveraging both the git log and git diff commands to generate the description.
 - Use the conventions in the CHANGELOG (e.g. _Added_, _Fixed_, _Removed_, _Changed_) for the names of the subsections.
 - Reference links to the issues should be added as URLs to the issue numbers, e.g. `[#1234](https://github.com/...)`, using the appropriate URL remote configured for this git repository.
+
+## Execution style
+
+When addressing large tasks that require several iterations and validation cycles, or when I explicitly say "this is a large task", use a structured approach:
+
+- **Context directory**: Document your process under `docs/<nnn>-feature`, where `<nn>` is the number of the feature. Add a `README.md` under that folder that briefly describes the feature at a very high level, and then proceed with adding relevant links in the README to additional sub-pages as they get added.
+
+- **Keep track of the HEAD commit** at this point. It'll be useful later to identify where the implementation of the new features started, in order to generate consistent commit messages or CHANGELOG items, or rollback.
+
+- **Research**: Look into `/README.md`, `docs/ARCHITECTURE.md` and any place under `docs` that may contain relevant context. Scan the code when the answers don't come from the existing documentation. Write down your findings and proposed approaches into `01-RESEARCH.md` under the feature documentation folder.
+
+- **Iterate over the research document**: I may add comments, either on the document itself or in the chat, that require further iterations. When that's the case, keep refining the research document until I suggest to proceed with the planning.
+
+- **Planning**: Re-read the research document and proceed with proposing a plan. Write down the plan into `02-PLAN.md` under the feature documentation folder. The plan should be split in phases.
+
+- **Iterate over the plan document**: Same guidelines as _Iterate over the research document_.
+
+- **Implementation**: Re-read the plan document and proceed with coding. Implement one phase at the time, and proceed with the next point only when instructed with an `ok` from my side.
+
+- **Summary**: Upon mutual acknowledgment of the implementation, write down a summary of your implementation into `docs/<nnn>-feature/implementation/<nn>-<description>.md`. Also write down a commit message in the chat after checking again the commit, following the guidelines specified previously in this document (but _do not_ commit yet). When I say `ok` or `next` you can proceed with implementing the next phase. Keep iterating until the last phase.
+
+- **Revise**: After all implementation phases are completed, go through the summaries generated under `docs/<nnn>-feature/implementation` and, if necessary, fill missing gaps either in the tests or in the documentation.
+
+- **Wrap up**: When the implementation is completed, updated `CHANGELOG.md` with a summary of the feature, under the _Unreleased_ section (create it if missing), following the guidelines for `CHANGELOG` generation already outlined previously in this document.
