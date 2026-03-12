@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.14
+
+- **Fix:** Guestbook ActivityPub interactions now include **mentions** and
+  **replies to non-article targets**, while continuing to exclude replies to
+  articles (shown on article pages) and non-relevant interaction types
+  (likes/boosts/quotes). Added tests covering the updated filtering behavior.
+- **Chore:** Added an `md-toc` pre-commit hook and replaced the README’s
+  placeholder TOC with an auto-generated one.
+- **Docs:** Enhanced README with additional repository and package badges
+  (issues, stars, forks, last commit, license, PyPI, Codacy, sponsor)
+
 ## 0.9.13
 
 ### Changed
