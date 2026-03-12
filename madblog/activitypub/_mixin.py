@@ -441,16 +441,13 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                 storage.write_json(fpath, data)
                 logger.info("Restored previously blocked follower %s", actor_id)
 
-    def _get_rendered_ap_interactions(self, md_file: str) -> str:
+    def _get_ap_interactions(self, md_file: str) -> list:
         """
-        Retrieve ActivityPub interactions for a given page.
-
-        :return: Tuple of (webmentions_html, ap_interactions_html)
+        Retrieve raw ActivityPub Interaction objects for a given page.
         """
-        ap_interactions = ""
         ap_integration = getattr(self, "_ap_integration", None)
         if not ap_integration:
-            return ap_interactions
+            return []
 
         ap_object_url = ap_integration.file_to_url(md_file)
         interactions = self.activitypub_handler.storage.get_interactions(
@@ -475,7 +472,13 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                 if is_allowed(i.source_actor_id, config.allowed_actors)
             ]
 
-        if interactions:
-            ap_interactions = self.activitypub_handler.render_interactions(interactions)
+        return interactions
 
-        return ap_interactions
+    def _get_rendered_ap_interactions(self, md_file: str) -> str:
+        """
+        Retrieve rendered ActivityPub interactions for a given page.
+        """
+        interactions = self._get_ap_interactions(md_file)
+        if interactions:
+            return self.activitypub_handler.render_interactions(interactions)
+        return ""

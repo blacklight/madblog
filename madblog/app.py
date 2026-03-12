@@ -1,4 +1,6 @@
+import datetime
 import email.utils
+import hashlib
 import os
 import contextlib
 
@@ -24,6 +26,7 @@ from .guestbook import GuestbookMixin
 from .markdown import MarkdownMixin
 from .monitor import ChangeType
 from .tags import TagIndex
+from .threading import build_thread_tree
 from .webmentions import WebmentionsMixin
 from ._sorters import PagesSorter, PagesSortByTime
 
@@ -81,6 +84,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         if os.path.isdir(templates_dir):
             self.template_folder = os.path.abspath(templates_dir)
 
+        self._register_template_filters()
         self._register_ap_context_processors()
         self._init_webmentions()
         self._init_activitypub()
@@ -93,6 +97,14 @@ class BlogApp(  # pylint: disable=too-many-ancestors
     @property
     def _app(self) -> Flask:
         return self
+
+    def _register_template_filters(self):
+        """Register custom Jinja2 template filters."""
+
+        @self.template_filter("hash_id")
+        def hash_id_filter(value: str) -> str:
+            """Generate a short hash ID from a string for use in anchor IDs."""
+            return hashlib.md5(str(value).encode()).hexdigest()[:12]
 
     def _on_content_change_tags(self, _: ChangeType, filepath: str) -> None:
         """Bridge: forward content changes to the tag indexer."""
@@ -129,15 +141,24 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         self,
         md_file: str,
         metadata: dict,
-    ) -> Tuple[str, str]:
+    ) -> list:
         """
-        Retrieve Webmentions and ActivityPub interactions for a page.
+        Retrieve reactions (Webmentions, AP interactions, author replies)
+        for a page and build a threaded tree.
 
-        :return: Tuple of (webmentions_html, ap_interactions_html)
+        :return: List of ThreadNode objects (the thread tree roots)
         """
-        return (
-            self._get_rendered_webmentions(metadata),
-            self._get_rendered_ap_interactions(md_file),
+        webmentions = self._get_webmentions(metadata)
+        ap_interactions = self._get_ap_interactions(md_file)
+        article_slug = self._article_slug_from_metadata(metadata)
+        author_replies = self._get_article_replies(article_slug)
+        article_url = config.link + metadata.get("uri", "")
+
+        return build_thread_tree(
+            webmentions=webmentions,
+            ap_interactions=ap_interactions,
+            author_replies=author_replies,
+            article_url=article_url,
         )
 
     def _set_page_response_headers(
@@ -232,15 +253,14 @@ class BlogApp(  # pylint: disable=too-many-ancestors
                 content = self._parse_markdown_content(f)
             output = f"# {title}\n\n{content}"
         else:
-            mentions, ap_interactions = self._get_page_interactions(md_file, metadata)
+            reactions_tree = self._get_page_interactions(md_file, metadata)
             output = self._render_page_html(
                 md_file=md_file,
                 metadata=metadata,
                 title=title,
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
-                mentions=mentions,
-                ap_interactions=ap_interactions,
+                reactions_tree=reactions_tree,
             )
 
         response = make_response(output)
@@ -299,6 +319,63 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         )
 
         return response
+
+    @staticmethod
+    def _article_slug_from_metadata(metadata: dict) -> str:
+        """
+        Derive the article slug from the metadata URI.
+
+        E.g. ``/article/2025/my-post`` → ``2025/my-post``
+        """
+        uri = metadata.get("uri", "")
+        if uri.startswith("/article/"):
+            return uri[len("/article/") :]
+        return uri.lstrip("/")
+
+    def _get_article_replies(self, article_slug: str) -> list:
+        """
+        Scan replies/<article_slug>/ and return a list of parsed reply dicts.
+
+        Each dict contains: slug, title, reply_to, published, content_html,
+        permalink, author, author_url, author_photo.
+        """
+        from .markdown import render_html
+
+        replies_subdir = self.replies_dir / article_slug
+        if not replies_subdir.is_dir():
+            return []
+
+        replies = []
+        for md_path in replies_subdir.glob("*.md"):
+            reply_slug = md_path.stem
+            try:
+                metadata = self._parse_reply_metadata(article_slug, reply_slug)
+            except Exception:
+                continue
+
+            md_file = metadata.pop("md_file")
+            with open(md_file, "r") as f:
+                content = self._parse_markdown_content(f)
+
+            author_info = self._parse_author(metadata)
+            permalink = f"/reply/{article_slug}/{reply_slug}"
+
+            replies.append(
+                {
+                    "slug": reply_slug,
+                    "title": metadata.get("title", reply_slug),
+                    "reply_to": metadata.get("reply-to", ""),
+                    "published": metadata.get("published"),
+                    "content_html": render_html(content),
+                    "permalink": permalink,
+                    "full_url": config.link + permalink,
+                    **author_info,
+                }
+            )
+
+        # Sort by published date ascending (oldest first)
+        replies.sort(key=lambda r: r.get("published") or datetime.date.min)
+        return replies
 
     def _render_reply_html(
         self,

@@ -365,3 +365,262 @@ class ReplyTitleInferenceTest(unittest.TestCase):
         with self.app.app_context():
             metadata = self.app._parse_reply_metadata("some-post", "no-title")
         self.assertEqual(metadata["title"], "no-title")
+
+
+class ThreadingModelTest(unittest.TestCase):
+    """Tests for the threading model (Phase 2)."""
+
+    def test_build_thread_tree_empty(self):
+        """Empty inputs return empty tree."""
+        from madblog.threading import build_thread_tree
+
+        tree = build_thread_tree([], [], [], "https://example.com/article/test")
+        self.assertEqual(tree, [])
+
+    def test_author_replies_become_root_nodes(self):
+        """Author replies to the article URL become root nodes."""
+        from madblog.threading import build_thread_tree, ReactionType
+
+        replies = [
+            {
+                "slug": "reply-1",
+                "title": "Reply 1",
+                "reply_to": "https://example.com/article/test",
+                "published": None,
+                "content_html": "<p>Content</p>",
+                "permalink": "/reply/test/reply-1",
+                "full_url": "https://example.com/reply/test/reply-1",
+            }
+        ]
+
+        tree = build_thread_tree([], [], replies, "https://example.com/article/test")
+
+        self.assertEqual(len(tree), 1)
+        self.assertEqual(tree[0].reaction_type, ReactionType.AUTHOR_REPLY)
+        self.assertEqual(tree[0].item["slug"], "reply-1")
+
+    def test_nested_replies_become_children(self):
+        """A reply to another reply becomes a child node."""
+        from madblog.threading import build_thread_tree
+
+        replies = [
+            {
+                "slug": "reply-1",
+                "title": "Reply 1",
+                "reply_to": "https://example.com/article/test",
+                "published": None,
+                "content_html": "<p>First reply</p>",
+                "permalink": "/reply/test/reply-1",
+                "full_url": "https://example.com/reply/test/reply-1",
+            },
+            {
+                "slug": "reply-2",
+                "title": "Reply 2",
+                "reply_to": "https://example.com/reply/test/reply-1",
+                "published": None,
+                "content_html": "<p>Nested reply</p>",
+                "permalink": "/reply/test/reply-2",
+                "full_url": "https://example.com/reply/test/reply-2",
+            },
+        ]
+
+        tree = build_thread_tree([], [], replies, "https://example.com/article/test")
+
+        self.assertEqual(len(tree), 1)
+        self.assertEqual(tree[0].item["slug"], "reply-1")
+        self.assertEqual(len(tree[0].children), 1)
+        self.assertEqual(tree[0].children[0].item["slug"], "reply-2")
+
+    def test_reaction_anchor_id_stable(self):
+        """Anchor IDs are stable and deterministic."""
+        from madblog.threading import reaction_anchor_id
+
+        id1 = reaction_anchor_id("wm", "https://example.com/post/123")
+        id2 = reaction_anchor_id("wm", "https://example.com/post/123")
+        self.assertEqual(id1, id2)
+        self.assertTrue(id1.startswith("wm-"))
+
+
+class ArticleRepliesCollectionTest(unittest.TestCase):
+    """Tests for _get_article_replies() (Phase 2)."""
+
+    def setUp(self):
+        from madblog.app import app
+        from madblog.config import config
+
+        self.app = app
+        self.config = config
+
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+
+        root = Path(self._tmpdir.name)
+        markdown_dir = root / "markdown"
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create an article
+        (markdown_dir / "test-article.md").write_text(
+            "[//]: # (title: Test Article)\n\n# Test Article\nContent.",
+            encoding="utf-8",
+        )
+
+        # Create replies
+        replies_dir = root / "replies" / "test-article"
+        replies_dir.mkdir(parents=True, exist_ok=True)
+
+        (replies_dir / "first-reply.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (reply-to: https://example.com/article/test-article)",
+                    "[//]: # (published: 2025-07-01)",
+                    "",
+                    "# First Reply",
+                    "First reply content.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        (replies_dir / "second-reply.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (reply-to: https://example.com/article/test-article)",
+                    "[//]: # (published: 2025-07-02)",
+                    "",
+                    "# Second Reply",
+                    "Second reply content.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        self._orig_content_dir = config.content_dir
+        self._orig_link = config.link
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+        self.app.pages_dir = markdown_dir
+        self.app.replies_dir = root / "replies"
+
+    def tearDown(self):
+        self.config.content_dir = self._orig_content_dir
+        self.config.link = self._orig_link
+
+    def test_get_article_replies_returns_list(self):
+        """_get_article_replies returns a list of reply dicts."""
+        with self.app.app_context():
+            replies = self.app._get_article_replies("test-article")
+
+        self.assertIsInstance(replies, list)
+        self.assertEqual(len(replies), 2)
+
+    def test_get_article_replies_sorted_by_date(self):
+        """Replies are sorted by published date ascending."""
+        with self.app.app_context():
+            replies = self.app._get_article_replies("test-article")
+
+        self.assertEqual(replies[0]["slug"], "first-reply")
+        self.assertEqual(replies[1]["slug"], "second-reply")
+
+    def test_get_article_replies_contains_expected_keys(self):
+        """Each reply dict contains expected keys."""
+        with self.app.app_context():
+            replies = self.app._get_article_replies("test-article")
+
+        reply = replies[0]
+        self.assertIn("slug", reply)
+        self.assertIn("title", reply)
+        self.assertIn("reply_to", reply)
+        self.assertIn("published", reply)
+        self.assertIn("content_html", reply)
+        self.assertIn("permalink", reply)
+        self.assertIn("full_url", reply)
+
+    def test_get_article_replies_empty_for_nonexistent(self):
+        """Returns empty list for articles without replies."""
+        with self.app.app_context():
+            replies = self.app._get_article_replies("nonexistent-article")
+
+        self.assertEqual(replies, [])
+
+
+class InlineReactionsRenderingTest(unittest.TestCase):
+    """Tests for inline reactions rendering on article pages (Phase 2)."""
+
+    def setUp(self):
+        from madblog.app import app
+        from madblog.config import config
+
+        self.app = app
+        self.config = config
+
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+
+        root = Path(self._tmpdir.name)
+        markdown_dir = root / "markdown"
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create an article
+        (markdown_dir / "article-with-reply.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (title: Article With Reply)",
+                    "[//]: # (published: 2025-07-01)",
+                    "",
+                    "# Article With Reply",
+                    "Article body content.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        # Create a reply to this article
+        replies_dir = root / "replies" / "article-with-reply"
+        replies_dir.mkdir(parents=True, exist_ok=True)
+
+        (replies_dir / "author-reply.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (reply-to: https://example.com/article/article-with-reply)",
+                    "[//]: # (published: 2025-07-02)",
+                    "",
+                    "# Author Response",
+                    "Thanks for reading!",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        self._orig_content_dir = config.content_dir
+        self._orig_link = config.link
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+        self.app.pages_dir = markdown_dir
+        self.app.replies_dir = root / "replies"
+
+        self.client = self.app.test_client()
+
+    def tearDown(self):
+        self.config.content_dir = self._orig_content_dir
+        self.config.link = self._orig_link
+
+    def test_article_page_renders_author_reply_inline(self):
+        """Article page includes author reply in reactions section."""
+        rsp = self.client.get("/article/article-with-reply")
+        self.assertEqual(rsp.status_code, 200)
+
+        html = rsp.get_data(as_text=True)
+        self.assertIn("reaction-author-reply", html)
+        self.assertIn("Thanks for reading!", html)
+
+    def test_reactions_section_has_heading(self):
+        """Reactions section includes a heading when reactions exist."""
+        rsp = self.client.get("/article/article-with-reply")
+        html = rsp.get_data(as_text=True)
+        self.assertIn("reactions-section", html)
+
+    def test_author_reply_has_permalink_anchor(self):
+        """Author replies have an anchor ID for permalinking."""
+        rsp = self.client.get("/article/article-with-reply")
+        html = rsp.get_data(as_text=True)
+        self.assertIn('id="reply-', html)

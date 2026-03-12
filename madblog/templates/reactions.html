@@ -1,0 +1,149 @@
+{# Recursive macro to render a thread node and its children #}
+{% macro render_thread_node(node, depth=0) %}
+  {% set max_indent = 5 %}
+  {% set indent_depth = [depth, max_indent] | min %}
+  <div class="reaction-thread depth-{{ indent_depth }}" style="margin-left: {{ indent_depth * 1.5 }}em;">
+    {% if node.reaction_type.value == 'webmention' %}
+      {{ render_webmention(node.item, node.identity) }}
+    {% elif node.reaction_type.value == 'ap_interaction' %}
+      {{ render_ap_interaction(node.item, node.identity) }}
+    {% elif node.reaction_type.value == 'author_reply' %}
+      {{ render_author_reply(node.item) }}
+    {% endif %}
+
+    {% for child in node.children %}
+      {{ render_thread_node(child, depth + 1) }}
+    {% endfor %}
+  </div>
+{% endmacro %}
+
+{# Render a single Webmention #}
+{% macro render_webmention(wm, identity) %}
+  {% set anchor_id = 'wm-' ~ (identity | hash_id) %}
+  <div class="reaction reaction-webmention wm-{{ wm.mention_type.value if wm.mention_type else 'mention' }}" id="{{ anchor_id }}">
+    <div class="reaction-header">
+      {% if wm.author_photo %}
+        <img class="reaction-avatar" src="{{ wm.author_photo }}" alt="" loading="lazy">
+      {% endif %}
+      <div class="reaction-meta">
+        <span class="reaction-author">
+          {% if wm.author_url %}
+            <a href="{{ wm.author_url }}" rel="nofollow noopener" target="_blank">{{ wm.author_name or 'Anonymous' }}</a>
+          {% else %}
+            {{ wm.author_name or 'Anonymous' }}
+          {% endif %}
+        </span>
+        {% if wm.mention_type and wm.mention_type.value != 'mention' and wm.mention_type.value != 'reply' %}
+          <span class="reaction-type-badge">{{ wm.mention_type.value }}</span>
+        {% endif %}
+        {% if wm.published %}
+          <time class="reaction-date" datetime="{{ wm.published.isoformat() }}">
+            {{ wm.published.strftime('%b %d, %Y') }}
+          </time>
+        {% endif %}
+      </div>
+    </div>
+    {% if wm.title and wm.title != wm.excerpt %}
+      <div class="reaction-title">
+        <a href="{{ wm.source }}" rel="nofollow noopener" target="_blank">{{ wm.title }}</a>
+      </div>
+    {% endif %}
+    {% if wm.content %}
+      <div class="reaction-content">{{ wm.content | safe }}</div>
+    {% elif wm.excerpt %}
+      <div class="reaction-content">{{ wm.excerpt }}</div>
+    {% endif %}
+    <div class="reaction-footer">
+      <a href="{{ wm.source }}" class="reaction-source" rel="nofollow noopener" target="_blank">View source</a>
+      <a href="#{{ anchor_id }}" class="reaction-permalink" title="Permalink">🔗</a>
+    </div>
+  </div>
+{% endmacro %}
+
+{# Render a single AP interaction #}
+{% macro render_ap_interaction(interaction, identity) %}
+  {% set anchor_id = 'ap-' ~ (identity | hash_id) %}
+  <div class="reaction reaction-ap reaction-ap-{{ interaction.interaction_type.value }}" id="{{ anchor_id }}">
+    <div class="reaction-header">
+      {% if interaction.author_photo %}
+        <img class="reaction-avatar" src="{{ interaction.author_photo }}" alt="" loading="lazy">
+      {% endif %}
+      <div class="reaction-meta">
+        <span class="reaction-author">
+          {% if interaction.author_url %}
+            <a href="{{ interaction.author_url }}" rel="nofollow noopener" target="_blank">{{ interaction.author_name or interaction.source_actor_id }}</a>
+          {% else %}
+            {{ interaction.author_name or interaction.source_actor_id }}
+          {% endif %}
+        </span>
+        {% if interaction.interaction_type.value != 'reply' and interaction.interaction_type.value != 'mention' %}
+          <span class="reaction-type-badge">{{ interaction.interaction_type.value }}</span>
+        {% endif %}
+        {% if interaction.published %}
+          <time class="reaction-date" datetime="{{ interaction.published.isoformat() }}">
+            {{ interaction.published.strftime('%b %d, %Y') }}
+          </time>
+        {% endif %}
+      </div>
+    </div>
+    {% if interaction.content %}
+      <div class="reaction-content">{{ interaction.content | safe }}</div>
+    {% endif %}
+    <div class="reaction-footer">
+      {% set source_url = interaction.object_id or interaction.activity_id %}
+      {% if source_url %}
+        <a href="{{ source_url }}" class="reaction-source" rel="nofollow noopener" target="_blank">View on the Fediverse</a>
+      {% endif %}
+      <a href="#{{ anchor_id }}" class="reaction-permalink" title="Permalink">🔗</a>
+    </div>
+  </div>
+{% endmacro %}
+
+{# Render an author reply #}
+{% macro render_author_reply(reply) %}
+  {% set anchor_id = 'reply-' ~ (reply.full_url | hash_id) %}
+  <div class="reaction reaction-author-reply" id="{{ anchor_id }}">
+    <div class="reaction-header">
+      {% if reply.author_photo %}
+        <img class="reaction-avatar" src="{{ reply.author_photo }}" alt="" loading="lazy">
+      {% endif %}
+      <div class="reaction-meta">
+        <span class="reaction-author author-badge">
+          {% if reply.author_url %}
+            <a href="{{ reply.author_url }}" rel="me">{{ reply.author or 'Author' }}</a>
+          {% else %}
+            {{ reply.author or 'Author' }}
+          {% endif %}
+          <span class="author-label">Author</span>
+        </span>
+        {% if reply.published %}
+          <time class="reaction-date" datetime="{{ reply.published.isoformat() }}">
+            {{ reply.published.strftime('%b %d, %Y') }}
+          </time>
+        {% endif %}
+      </div>
+    </div>
+    {% if reply.title and reply.title != reply.slug %}
+      <div class="reaction-title">
+        <a href="{{ reply.permalink }}">{{ reply.title }}</a>
+      </div>
+    {% endif %}
+    <div class="reaction-content">{{ reply.content_html | safe }}</div>
+    <div class="reaction-footer">
+      <a href="{{ reply.permalink }}" class="reaction-source">View full reply</a>
+      <a href="#{{ anchor_id }}" class="reaction-permalink" title="Permalink">🔗</a>
+    </div>
+  </div>
+{% endmacro %}
+
+{# Main reactions section #}
+{% if reactions_tree %}
+<section class="reactions-section">
+  <h2 class="reactions-heading">Reactions</h2>
+  <div class="reactions-list">
+    {% for node in reactions_tree %}
+      {{ render_thread_node(node, 0) }}
+    {% endfor %}
+  </div>
+</section>
+{% endif %}

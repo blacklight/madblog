@@ -203,8 +203,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
         title: str,
         skip_header: bool,
         skip_html_head: bool,
-        mentions: str,
-        ap_interactions: str,
+        reactions_tree: list,
     ) -> str:
         """
         Render a Markdown page to HTML using the article template.
@@ -234,8 +233,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 tags=tags,
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
-                mentions=mentions,
-                ap_interactions=ap_interactions,
+                reactions_tree=reactions_tree,
                 **author_info,
             )
 

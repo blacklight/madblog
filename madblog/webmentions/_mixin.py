@@ -96,10 +96,9 @@ class WebmentionsMixin(ABC):  # pylint: disable=too-few-public-methods
 
         self.webmentions_handler.process_incoming_webmention = _filtered_process
 
-    def _get_rendered_webmentions(self, metadata: dict) -> Markup:
+    def _get_webmentions(self, metadata: dict) -> list:
         """
-        Retrieve a Markup object with rendered Webmentions for the given page
-        metadata.
+        Retrieve raw Webmention objects for the given page metadata.
         """
         mentions = self.webmentions_handler.retrieve_stored_webmentions(
             config.link + metadata.get("uri", ""),
@@ -115,4 +114,12 @@ class WebmentionsMixin(ABC):  # pylint: disable=too-few-public-methods
                 m for m in mentions if is_allowed(m.source, config.allowed_actors)
             ]
 
+        return mentions
+
+    def _get_rendered_webmentions(self, metadata: dict) -> Markup:
+        """
+        Retrieve a Markup object with rendered Webmentions for the given page
+        metadata.
+        """
+        mentions = self._get_webmentions(metadata)
         return self.webmentions_handler.render_webmentions(mentions)

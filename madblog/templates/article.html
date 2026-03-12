@@ -83,16 +83,8 @@
 {% if not skip_html_head %}
     </div>
 
-{% if mentions %}
-  {{ mentions }}
-</div>
-{% endif %}
+    {% include 'reactions.html' %}
 
-{% if ap_interactions %}
-  {{ ap_interactions }}
-{% endif %}
-
-    </div>
   </article>
 </main>
 
