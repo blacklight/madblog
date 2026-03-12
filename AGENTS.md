@@ -50,6 +50,8 @@ When addressing large tasks that require several iterations and validation cycle
 
 - **Keep track of the HEAD commit** at this point. It'll be useful later to identify where the implementation of the new features started, in order to generate consistent commit messages or CHANGELOG items, or rollback.
 
+- **Keep track of follow-ups**: Everything that we agree to be a follow-up after mutual acknowledgment in the research, planning or implementation phases should be written to `99-FOLLOW-UP.md` in the feature documentation folder.
+
 - **Research**: Look into `/README.md`, `docs/ARCHITECTURE.md` and any place under `docs` that may contain relevant context. Scan the code when the answers don't come from the existing documentation. Write down your findings and proposed approaches into `01-RESEARCH.md` under the feature documentation folder.
 
 - **Iterate over the research document**: I may add comments, either on the document itself or in the chat, that require further iterations. When that's the case, keep refining the research document until I suggest to proceed with the planning.
@@ -65,3 +67,5 @@ When addressing large tasks that require several iterations and validation cycle
 - **Revise**: After all implementation phases are completed, go through the summaries generated under `docs/<nnn>-feature/implementation` and, if necessary, fill missing gaps either in the tests or in the documentation.
 
 - **Wrap up**: When the implementation is completed, updated `CHANGELOG.md` with a summary of the feature, under the _Unreleased_ section (create it if missing), following the guidelines for `CHANGELOG` generation already outlined previously in this document.
+
+- **Follow-ups**: Give a last read to the produced documents and write any follow-ups to `99-FOLLOW-UP.md` in the feature documentation folder.
