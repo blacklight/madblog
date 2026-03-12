@@ -17,6 +17,7 @@ from flask import (
 )
 
 from .app import app
+from .cache import generate_etag
 from .config import config
 from .feeds import FeedAuthor
 from ._sorters import PagesSortByTimeGroupedByFolder
@@ -283,7 +284,7 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
     )
 
     # Generate ETag based on most recent modification time
-    etag = app._generate_etag(most_recent_mtime) if most_recent_mtime > 0 else None
+    etag = generate_etag(most_recent_mtime) if most_recent_mtime > 0 else None
 
     # Check if the client has a cached version that's still valid
     # Check both If-Modified-Since and If-None-Match headers
