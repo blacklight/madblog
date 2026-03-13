@@ -22,6 +22,7 @@ from webmentions import (
 from webmentions.storage.adapters.file._watcher import ContentTextFormat
 
 from madblog.config import config
+from madblog.markdown import resolve_relative_urls
 from madblog.monitor import ChangeType
 from madblog.sync import StartupSyncMixin
 
@@ -135,6 +136,8 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
                     text = fh.read()
             except OSError:
                 return
+            # Resolve relative URLs to absolute before processing
+            text = resolve_relative_urls(text, self.base_url)
             try:
                 self._webmentions_handler.process_outgoing_webmentions(
                     source_url,

@@ -28,7 +28,7 @@ from madblog.constants import (
     REGEX_MERMAID_BLOCK,
     REGEX_TOC_MARKER,
 )
-from madblog.markdown import render_html
+from madblog.markdown import render_html, resolve_relative_urls
 from madblog.monitor import ChangeType
 from madblog.sync import StartupSyncMixin
 from madblog.tags import extract_hashtags
@@ -530,6 +530,8 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
             if description:
                 cleaned = f"**{description}**\n\n{cleaned}"
 
+        # Resolve relative URLs to absolute before rendering to HTML
+        cleaned = resolve_relative_urls(cleaned, self.content_base_url)
         html = render_html(cleaned)
 
         # Extract LaTeX/Mermaid rendered media → PNG attachments

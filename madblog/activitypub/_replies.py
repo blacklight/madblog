@@ -7,7 +7,7 @@ from typing import Callable
 from pubby import Object
 
 from madblog.config import config
-from madblog.markdown import render_html
+from madblog.markdown import render_html, resolve_relative_urls
 from madblog.monitor import ChangeType
 from madblog.tags import extract_hashtags
 
@@ -122,6 +122,8 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
 
         # Build content (no title header for Notes)
         cleaned = self._clean_content(filepath)
+        # Resolve relative URLs to absolute before rendering to HTML
+        cleaned = resolve_relative_urls(cleaned, self.content_base_url)
         html = render_html(cleaned)
         html, attachments = self._extract_media_attachments(html, cleaned)
 
