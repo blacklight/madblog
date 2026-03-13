@@ -237,11 +237,25 @@ class ActivityPubEnabledTest(unittest.TestCase):
     @skip_if_no_pubby
     def test_actor(self):
         client = self.app.test_client()
-        resp = client.get("/ap/actor")
+        resp = client.get("/ap/actor", headers={"Accept": "application/activity+json"})
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json()
         self.assertEqual(data["type"], "Person")
         self.assertEqual(data["preferredUsername"], "blog")
+
+    @skip_if_no_pubby
+    def test_actor_redirects_to_profile_for_html_clients(self):
+        """When a browser requests /ap/actor, redirect to the profile page."""
+        client = self.app.test_client()
+        # No Accept header or HTML Accept header should redirect
+        resp = client.get("/ap/actor")
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.headers["Location"], "/@blog")
+
+        # Explicitly requesting HTML should also redirect
+        resp = client.get("/ap/actor", headers={"Accept": "text/html"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.headers["Location"], "/@blog")
 
     @skip_if_no_pubby
     def test_actor_profile_fields_are_configurable(self):
@@ -258,7 +272,7 @@ class ActivityPubEnabledTest(unittest.TestCase):
         self.addCleanup(lambda: app._ap_startup_thread.join(timeout=5))
         client = app.test_client()
 
-        resp = client.get("/ap/actor")
+        resp = client.get("/ap/actor", headers={"Accept": "application/activity+json"})
         self.assertEqual(resp.status_code, 200)
         actor = resp.get_json()
 
@@ -309,7 +323,7 @@ class ActivityPubEnabledTest(unittest.TestCase):
         self.assertEqual(data["subject"], "acct:blog@example.org")
         self.assertEqual(data["aliases"][0], "https://ap.example.org/ap/actor")
 
-        resp = client.get("/ap/actor")
+        resp = client.get("/ap/actor", headers={"Accept": "application/activity+json"})
         self.assertEqual(resp.status_code, 200)
         actor = resp.get_json()
         self.assertEqual(actor["id"], "https://ap.example.org/ap/actor")

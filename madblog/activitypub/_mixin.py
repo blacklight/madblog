@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from logging import getLogger
 from pathlib import Path
 
-from flask import Flask, Response, has_request_context, make_response, request
+from flask import Flask, Response, has_request_context, make_response, redirect, request
 from pubby import ActivityPubHandler
 from pubby._model import AP_CONTEXT
 from pubby.storage.adapters.file import FileActivityPubStorage
@@ -223,6 +223,19 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
         app: Flask = self  # type: ignore
         bind_activitypub(app, self.activitypub_handler)
+
+        # Content negotiation for /ap/actor: redirect to profile page when
+        # the client prefers HTML (e.g. a browser following the actor link).
+        # This must be registered as a before_request handler because pubby's
+        # route always returns JSON.
+        @app.before_request
+        def _actor_html_redirect():
+            if request.path == "/ap/actor" and request.method == "GET":
+                if not self._ap_accept_quality():
+                    # Client does not want ActivityPub JSON; redirect to profile
+                    return redirect(f"/@{config.activitypub_username}", code=302)
+            return None
+
         bind_mastodon_api(
             app,
             self.activitypub_handler,
