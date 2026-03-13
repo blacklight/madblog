@@ -254,6 +254,11 @@
   margin-bottom: 0.25em;
 }
 
+.reaction-thread-nested {
+  border-left: 1px solid var(--color-border-tertiary);
+  padding-left: 0.75em;
+}
+
 .reaction-thread.depth-0 {
   margin-bottom: 0.5em;
 }

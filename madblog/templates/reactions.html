@@ -3,7 +3,7 @@
   {% set max_indent = 5 %}
   {% set indent_depth = [depth, max_indent] | min %}
   {% set current_anchor = get_anchor_id(node) %}
-  <div class="reaction-thread depth-{{ indent_depth }}" style="margin-left: {{ indent_depth * 1.5 }}em;">
+  <div class="reaction-thread reaction-thread-{{ 'nested' if indent_depth > 0 else 'top' }} depth-{{ indent_depth }}" style="margin-left: {{ indent_depth * 0.25 }}em;">
     {% if node.reaction_type.value == 'webmention' %}
       {{ render_webmention(node.item, node.identity, parent_anchor) }}
     {% elif node.reaction_type.value == 'ap_interaction' %}
