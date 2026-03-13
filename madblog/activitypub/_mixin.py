@@ -232,8 +232,13 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         def _actor_html_redirect():
             if request.path == "/ap/actor" and request.method == "GET":
                 if not self._ap_accept_quality():
-                    # Client does not want ActivityPub JSON; redirect to profile
-                    return redirect(f"/@{config.activitypub_username}", code=302)
+                    # Client does not want ActivityPub JSON; redirect to profile.
+                    # Use absolute URL based on config.link since the profile
+                    # page lives there, not necessarily at activitypub_link.
+                    profile_url = (
+                        f'{config.link.rstrip("/")}/@{config.activitypub_username}'
+                    )
+                    return redirect(profile_url, code=302)
             return None
 
         bind_mastodon_api(

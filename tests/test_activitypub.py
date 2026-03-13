@@ -250,12 +250,12 @@ class ActivityPubEnabledTest(unittest.TestCase):
         # No Accept header or HTML Accept header should redirect
         resp = client.get("/ap/actor")
         self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp.headers["Location"], "/@blog")
+        self.assertEqual(resp.headers["Location"], "https://example.com/@blog")
 
         # Explicitly requesting HTML should also redirect
         resp = client.get("/ap/actor", headers={"Accept": "text/html"})
         self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp.headers["Location"], "/@blog")
+        self.assertEqual(resp.headers["Location"], "https://example.com/@blog")
 
     @skip_if_no_pubby
     def test_actor_profile_fields_are_configurable(self):
