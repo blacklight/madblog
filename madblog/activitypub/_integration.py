@@ -517,6 +517,8 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         url: str,
         title: str,
         description: str,
+        *,
+        uri: str = "",
     ) -> tuple[str, str | None, list[dict]]:
         """
         Build the HTML content and optional summary for a post.
@@ -533,7 +535,7 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
                 cleaned = f"**{description}**\n\n{cleaned}"
 
         # Resolve relative URLs to absolute before rendering to HTML
-        cleaned = resolve_relative_urls(cleaned, self.content_base_url)
+        cleaned = resolve_relative_urls(cleaned, self.content_base_url, uri)
         html = render_html(cleaned)
 
         # Extract LaTeX/Mermaid rendered media → PNG attachments
@@ -590,6 +592,7 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
             public_url,
             title,
             description,
+            uri=metadata.get("uri", ""),
         )
 
         # Resolve @user@domain mentions

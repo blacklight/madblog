@@ -129,5 +129,164 @@ Some code: `[not a link](/fake)`
         self.assertIn('href="https://example.com/about"', result)
 
 
+class TestResolveRelativeUrlsWithCurrentUri(unittest.TestCase):
+    """Test resolve_relative_urls with current_uri for Obsidian-style links."""
+
+    def test_dot_slash_relative_link(self):
+        """./path links should resolve relative to current directory."""
+        md = "See [other post](./other-post) for details."
+        result = resolve_relative_urls(
+            md, "https://example.com", "/article/2025/my-post"
+        )
+        self.assertEqual(
+            result,
+            "See [other post](https://example.com/article/2025/other-post) for details.",
+        )
+
+    def test_bare_relative_link(self):
+        """Bare relative paths should resolve relative to current directory."""
+        md = "See [other post](other-post) for details."
+        result = resolve_relative_urls(
+            md, "https://example.com", "/article/2025/my-post"
+        )
+        self.assertEqual(
+            result,
+            "See [other post](https://example.com/article/2025/other-post) for details.",
+        )
+
+    def test_parent_directory_link(self):
+        """../ paths should resolve to parent directory."""
+        md = "See [parent dir](../other-dir/post) for details."
+        result = resolve_relative_urls(
+            md, "https://example.com", "/article/2025/my-post"
+        )
+        self.assertEqual(
+            result,
+            "See [parent dir](https://example.com/article/other-dir/post) for details.",
+        )
+
+    def test_multiple_parent_directories(self):
+        """Multiple ../ should resolve correctly."""
+        md = "See [post](../../other-year/post) for details."
+        result = resolve_relative_urls(
+            md, "https://example.com", "/article/2025/01/my-post"
+        )
+        self.assertEqual(
+            result,
+            "See [post](https://example.com/article/other-year/post) for details.",
+        )
+
+    def test_directory_traversal_prevention(self):
+        """../ should not go above base_path (/article)."""
+        md = "See [escape](../../../../etc/passwd) for details."
+        result = resolve_relative_urls(
+            md, "https://example.com", "/article/2025/my-post"
+        )
+        # Should be clamped to /article/passwd, not /etc/passwd
+        self.assertTrue(result.startswith("See [escape](https://example.com/article/"))
+        self.assertNotIn("/etc/", result)
+
+    def test_directory_traversal_with_custom_base_path(self):
+        """../ should respect custom base_path."""
+        md = "See [link](../../other) for details."
+        result = resolve_relative_urls(
+            md, "https://example.com", "/reply/article-slug/reply-id", "/reply"
+        )
+        # Should be clamped to /reply/other
+        self.assertTrue(result.startswith("See [link](https://example.com/reply/"))
+
+    def test_no_current_uri_bare_path_unchanged(self):
+        """Bare paths without current_uri should remain unchanged."""
+        md = "See [link](other-post) for details."
+        result = resolve_relative_urls(md, "https://example.com", "")
+        self.assertEqual(result, "See [link](other-post) for details.")
+
+    def test_dot_slash_image(self):
+        """./path images should resolve correctly."""
+        md = "![photo](./images/photo.png)"
+        result = resolve_relative_urls(
+            md, "https://example.com", "/article/2025/my-post"
+        )
+        self.assertEqual(
+            result, "![photo](https://example.com/article/2025/images/photo.png)"
+        )
+
+    def test_bare_relative_image(self):
+        """Bare relative image paths should resolve correctly."""
+        md = "![photo](photo.png)"
+        result = resolve_relative_urls(
+            md, "https://example.com", "/article/2025/my-post"
+        )
+        self.assertEqual(result, "![photo](https://example.com/article/2025/photo.png)")
+
+    def test_html_bare_relative_href(self):
+        """Bare relative HTML href should resolve correctly."""
+        md = '<a href="other-page">Link</a>'
+        result = resolve_relative_urls(
+            md, "https://example.com", "/article/2025/my-post"
+        )
+        self.assertEqual(
+            result, '<a href="https://example.com/article/2025/other-page">Link</a>'
+        )
+
+    def test_html_dot_slash_href(self):
+        """./path HTML href should resolve correctly."""
+        md = '<a href="./other-page">Link</a>'
+        result = resolve_relative_urls(
+            md, "https://example.com", "/article/2025/my-post"
+        )
+        self.assertEqual(
+            result, '<a href="https://example.com/article/2025/other-page">Link</a>'
+        )
+
+    def test_special_protocols_unchanged(self):
+        """mailto:, tel:, etc. should not be treated as relative paths."""
+        md = "Email [us](mailto:test@example.com) or call [us](tel:+1234567890)."
+        result = resolve_relative_urls(
+            md, "https://example.com", "/article/2025/my-post"
+        )
+        self.assertIn("mailto:test@example.com", result)
+        self.assertIn("tel:+1234567890", result)
+
+    def test_anchor_links_unchanged(self):
+        """#anchor links should not be treated as relative paths."""
+        md = "See [section](#my-section) below."
+        result = resolve_relative_urls(
+            md, "https://example.com", "/article/2025/my-post"
+        )
+        self.assertEqual(result, "See [section](#my-section) below.")
+
+    def test_query_string_unchanged(self):
+        """?query links should not be treated as relative paths."""
+        md = "See [filtered](?tag=python) results."
+        result = resolve_relative_urls(
+            md, "https://example.com", "/article/2025/my-post"
+        )
+        self.assertEqual(result, "See [filtered](?tag=python) results.")
+
+    def test_mixed_relative_formats(self):
+        """Test a document with various relative URL formats."""
+        md = """# Post
+
+See [absolute](/article/other) and [dot-relative](./sibling).
+
+Also check [bare](another-post) and [parent](../2024/old-post).
+
+External: [Google](https://google.com) and [email](mailto:hi@example.com).
+"""
+        result = resolve_relative_urls(
+            md, "https://example.com", "/article/2025/my-post"
+        )
+
+        self.assertIn("[absolute](https://example.com/article/other)", result)
+        self.assertIn(
+            "[dot-relative](https://example.com/article/2025/sibling)", result
+        )
+        self.assertIn("[bare](https://example.com/article/2025/another-post)", result)
+        self.assertIn("[parent](https://example.com/article/2024/old-post)", result)
+        self.assertIn("[Google](https://google.com)", result)
+        self.assertIn("[email](mailto:hi@example.com)", result)
+
+
 if __name__ == "__main__":
     unittest.main()

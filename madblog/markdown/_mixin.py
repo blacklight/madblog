@@ -240,7 +240,9 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 description=metadata.get("description"),
                 published_datetime=metadata.get("published"),
                 published=metadata["published"].strftime("%b %d, %Y"),
-                content=render_html(resolve_relative_urls(content, config.link)),
+                content=render_html(
+                    resolve_relative_urls(content, config.link, metadata.get("uri", ""))
+                ),
                 tags=tags,
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,

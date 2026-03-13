@@ -123,7 +123,9 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         # Build content (no title header for Notes)
         cleaned = self._clean_content(filepath)
         # Resolve relative URLs to absolute before rendering to HTML
-        cleaned = resolve_relative_urls(cleaned, self.content_base_url)
+        cleaned = resolve_relative_urls(
+            cleaned, self.content_base_url, metadata.get("uri", ""), "/reply"
+        )
         html = render_html(cleaned)
         html, attachments = self._extract_media_attachments(html, cleaned)
 

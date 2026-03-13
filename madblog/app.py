@@ -454,7 +454,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
                     "reply_to": metadata.get("reply-to", ""),
                     "published": metadata.get("published"),
                     "content_html": render_html(
-                        resolve_relative_urls(content, config.link)
+                        resolve_relative_urls(content, config.link, permalink, "/reply")
                     ),
                     "permalink": permalink,
                     "full_url": config.link + permalink,
@@ -499,7 +499,11 @@ class BlogApp(  # pylint: disable=too-many-ancestors
                 description=metadata.get("description"),
                 published_datetime=metadata.get("published"),
                 published=metadata["published"].strftime("%b %d, %Y"),
-                content=render_html(resolve_relative_urls(content, config.link)),
+                content=render_html(
+                    resolve_relative_urls(
+                        content, config.link, metadata.get("uri", ""), "/reply"
+                    )
+                ),
                 reply_to=reply_to,
                 article_slug=article_slug,
                 **author_info,

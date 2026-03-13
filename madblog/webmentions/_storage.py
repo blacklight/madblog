@@ -102,6 +102,7 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         *,
         sync: bool = True,
         label: str = "",
+        base_path: str = "/article",
     ) -> None:
         """
         Process outgoing webmentions for a content change.
@@ -111,11 +112,17 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         :param change_type: The type of change (added, edited, deleted).
         :param sync: Whether to update the sync cache.
         :param label: Label for log messages (e.g. "reply ").
+        :param base_path: Base path for directory traversal prevention.
         """
         if self._webmentions_handler is None:
             return
 
         text_format = self._get_text_format(filepath)
+
+        # Extract URI from source_url by removing base_url prefix
+        current_uri = ""
+        if source_url.startswith(self.base_url):
+            current_uri = source_url[len(self.base_url) :]
 
         if change_type.value == "deleted":
             if sync:
@@ -137,7 +144,7 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
             except OSError:
                 return
             # Resolve relative URLs to absolute before processing
-            text = resolve_relative_urls(text, self.base_url)
+            text = resolve_relative_urls(text, self.base_url, current_uri, base_path)
             try:
                 self._webmentions_handler.process_outgoing_webmentions(
                     source_url,
@@ -442,5 +449,10 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
 
         source_url = self.reply_file_to_url(filepath)
         self._process_outgoing_change(
-            source_url, filepath, change_type, sync=False, label="reply "
+            source_url,
+            filepath,
+            change_type,
+            sync=False,
+            label="reply ",
+            base_path="/reply",
         )
