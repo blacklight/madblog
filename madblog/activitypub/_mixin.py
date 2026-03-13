@@ -10,6 +10,7 @@ from pathlib import Path
 
 from flask import Flask, Response, has_request_context, make_response, request
 from pubby import ActivityPubHandler
+from pubby._model import AP_CONTEXT
 from pubby.storage.adapters.file import FileActivityPubStorage
 from pubby.server.adapters.flask import bind_activitypub
 from pubby.server.adapters.flask_mastodon import bind_mastodon_api
@@ -236,11 +237,13 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             pages_dir=str(self.pages_dir),
             base_url=ap_base_url,
             content_base_url=config.link,  # Images served at actual blog URL
+            replies_dir=getattr(self, "replies_dir", None),
         )
         self.content_monitor.register(self._ap_integration.on_content_change)
 
         def _ap_startup_tasks():
             self._ap_integration.sync_on_startup()
+            self._ap_integration.sync_replies_on_startup()
 
             # Push the current actor profile to all followers so remote
             # instances pick up attachment/field changes (e.g. verified links).
@@ -283,14 +286,25 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         ap_quality = self._ap_accept_quality()
         return bool(ap_quality and ap_quality > request.accept_mimetypes["text/html"])
 
-    def _get_activitypub_page_response(
+    def _get_activitypub_object_response(
         self,
         *,
-        md_file: str,
+        ap_url: str,
+        public_url: str,
+        build_fn,
         metadata: dict,
         last_modified: str,
         etag: str,
     ) -> Response | None:
+        """
+        Shared helper: return an AP JSON response (or split-domain redirect)
+        for any content object (article or reply).
+
+        :param ap_url: Canonical AP-domain object ``id``.
+        :param public_url: Human-facing URL stored in the AP ``url`` field.
+        :param build_fn: Callable ``(md_file, ap_url, actor_id, public_url)``
+            that returns ``(Object, activity_type)``.
+        """
         if not (
             hasattr(self, "activitypub_handler") and hasattr(self, "_ap_integration")
         ):
@@ -298,8 +312,6 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
         if not self._ap_accept_quality():
             return None
-
-        ap_url = self._ap_integration.file_to_url(md_file)
 
         # When the AP domain differs from the blog domain and the request
         # arrived at the blog domain, redirect AP clients to the canonical
@@ -316,16 +328,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
                 return redirect(ap_url, code=302)  # type: ignore
 
-        from pubby._model import AP_CONTEXT
-
-        base_url = config.link or request.host_url.rstrip("/")
-        public_url = base_url.rstrip("/") + metadata.get("uri", "")
-        obj, _ = self._ap_integration.build_object(
-            md_file,
-            ap_url,
-            self.activitypub_handler.actor_id,
-            public_url=public_url,
-        )
+        obj, _ = build_fn(ap_url, public_url)
         doc = obj.to_dict()
         doc["@context"] = AP_CONTEXT
 
@@ -335,13 +338,62 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         response.headers["ETag"] = etag
         response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
 
-        article_language = metadata.get("language")
-        if article_language:
-            response.headers["Language"] = article_language
+        language = metadata.get("language")
+        if language:
+            response.headers["Language"] = language
         elif config.language:
             response.headers["Language"] = config.language
 
         return response
+
+    def _get_activitypub_page_response(
+        self,
+        *,
+        md_file: str,
+        metadata: dict,
+        last_modified: str,
+        etag: str,
+    ) -> Response | None:
+        base_url = config.link or request.host_url.rstrip("/")
+        return self._get_activitypub_object_response(
+            ap_url=self._ap_integration.file_to_url(md_file),
+            public_url=base_url.rstrip("/") + metadata.get("uri", ""),
+            build_fn=lambda ap_url, public_url: self._ap_integration.build_object(
+                md_file,
+                ap_url,
+                self.activitypub_handler.actor_id,
+                public_url=public_url,
+            ),
+            metadata=metadata,
+            last_modified=last_modified,
+            etag=etag,
+        )
+
+    def _get_activitypub_reply_response(
+        self,
+        *,
+        md_file: str,
+        metadata: dict,
+        last_modified: str,
+        etag: str,
+        article_slug: str,
+        reply_slug: str,
+    ) -> Response | None:
+        """Return an AP JSON response (or redirect) for an author reply."""
+        base_url = (config.link or request.host_url.rstrip("/")).rstrip("/")
+        return self._get_activitypub_object_response(
+            ap_url=self._ap_integration.reply_file_to_url(md_file),
+            public_url=f"{base_url}/reply/{article_slug}/{reply_slug}",
+            build_fn=lambda ap_url, public_url: self._ap_integration.build_reply_object(
+                md_file,
+                ap_url,
+                self.activitypub_handler.actor_id,
+                public_url=public_url,
+            ),
+            metadata=metadata,
+            last_modified=last_modified,
+            etag=etag,
+        )
 
     def _install_activitypub_moderation(self):
         """
@@ -441,41 +493,55 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                 storage.write_json(fpath, data)
                 logger.info("Restored previously blocked follower %s", actor_id)
 
-    def _get_rendered_ap_interactions(self, md_file: str) -> str:
-        """
-        Retrieve ActivityPub interactions for a given page.
-
-        :return: Tuple of (webmentions_html, ap_interactions_html)
-        """
-        ap_interactions = ""
-        ap_integration = getattr(self, "_ap_integration", None)
-        if not ap_integration:
-            return ap_interactions
-
-        ap_object_url = ap_integration.file_to_url(md_file)
-        interactions = self.activitypub_handler.storage.get_interactions(
-            target_resource=ap_object_url
-        )
-
+    def _filter_ap_interactions(self, interactions: list) -> list:
+        """Apply blocklist/allowlist filtering to AP interactions."""
         mod_cache = getattr(self, "_blocklist_cache", None)
         if mod_cache:
-            interactions = [
+            return [
                 i for i in interactions if mod_cache.is_permitted(i.source_actor_id)
             ]
-        elif config.blocked_actors:
-            interactions = [
+        if config.blocked_actors:
+            return [
                 i
                 for i in interactions
                 if not is_blocked(i.source_actor_id, config.blocked_actors)
             ]
-        elif config.allowed_actors:
-            interactions = [
+        if config.allowed_actors:
+            return [
                 i
                 for i in interactions
                 if is_allowed(i.source_actor_id, config.allowed_actors)
             ]
+        return list(interactions)
 
+    def _get_ap_interactions(
+        self, md_file: str, extra_target_urls: list[str] | None = None
+    ) -> list:
+        """
+        Retrieve raw ActivityPub Interaction objects for a given page.
+
+        :param md_file: The Markdown file for the article.
+        :param extra_target_urls: Additional AP object URLs to fetch
+            interactions for (e.g. author reply URLs).
+        """
+        ap_integration = getattr(self, "_ap_integration", None)
+        if not ap_integration:
+            return []
+
+        storage = self.activitypub_handler.storage
+        ap_object_url = ap_integration.file_to_url(md_file)
+        interactions = list(storage.get_interactions(target_resource=ap_object_url))
+
+        for url in extra_target_urls or []:
+            interactions.extend(storage.get_interactions(target_resource=url))
+
+        return self._filter_ap_interactions(interactions)
+
+    def _get_rendered_ap_interactions(self, md_file: str) -> str:
+        """
+        Retrieve rendered ActivityPub interactions for a given page.
+        """
+        interactions = self._get_ap_interactions(md_file)
         if interactions:
-            ap_interactions = self.activitypub_handler.render_interactions(interactions)
-
-        return ap_interactions
+            return self.activitypub_handler.render_interactions(interactions)
+        return ""

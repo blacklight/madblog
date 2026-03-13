@@ -1,4 +1,4 @@
-{% with title="Guestbook", url=config.link + "/guestbook", description="Guestbook - messages and mentions", type='page', image=None, skip_header=not config.header, styles=['/css/blog.css'] %}
+{% with title="Guestbook", url=config.link + "/guestbook", description="Guestbook - messages and mentions", type='page', image=None, skip_header=not config.header, styles=['/css/blog.css', '/css/reactions.css'] %}
   {% include 'common-head.html' %}
 {% endwith %}
 
@@ -24,37 +24,19 @@
       </p>
     </div>
 
-    <div class="guestbook-entries">
-      {% if webmentions %}
-        <section class="guestbook-section webmentions-section">
-          {{ webmentions | safe }}
-        </section>
-      {% endif %}
-
-      {% if ap_interactions %}
-        <section class="guestbook-section activitypub-section">
-          {{ ap_interactions | safe }}
-        </section>
-      {% endif %}
-
-      {% if not webmentions and not ap_interactions %}
-        <div class="guestbook-empty">
-          <p>No messages yet. Be the first to leave a note!</p>
-        </div>
-      {% endif %}
-    </div>
+    {% if reactions_tree %}
+      {% with utils=utils %}
+        {% include 'reactions.html' %}
+      {% endwith %}
+    {% else %}
+      <div class="guestbook-empty">
+        <p>No messages yet. Be the first to leave a note!</p>
+      </div>
+    {% endif %}
   </article>
 </main>
 
 <style>
-.guestbook-entries {
-  margin-top: 2em;
-}
-
-.guestbook-section h2 {
-  font-size: 1.2em;
-}
-
 .guestbook-empty {
   text-align: center;
   padding: 2em;

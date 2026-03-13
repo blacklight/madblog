@@ -1,5 +1,5 @@
 {% if not skip_html_head %}
-  {% with title=title, description=description, image=image, url=url, type='article', skip_header=skip_header or not config.header, styles=['/css/blog.css', '/css/code.css'] %}
+  {% with title=title, description=description, image=image, url=url, type='article', skip_header=skip_header or not config.header, styles=['/css/blog.css', '/css/code.css', '/css/reactions.css'] %}
     {% include 'common-head.html' %}
   {% endwith %}
 
@@ -38,17 +38,17 @@
                 <img class="u-photo" src="{{ author_photo }}" alt="Author photo" loading="lazy">
               {% endif %}
               {% if author_url %}
-                <a class="p-url" rel="me" href="{{ author_url }}">
+                <a class="u-url" rel="me" href="{{ author_url }}">
               {% endif %}
 
               <span class="p-name">
                 {{ author }}
               </span>
-            </span>
 
-            {% if author_url %}
-              </a>
-            {% endif %}
+              {% if author_url %}
+                </a>
+              {% endif %}
+            </span>
           {% endif %}
 
           {% if published %}
@@ -83,16 +83,10 @@
 {% if not skip_html_head %}
     </div>
 
-{% if mentions %}
-  {{ mentions }}
-</div>
-{% endif %}
+    {% with utils=utils %}
+      {% include 'reactions.html' %}
+    {% endwith %}
 
-{% if ap_interactions %}
-  {{ ap_interactions }}
-{% endif %}
-
-    </div>
   </article>
 </main>
 

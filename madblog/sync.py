@@ -88,28 +88,40 @@ class StartupSyncMixin(ABC):  # pylint: disable=too-few-public-methods
     # Startup scan
     # ------------------------------------------------------------------
 
-    def sync_on_startup(self) -> None:
+    def _sync_directory(
+        self,
+        directory: str | Path,
+        file_to_url,
+        notify,
+        *,
+        label: str = "",
+    ) -> None:
         """
-        Scan all ``.md`` files under the pages directory.  For each file
-        whose mtime is newer than the stored value (or that has never been
-        seen), call ``_sync_notify``.
+        Walk *directory* for ``.md`` files and call *notify* for any whose
+        mtime is newer than the cached value.
+
+        :param directory: Root directory to scan.
+        :param file_to_url: ``(filepath) -> url`` mapping.
+        :param notify: ``(filepath, is_new: bool) -> None`` callback.
+        :param label: Human-readable label for log messages.
         """
-        pages_path = Path(self._sync_pages_dir)
-        if not pages_path.is_dir():
+        dir_path = Path(directory)
+        if not dir_path.is_dir():
             return
 
-        md_files = list(pages_path.rglob("*.md"))
+        md_files = list(dir_path.rglob("*.md"))
         if not md_files:
             return
 
+        tag = f" [{label}]" if label else ""
         cache = self._load_sync_cache()
         count = 0
 
         for md_file in md_files:
             filepath = str(md_file)
-            url = self._sync_file_to_url(filepath)
 
             try:
+                url = file_to_url(filepath)
                 current_mtime = os.path.getmtime(filepath)
             except OSError:
                 continue
@@ -117,21 +129,32 @@ class StartupSyncMixin(ABC):  # pylint: disable=too-few-public-methods
             stored_mtime = cache.get(url)
 
             if stored_mtime is None:
-                logger.info("Startup sync: new file %s", url)
-                self._sync_notify(filepath, is_new=True)
+                logger.info("Startup sync%s: new file %s", tag, url)
+                notify(filepath, is_new=True)
                 count += 1
             elif current_mtime > stored_mtime:
-                logger.info("Startup sync: modified file %s", url)
-                self._sync_notify(filepath, is_new=False)
+                logger.info("Startup sync%s: modified file %s", tag, url)
+                notify(filepath, is_new=False)
                 count += 1
 
         if count:
             logger.info(
-                "Startup sync (%s): processed %d file(s)",
-                self._sync_cache_file.name,
+                "Startup sync%s: processed %d file(s)",
+                tag,
                 count,
             )
         else:
-            logger.info(
-                "Startup sync (%s): all files up to date", self._sync_cache_file.name
-            )
+            logger.info("Startup sync%s: all files up to date", tag)
+
+    def sync_on_startup(self) -> None:
+        """
+        Scan all ``.md`` files under the pages directory.  For each file
+        whose mtime is newer than the stored value (or that has never been
+        seen), call ``_sync_notify``.
+        """
+        self._sync_directory(
+            self._sync_pages_dir,
+            self._sync_file_to_url,
+            self._sync_notify,
+            label="pages",
+        )

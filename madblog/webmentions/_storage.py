@@ -51,6 +51,7 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         base_url: str,
         root_dir: str | Path | None = None,
         webmentions_hard_delete: bool = False,
+        replies_dir: str | Path | None = None,
         **_,
     ):
         self.content_dir = Path(content_dir).resolve()
@@ -58,6 +59,7 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         self.mentions_dir = Path(mentions_dir).resolve()
         self.mentions_dir.mkdir(exist_ok=True, parents=True)
         self.base_url = base_url
+        self.replies_dir = Path(replies_dir).resolve() if replies_dir else None
         self._webmentions_hard_delete = webmentions_hard_delete
         self._resource_locks = defaultdict(RLock)
         self._watcher_lock = RLock()
@@ -86,22 +88,37 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         rel = os.path.relpath(filepath, self.content_dir).rsplit(".", 1)[0]
         return f"{self.base_url}/article/{rel}"
 
-    def on_content_change(self, change_type, filepath: str) -> None:
-        """
-        Callback for :class:`ContentMonitor`
+    def _get_text_format(self, filepath: str) -> ContentTextFormat:
+        """Get ContentTextFormat from file extension."""
+        ext = os.path.splitext(filepath)[1].lower()
+        return self._EXT_FORMAT_MAP.get(ext, ContentTextFormat.MARKDOWN)
 
-        Forward file changes to the Webmentions handler so that outgoing
-        mentions are (re-)processed.
+    def _process_outgoing_change(
+        self,
+        source_url: str,
+        filepath: str,
+        change_type: ChangeType,
+        *,
+        sync: bool = True,
+        label: str = "",
+    ) -> None:
+        """
+        Process outgoing webmentions for a content change.
+
+        :param source_url: The public URL of the source content.
+        :param filepath: The local file path.
+        :param change_type: The type of change (added, edited, deleted).
+        :param sync: Whether to update the sync cache.
+        :param label: Label for log messages (e.g. "reply ").
         """
         if self._webmentions_handler is None:
             return
 
-        source_url = self.file_to_url(filepath)
-        ext = os.path.splitext(filepath)[1].lower()
-        text_format = self._EXT_FORMAT_MAP.get(ext, ContentTextFormat.MARKDOWN)
+        text_format = self._get_text_format(filepath)
 
         if change_type.value == "deleted":
-            self._sync_unmark(source_url)
+            if sync:
+                self._sync_unmark(source_url)
             try:
                 self._webmentions_handler.process_outgoing_webmentions(
                     source_url,
@@ -110,7 +127,7 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
                 )
             except ValueError as e:
                 logger.warning(
-                    "Skipping outgoing webmentions for %s: %s", source_url, e
+                    "Skipping outgoing webmentions for %s%s: %s", label, source_url, e
                 )
         else:
             try:
@@ -126,32 +143,51 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
                 )
             except ValueError as e:
                 logger.warning(
-                    "Skipping outgoing webmentions for %s: %s", source_url, e
+                    "Skipping outgoing webmentions for %s%s: %s", label, source_url, e
                 )
-            try:
-                mtime = os.path.getmtime(filepath)
-            except OSError:
-                mtime = 0
-            self._sync_mark(source_url, mtime)
+            if sync:
+                try:
+                    mtime = os.path.getmtime(filepath)
+                except OSError:
+                    mtime = 0
+                self._sync_mark(source_url, mtime)
+
+    def on_content_change(self, change_type: ChangeType, filepath: str) -> None:
+        """
+        Callback for :class:`ContentMonitor`
+
+        Forward file changes to the Webmentions handler so that outgoing
+        mentions are (re-)processed.
+        """
+        # Skip files under replies/ - handled by on_reply_change
+        if self.replies_dir and filepath.startswith(str(self.replies_dir) + os.sep):
+            return
+
+        source_url = self.file_to_url(filepath)
+        self._process_outgoing_change(source_url, filepath, change_type, sync=True)
+
+    def _get_mentions_dir(
+        self, source: str, target: str, direction: WebmentionDirection
+    ) -> Path:
+        """
+        Get the mentions directory for a webmention based on direction.
+
+        For incoming mentions, use the target URL to determine the post slug.
+        For outgoing mentions, use the source URL.
+        """
+        if direction == WebmentionDirection.IN:
+            post_slug = self._extract_post_slug(target)
+        else:
+            post_slug = self._extract_post_slug(source)
+        return self.mentions_dir / direction.value / post_slug
 
     def store_webmention(self, mention: Webmention):
         """
         Store Webmention as Markdown file
         """
-
-        if mention.direction == WebmentionDirection.IN:
-            # Extract post slug from target URL
-            post_slug = self._extract_post_slug(mention.target)
-            post_mentions_dir = (
-                self.mentions_dir / WebmentionDirection.IN.value / post_slug
-            )
-        else:
-            # Extract post slug from source URL
-            post_slug = self._extract_post_slug(mention.source)
-            post_mentions_dir = (
-                self.mentions_dir / WebmentionDirection.OUT.value / post_slug
-            )
-
+        post_mentions_dir = self._get_mentions_dir(
+            mention.source, mention.target, mention.direction
+        )
         post_mentions_dir.mkdir(exist_ok=True, parents=True)
 
         # Generate safe filename
@@ -206,7 +242,10 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
                 if metadata.get("status") != WebmentionStatus.CONFIRMED.value:
                     continue
 
-                webmentions.append(Webmention.build(metadata))
+                mention = Webmention.build(metadata)
+                self._normalize_author(mention)
+                self._normalize_content(mention)
+                webmentions.append(mention)
             except Exception as e:
                 logger.error("Error parsing Webmention in %s: %s", md_file, e)
                 continue
@@ -222,17 +261,7 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         direction: WebmentionDirection,
     ):
         """Mark a stored mention as deleted by updating its metadata."""
-
-        if direction == WebmentionDirection.IN:
-            post_slug = self._extract_post_slug(target)
-            post_mentions_dir = (
-                self.mentions_dir / WebmentionDirection.IN.value / post_slug
-            )
-        else:
-            post_slug = self._extract_post_slug(source)
-            post_mentions_dir = (
-                self.mentions_dir / WebmentionDirection.OUT.value / post_slug
-            )
+        post_mentions_dir = self._get_mentions_dir(source, target, direction)
 
         filename = self._generate_mention_filename(source, "webmention")
         filepath = post_mentions_dir / filename
@@ -311,7 +340,7 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
 
             md_content += f"[//]: # ({key}: {value})\n"
 
-        md_content += f"\n{mention.content}\n"
+        md_content += f"\n{mention.content or ''}\n"
         return md_content
 
     @staticmethod
@@ -359,3 +388,56 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         safe = re.sub(r"[^\w\s-]", "", text)
         safe = re.sub(r"[-\s]+", "-", safe)
         return safe[:max_length].strip("-")
+
+    @staticmethod
+    def _normalize_content(mention: Webmention) -> None:
+        """
+        Fix legacy data where ``None`` content was serialized as the
+        literal string ``"None"``.
+        """
+        if mention.content == "None":
+            mention.content = None
+        if mention.excerpt == "None":
+            mention.excerpt = None
+        if mention.title == "None":
+            mention.title = None
+
+    @staticmethod
+    def _normalize_author(mention: Webmention) -> None:
+        """
+        Fix legacy data where a plain-text author name was stored in
+        ``author_url`` instead of ``author_name``.
+        """
+        if mention.author_url and not mention.author_url.startswith(
+            ("http://", "https://", "mailto:")
+        ):
+            if not mention.author_name:
+                mention.author_name = mention.author_url
+            mention.author_url = None
+
+    # -----------------------------------------------------------------
+    # Reply outgoing webmentions
+    # -----------------------------------------------------------------
+
+    def reply_file_to_url(self, filepath: str) -> str:
+        """Convert a reply file path to its public URL."""
+        if not self.replies_dir:
+            raise ValueError("replies_dir not configured")
+
+        rel = os.path.relpath(filepath, self.replies_dir).rsplit(".", 1)[0]
+        return f"{self.base_url}/reply/{rel}"
+
+    def on_reply_change(self, change_type: ChangeType, filepath: str) -> None:
+        """
+        Callback for replies ContentMonitor.
+
+        Forward reply file changes to the Webmentions handler so that
+        outgoing mentions are (re-)processed.
+        """
+        if not self.replies_dir:
+            return
+
+        source_url = self.reply_file_to_url(filepath)
+        self._process_outgoing_change(
+            source_url, filepath, change_type, sync=False, label="reply "
+        )

@@ -17,8 +17,11 @@ from flask import (
 )
 
 from .app import app
+from .cache import generate_etag
 from .config import config
 from .feeds import FeedAuthor
+from .templates import TemplateUtils
+from .threading import build_thread_tree, count_reactions
 from ._sorters import PagesSortByTimeGroupedByFolder
 
 logger = logging.getLogger(__name__)
@@ -167,6 +170,16 @@ def raw_article_route(article: str):
     return raw_article_with_path_route("", article)
 
 
+@app.route("/reply/<path:article_slug>/<reply_slug>", methods=["GET"])
+def reply_route(article_slug: str, reply_slug: str):
+    return app.get_reply(article_slug, reply_slug)
+
+
+@app.route("/reply/<path:article_slug>/<reply_slug>.md", methods=["GET"])
+def raw_reply_route(article_slug: str, reply_slug: str):
+    return app.get_reply(article_slug, reply_slug, as_markdown=True)
+
+
 def _get_absolute_url(url: str) -> str:
     if not url:
         return ""
@@ -273,7 +286,7 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
     )
 
     # Generate ETag based on most recent modification time
-    etag = app._generate_etag(most_recent_mtime) if most_recent_mtime > 0 else None
+    etag = generate_etag(most_recent_mtime) if most_recent_mtime > 0 else None
 
     # Check if the client has a cached version that's still valid
     # Check both If-Modified-Since and If-None-Match headers
@@ -589,21 +602,29 @@ def guestbook_route():
     if not config.enable_guestbook:
         return Response("Guestbook is not enabled", status=404, mimetype="text/plain")
 
-    webmentions_html = ""
-    ap_interactions_html = ""
+    webmentions = (
+        app.get_guestbook_webmentions() if config.enable_webmentions else []
+    )
+    ap_interactions = (
+        app.get_guestbook_ap_interactions() if config.enable_activitypub else []
+    )
 
-    if config.enable_webmentions:
-        webmentions_html = app.get_rendered_guestbook_webmentions()
-
-    if config.enable_activitypub:
-        ap_interactions_html = app.get_rendered_guestbook_ap_interactions()
+    guestbook_url = config.link.rstrip("/")
+    reactions_tree = build_thread_tree(
+        webmentions=webmentions,
+        ap_interactions=ap_interactions,
+        author_replies=[],
+        article_url=guestbook_url,
+    )
+    reactions_counts = count_reactions(reactions_tree)
 
     response = make_response(
         render_template(
             "guestbook.html",
             config=config,
-            webmentions=webmentions_html,
-            ap_interactions=ap_interactions_html,
+            reactions_tree=reactions_tree,
+            reactions_counts=reactions_counts,
+            utils=TemplateUtils(),
         )
     )
     response.headers["Cache-Control"] = "no-store"

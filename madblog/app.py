@@ -1,4 +1,6 @@
+import datetime
 import email.utils
+import hashlib
 import os
 import contextlib
 
@@ -17,20 +19,20 @@ from flask import (
 )
 
 from .activitypub import ActivityPubMixin
-from .cache import CacheMixin
+from .cache import CachedPage, generate_etag
 from .config import config
 from .feeds import FeedsMixin
 from .guestbook import GuestbookMixin
 from .markdown import MarkdownMixin
-from .monitor import ChangeType
+from .monitor import ChangeType, ContentMonitor
 from .tags import TagIndex
+from .threading import build_thread_tree
 from .webmentions import WebmentionsMixin
 from ._sorters import PagesSorter, PagesSortByTime
 
 
 class BlogApp(  # pylint: disable=too-many-ancestors
     ActivityPubMixin,
-    CacheMixin,
     FeedsMixin,
     GuestbookMixin,
     MarkdownMixin,
@@ -58,6 +60,8 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             # `config.content_dir` is treated as the root for Markdown files.
             self.pages_dir = Path(config.content_dir).expanduser().resolve()
 
+        self.replies_dir = Path(config.content_dir).expanduser().resolve() / "replies"
+
         img_dir = os.path.join(config.content_dir, "img")
         if os.path.isdir(img_dir):
             self.img_dir = os.path.abspath(img_dir)
@@ -80,6 +84,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         if os.path.isdir(templates_dir):
             self.template_folder = os.path.abspath(templates_dir)
 
+        self._register_template_filters()
         self._register_ap_context_processors()
         self._init_webmentions()
         self._init_activitypub()
@@ -88,10 +93,19 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             pages_dir=str(self.pages_dir),
             mentions_dir=str(self.mentions_dir),
         )
+        self.replies_monitor: Optional[ContentMonitor] = None
 
     @property
     def _app(self) -> Flask:
         return self
+
+    def _register_template_filters(self):
+        """Register custom Jinja2 template filters."""
+
+        @self.template_filter("hash_id")
+        def hash_id_filter(value: str) -> str:
+            """Generate a short hash ID from a string for use in anchor IDs."""
+            return hashlib.md5(str(value).encode()).hexdigest()[:12]
 
     def _on_content_change_tags(self, _: ChangeType, filepath: str) -> None:
         """Bridge: forward content changes to the tag indexer."""
@@ -121,22 +135,81 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         self.content_monitor.register(self._on_content_change_tags)
         self.content_monitor.start()
 
+        # Start replies monitor for federation
+        self._start_replies_monitor()
+
     def stop(self) -> None:
         self.content_monitor.stop()
+        if self.replies_monitor:
+            self.replies_monitor.stop()
+            self.replies_monitor = None
+
+    def _start_replies_monitor(self) -> None:
+        """
+        Create and start a ContentMonitor for the replies directory.
+
+        Registers callbacks for ActivityPub and Webmentions federation.
+        The directory is created if it doesn't exist so that replies
+        created after startup are immediately picked up.
+        """
+        self.replies_dir.mkdir(parents=True, exist_ok=True)
+
+        self.replies_monitor = ContentMonitor(
+            root_dir=str(self.replies_dir),
+            throttle_seconds=config.throttle_seconds_on_update,
+        )
+
+        # Register ActivityPub callback for reply federation
+        if config.enable_activitypub and hasattr(self, "_ap_integration"):
+            self.replies_monitor.register(self._ap_integration.on_reply_change)
+
+        # Register Webmentions callback for outgoing mentions from replies
+        if config.enable_webmentions:
+            self.replies_monitor.register(self.webmentions_storage.on_reply_change)
+
+        self.replies_monitor.start()
 
     def _get_page_interactions(
         self,
         md_file: str,
         metadata: dict,
-    ) -> Tuple[str, str]:
+    ) -> list:
         """
-        Retrieve Webmentions and ActivityPub interactions for a page.
+        Retrieve reactions (Webmentions, AP interactions, author replies)
+        for a page and build a threaded tree.
 
-        :return: Tuple of (webmentions_html, ap_interactions_html)
+        :return: List of ThreadNode objects (the thread tree roots)
         """
-        return (
-            self._get_rendered_webmentions(metadata),
-            self._get_rendered_ap_interactions(md_file),
+        webmentions = self._get_webmentions(metadata)
+        article_slug = self._article_slug_from_metadata(metadata)
+        author_replies = self._get_article_replies(article_slug)
+        article_url = config.link + metadata.get("uri", "")
+
+        # Also fetch AP interactions targeting author reply URLs so that
+        # fediverse replies to author replies appear in the thread.
+        # When activitypub_link differs from link the AP target URL and the
+        # public full_url use different origins; annotate each reply with
+        # the AP variant so the thread tree can register both as aliases.
+        reply_ap_urls = []
+        ap_integration = getattr(self, "_ap_integration", None)
+        if ap_integration:
+            for reply in author_replies:
+                permalink = reply.get("permalink", "")
+                if permalink:
+                    ap_url = ap_integration.base_url + permalink
+                    reply_ap_urls.append(ap_url)
+                    if ap_url != reply.get("full_url"):
+                        reply["ap_full_url"] = ap_url
+
+        ap_interactions = self._get_ap_interactions(
+            md_file, extra_target_urls=reply_ap_urls
+        )
+
+        return build_thread_tree(
+            webmentions=webmentions,
+            ap_interactions=ap_interactions,
+            author_replies=author_replies,
+            article_url=article_url,
         )
 
     def _set_page_response_headers(
@@ -208,23 +281,18 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         metadata = self._parse_page_metadata(page)
         md_file = metadata.pop("md_file")
 
-        # Get file modification time for cache headers
-        file_stat = os.stat(md_file)
-        file_mtime = file_stat.st_mtime
-        last_modified = formatdate(file_mtime, usegmt=True)
-        etag = self._generate_etag(file_mtime)
-
         # Return 304 if client cache is valid
-        if self._check_cache_validity(file_mtime, etag):
-            return self._make_304_response(last_modified, etag, metadata)
+        cached_page = CachedPage(md_file, metadata=metadata)
+        if cached_page.is_client_cache_valid():
+            return cached_page.make_304_response()
 
         # Return ActivityPub response if client prefers it
         if self._client_prefers_activitypub():
             ap_response = self._get_activitypub_page_response(
                 md_file=md_file,
                 metadata=metadata,
-                last_modified=last_modified,
-                etag=etag,
+                last_modified=cached_page.last_modified,
+                etag=cached_page.etag,
             )
             if ap_response:
                 return ap_response
@@ -236,27 +304,181 @@ class BlogApp(  # pylint: disable=too-many-ancestors
                 content = self._parse_markdown_content(f)
             output = f"# {title}\n\n{content}"
         else:
-            mentions, ap_interactions = self._get_page_interactions(md_file, metadata)
+            reactions_tree = self._get_page_interactions(md_file, metadata)
             output = self._render_page_html(
                 md_file=md_file,
                 metadata=metadata,
                 title=title,
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
-                mentions=mentions,
-                ap_interactions=ap_interactions,
+                reactions_tree=reactions_tree,
             )
 
         response = make_response(output)
         self._set_page_response_headers(
             response,
-            last_modified=last_modified,
-            etag=etag,
+            last_modified=cached_page.last_modified,
+            etag=cached_page.etag,
             metadata=metadata,
             as_markdown=as_markdown,
         )
 
         return response
+
+    def get_reply(
+        self,
+        article_slug: str,
+        reply_slug: str,
+        *,
+        as_markdown: bool = False,
+    ) -> Response:
+        """
+        Get the HTML (or raw Markdown) for an author reply.
+
+        :param article_slug: The slug of the parent article (or ``_guestbook``).
+        :param reply_slug: The slug of the reply itself.
+        :param as_markdown: Return raw Markdown instead of rendered HTML.
+        """
+        metadata = self._parse_reply_metadata(article_slug, reply_slug)
+        md_file = metadata.pop("md_file")
+
+        # Return 304 if client cache is valid
+        cached_page = CachedPage(md_file, metadata=metadata)
+        if cached_page.is_client_cache_valid():
+            return cached_page.make_304_response()
+
+        # Return ActivityPub response if client prefers it
+        if self._client_prefers_activitypub():
+            ap_response = self._get_activitypub_reply_response(
+                md_file=md_file,
+                metadata=metadata,
+                last_modified=cached_page.last_modified,
+                etag=cached_page.etag,
+                article_slug=article_slug,
+                reply_slug=reply_slug,
+            )
+            if ap_response:
+                return ap_response
+
+        title = metadata.get("title") or reply_slug
+        if as_markdown:
+            with open(md_file, "r") as f:
+                content = self._parse_markdown_content(f)
+            output = f"# {title}\n\n{content}"
+        else:
+            output = self._render_reply_html(
+                md_file=md_file,
+                metadata=metadata,
+                title=title,
+                article_slug=article_slug,
+            )
+
+        response = make_response(output)
+        self._set_page_response_headers(
+            response,
+            last_modified=cached_page.last_modified,
+            etag=cached_page.etag,
+            metadata=metadata,
+            as_markdown=as_markdown,
+        )
+
+        return response
+
+    @staticmethod
+    def _article_slug_from_metadata(metadata: dict) -> str:
+        """
+        Derive the article slug from the metadata URI.
+
+        E.g. ``/article/2025/my-post`` → ``2025/my-post``
+        """
+        uri = metadata.get("uri", "")
+        if uri.startswith("/article/"):
+            return uri[len("/article/") :]
+        return uri.lstrip("/")
+
+    def _get_article_replies(self, article_slug: str) -> list:
+        """
+        Scan replies/<article_slug>/ and return a list of parsed reply dicts.
+
+        Each dict contains: slug, title, reply_to, published, content_html,
+        permalink, author, author_url, author_photo.
+        """
+        from .markdown import render_html
+
+        replies_subdir = self.replies_dir / article_slug
+        if not replies_subdir.is_dir():
+            return []
+
+        replies = []
+        for md_path in replies_subdir.glob("*.md"):
+            reply_slug = md_path.stem
+            try:
+                metadata = self._parse_reply_metadata(article_slug, reply_slug)
+            except Exception:
+                continue
+
+            md_file = metadata.pop("md_file")
+            with open(md_file, "r") as f:
+                content = self._parse_markdown_content(f)
+
+            author_info = self._parse_author(metadata)
+            permalink = f"/reply/{article_slug}/{reply_slug}"
+
+            replies.append(
+                {
+                    "slug": reply_slug,
+                    "title": metadata.get("title", reply_slug),
+                    "reply_to": metadata.get("reply-to", ""),
+                    "published": metadata.get("published"),
+                    "content_html": render_html(content),
+                    "permalink": permalink,
+                    "full_url": config.link + permalink,
+                    **author_info,
+                }
+            )
+
+        # Sort by published date ascending (oldest first)
+        replies.sort(key=lambda r: r.get("published") or datetime.date.min)
+        return replies
+
+    def _render_reply_html(
+        self,
+        *,
+        md_file: str,
+        metadata: dict,
+        title: str,
+        article_slug: str,
+    ) -> str:
+        """
+        Render a reply Markdown file to HTML using the reply template.
+        """
+        from .markdown import render_html
+
+        with open(md_file, "r") as f:
+            content = self._parse_markdown_content(f)
+
+        author_info = self._parse_author(metadata)
+        reply_to = metadata.get("reply-to", "")
+
+        with contextlib.ExitStack() as stack:
+            if not has_app_context():
+                stack.enter_context(self._app.app_context())
+
+            return render_template(
+                "reply.html",
+                config=config,
+                title=title,
+                uri=metadata.get("uri"),
+                url=config.link + metadata.get("uri", ""),
+                image=metadata.get("image"),
+                description=metadata.get("description"),
+                published_datetime=metadata.get("published"),
+                published=metadata["published"].strftime("%b %d, %Y"),
+                content=render_html(content),
+                reply_to=reply_to,
+                article_slug=article_slug,
+                **author_info,
+            )
 
     def _get_page_content(self, page: str, **kwargs) -> str:
         """Return the HTML content of a page as a string (not a Response)."""
@@ -273,27 +495,37 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         skip_html_head: bool = False,
     ):
         pages_dir = str(self.pages_dir).rstrip("/")
-        return [
-            {
-                "path": os.path.join(root[len(pages_dir) + 1 :], f),
-                "folder": root[len(pages_dir) + 1 :],
-                "content": (
-                    self._get_page_content(
-                        os.path.join(root, f),
-                        skip_header=skip_header,
-                        skip_html_head=skip_html_head,
-                    )
-                    if with_content
-                    else ""
-                ),
-                **self._parse_page_metadata(
-                    os.path.join(root[len(pages_dir) + 1 :], f)
-                ),
-            }
-            for root, _, files in os.walk(pages_dir, followlinks=True)
-            for f in files
-            if f.endswith(".md")
-        ]
+        replies_dir = str(self.replies_dir)
+        pages = []
+
+        for root, dirs, files in os.walk(pages_dir, followlinks=True):
+            # Exclude the replies directory from the home page listing
+            dirs[:] = [d for d in dirs if os.path.join(root, d) != replies_dir]
+
+            for f in files:
+                if not f.endswith(".md"):
+                    continue
+
+                pages.append(
+                    {
+                        "path": os.path.join(root[len(pages_dir) + 1 :], f),
+                        "folder": root[len(pages_dir) + 1 :],
+                        "content": (
+                            self._get_page_content(
+                                os.path.join(root, f),
+                                skip_header=skip_header,
+                                skip_html_head=skip_html_head,
+                            )
+                            if with_content
+                            else ""
+                        ),
+                        **self._parse_page_metadata(
+                            os.path.join(root[len(pages_dir) + 1 :], f)
+                        ),
+                    }
+                )
+
+        return pages
 
     def get_pages(
         self,
@@ -364,7 +596,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         )
 
         # Generate ETag based on most recent modification time
-        etag = self._generate_etag(most_recent_mtime) if most_recent_mtime > 0 else None
+        etag = generate_etag(most_recent_mtime) if most_recent_mtime > 0 else None
 
         # Check if the client has a cached version that's still valid
         # Check both If-Modified-Since and If-None-Match headers

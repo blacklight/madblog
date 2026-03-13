@@ -1,0 +1,249 @@
+{# Recursive macro to render a thread node and its children #}
+{% macro render_thread_node(node, depth=0, parent_anchor=None) %}
+  {% set max_indent = 5 %}
+  {% set indent_depth = [depth, max_indent] | min %}
+  {% set current_anchor = get_anchor_id(node) %}
+  <div class="reaction-thread reaction-thread-{{ 'nested' if indent_depth > 0 else 'top' }} depth-{{ indent_depth }}" style="margin-left: {{ indent_depth * 0.25 }}em;">
+    {% if node.reaction_type.value == 'webmention' %}
+      {{ render_webmention(node.item, node.identity, parent_anchor) }}
+    {% elif node.reaction_type.value == 'ap_interaction' %}
+      {{ render_ap_interaction(node.item, node.identity, parent_anchor) }}
+    {% elif node.reaction_type.value == 'author_reply' %}
+      {{ render_author_reply(node.item, parent_anchor) }}
+    {% endif %}
+
+    {% for child in node.children %}
+      {{ render_thread_node(child, depth + 1, current_anchor) }}
+    {% endfor %}
+  </div>
+{% endmacro %}
+
+{# Helper to get anchor ID for a node #}
+{% macro get_anchor_id(node) %}
+{%- if node.reaction_type.value == 'webmention' -%}
+wm-{{ node.identity | hash_id }}
+{%- elif node.reaction_type.value == 'ap_interaction' -%}
+ap-{{ node.identity | hash_id }}
+{%- elif node.reaction_type.value == 'author_reply' -%}
+reply-{{ node.item.full_url | hash_id }}
+{%- endif -%}
+{% endmacro %}
+
+{# Render a single Webmention #}
+{% macro render_webmention(wm, identity, parent_anchor=None) %}
+  {% set anchor_id = 'wm-' ~ (identity | hash_id) %}
+  {% set source = wm.source or wm.author_url %}
+  {% set source_url = ('https://' ~ utils.hostname(source)) if source and not source.startswith('https://') else source %}
+  {% set source_hostname = utils.hostname(source_url) %}
+  {% set author_name = wm.author_name or 'Anonymous' %}
+  <div class="reaction reaction-webmention wm-{{ wm.mention_type.value if wm.mention_type else 'mention' }}" id="{{ anchor_id }}">
+    <div class="reaction-header">
+      {% if wm.author_photo %}
+        <img class="reaction-avatar" src="{{ wm.author_photo }}" alt="" loading="lazy">
+      {% else %}
+        {% include 'icons/user.html' %}
+      {% endif %}
+      <div class="reaction-meta">
+        <div class="reaction-meta-row">
+          <span class="reaction-author">
+            {% if wm.author_url %}
+              <a href="{{ wm.author_url }}" rel="nofollow noopener" target="_blank">{{ author_name }}</a>
+            {% else %}
+              {{ author_name }}
+            {% endif %}
+          </span>
+          {% if wm.mention_type and wm.mention_type.value != 'mention' and wm.mention_type.value != 'reply' %}
+            <span class="reaction-type" title="{{ wm.mention_type.label }}">
+              {% if wm.mention_type.value == 'like' %}
+                <span class="reaction-like">⭐</span>
+              {% elif wm.mention_type.value == 'reblog' %}
+                <span class="reaction-reblog">🔁</span>
+              {% elif wm.mention_type.value == 'quote' %}
+                <span class="reaction-quote">🗣️</span>
+              {% elif wm.mention_type.value == 'webmention' %}
+                <span class="reaction-webmention">🔗</span>
+              {% elif wm.mention_type.value == 'author_reply' %}
+                <span class="reaction-author-reply">>✍️</span>
+              {% endif %}
+            </span>
+          {% endif %}
+          {% if parent_anchor %}
+            <a href="#{{ parent_anchor }}" class="reaction-reply-to" title="In reply to">↩</a>
+          {% endif %}
+          {% if wm.published %}
+            <time class="reaction-date" datetime="{{ wm.published.isoformat() }}">
+              {{ wm.published.strftime('%b %d, %Y @ %H:%M') }}
+            </time>
+          {% endif %}
+        </div>
+        {% if source_url %}
+          <div class="reaction-meta-row">
+            <div class="source-id">
+              <a href="{{ source_url }}" rel="nofollow noopener" target="_blank">{{ source_hostname }}</a>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    {% if wm.title and wm.title != wm.excerpt %}
+      <div class="reaction-title">
+        <a href="{{ wm.source }}" rel="nofollow noopener" target="_blank">{{ wm.title }}</a>
+      </div>
+    {% endif %}
+    {% if wm.content %}
+      <div class="reaction-content{{ ' reaction-collapsible' if wm.content|length > 1000 }}">{{ wm.content | safe }}</div>
+      {% if wm.content|length > 1000 %}
+        <label class="reaction-expand"><input type="checkbox" class="reaction-toggle"></label>
+      {% endif %}
+    {% elif wm.excerpt %}
+      <div class="reaction-content{{ ' reaction-collapsible' if wm.excerpt|length > 1000 }}">{{ wm.excerpt }}</div>
+      {% if wm.excerpt|length > 1000 %}
+        <label class="reaction-expand"><input type="checkbox" class="reaction-toggle"></label>
+      {% endif %}
+    {% endif %}
+    <div class="reaction-footer">
+      <span class="reaction-source-type" title="Webmention">🔗 Webmention</span>
+      <a href="{{ wm.source }}" class="reaction-source" rel="nofollow noopener" target="_blank">View source</a>
+      <a href="#{{ anchor_id }}" class="reaction-permalink" title="Permalink">🔗</a>
+    </div>
+  </div>
+{% endmacro %}
+
+{# Render a single AP interaction #}
+{% macro render_ap_interaction(interaction, identity, parent_anchor=None) %}
+  {% set anchor_id = 'ap-' ~ (identity | hash_id) %}
+  <div class="reaction reaction-ap reaction-ap-{{ interaction.interaction_type.value }}" id="{{ anchor_id }}">
+    <div class="reaction-header">
+      {% if interaction.author_photo %}
+        <img class="reaction-avatar" src="{{ interaction.author_photo }}" alt="" loading="lazy">
+      {% else %}
+        {% include 'icons/user.html' %}
+      {% endif %}
+      <div class="reaction-meta">
+        <div class="reaction-meta-row">
+          <span class="reaction-author">
+            {% if interaction.author_url %}
+              <a href="{{ interaction.author_url }}" rel="nofollow noopener" target="_blank">{{ interaction.author_name or interaction.source_actor_id }}</a>
+            {% else %}
+              {{ interaction.author_name or interaction.source_actor_id }}
+            {% endif %}
+          </span>
+          {% if interaction.interaction_type.value != 'reply' and interaction.interaction_type.value != 'mention' %}
+            <span class="reaction-type" title="{{ interaction.interaction_type.value.capitalize() }}">
+              {% if interaction.interaction_type.value == 'like' %}
+                <span class="reaction-like">⭐</span>
+              {% elif interaction.interaction_type.value == 'boost' %}
+                <span class="reaction-reblog">🔁</span>
+              {% elif interaction.interaction_type.value == 'quote' %}
+                <span class="reaction-quote">🗣️</span>
+              {% elif interaction.interaction_type.value == 'webmention' %}
+                <span class="reaction-webmention">🔗</span>
+              {% elif interaction.interaction_type.value == 'author_reply' %}
+                <span class="reaction-author-reply">>✍️</span>
+              {% endif %}
+            </span>
+          {% endif %}
+          {% if parent_anchor %}
+            <a href="#{{ parent_anchor }}" class="reaction-reply-to" title="In reply to">↩</a>
+          {% endif %}
+          {% if interaction.published %}
+            <time class="reaction-date" datetime="{{ interaction.published.isoformat() }}">
+              {{ interaction.published.strftime('%b %d, %Y @ %H:%M') }}
+            </time>
+          {% endif %}
+        </div>
+        {% if interaction.author_url %}
+          <div class="reaction-meta-row">
+            <div class="source-id">
+              <a href="{{ interaction.author_url }}" rel="nofollow noopener" target="_blank">{{ utils.ap.actor_fqn(interaction.author_url) }}</a>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    {% if interaction.content %}
+      <div class="reaction-content{{ ' reaction-collapsible' if interaction.content|length > 1000 }}">{{ interaction.content | safe }}</div>
+      {% if interaction.content|length > 1000 %}
+        <label class="reaction-expand"><input type="checkbox" class="reaction-toggle"></label>
+      {% endif %}
+    {% endif %}
+    <div class="reaction-footer">
+      <span class="reaction-source-type" title="ActivityPub">🌐 Fediverse</span>
+      {% set source_url = interaction.object_id or interaction.activity_id %}
+      {% if source_url %}
+        <a href="{{ source_url }}" class="reaction-source" rel="nofollow noopener" target="_blank">View source</a>
+      {% endif %}
+      <a href="#{{ anchor_id }}" class="reaction-permalink" title="Permalink">🔗</a>
+    </div>
+  </div>
+{% endmacro %}
+
+{# Render an author reply #}
+{% macro render_author_reply(reply, parent_anchor=None) %}
+  {% set anchor_id = 'reply-' ~ (reply.full_url | hash_id) %}
+  <div class="reaction reaction-author-reply" id="{{ anchor_id }}">
+    <div class="reaction-header">
+      {% if reply.author_photo %}
+        <img class="reaction-avatar" src="{{ reply.author_photo }}" alt="" loading="lazy">
+      {% else %}
+        {% include 'icons/user.html' %}
+      {% endif %}
+      <div class="reaction-meta">
+        <div class="reaction-meta-row">
+          <span class="reaction-author author-badge">
+            {% if reply.author_url %}
+              <a href="{{ reply.author_url }}" rel="me">{{ reply.author or 'Author' }}</a>
+            {% else %}
+              {{ reply.author or 'Author' }}
+            {% endif %}
+            <span class="author-label">Author</span>
+          </span>
+          {% if parent_anchor %}
+            <a href="#{{ parent_anchor }}" class="reaction-reply-to" title="In reply to">↩</a>
+          {% endif %}
+          {% if reply.published %}
+            <time class="reaction-date" datetime="{{ reply.published.isoformat() }}">
+              {{ reply.published.strftime('%b %d, %Y @ %H:%M') }}
+            </time>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% if reply.title and reply.title != reply.slug %}
+      <div class="reaction-title">
+        <a href="{{ reply.permalink }}">{{ reply.title }}</a>
+      </div>
+    {% endif %}
+    <div class="reaction-content{{ ' reaction-collapsible' if reply.content_html|length > 1000 }}">{{ reply.content_html | safe }}</div>
+    {% if reply.content_html|length > 1000 %}
+      <label class="reaction-expand"><input type="checkbox" class="reaction-toggle"></label>
+    {% endif %}
+    <div class="reaction-footer">
+      <a href="{{ reply.permalink }}" class="reaction-source">View full reply</a>
+      <a href="#{{ anchor_id }}" class="reaction-permalink" title="Permalink">🔗</a>
+    </div>
+  </div>
+{% endmacro %}
+
+{# Main reactions section #}
+{% if reactions_tree %}
+<section class="reactions-section">
+  <h2 class="reactions-heading">Reactions</h2>
+  {% if reactions_counts and reactions_counts.total > 0 %}
+  <div class="reactions-summary">
+    {% if reactions_counts.likes %}<span title="Likes">⭐ {{ reactions_counts.likes }}</span>{% endif %}
+    {% if reactions_counts.boosts %}<span title="Boosts">🔁 {{ reactions_counts.boosts }}</span>{% endif %}
+    {% if reactions_counts.replies %}<span title="Replies">💬 {{ reactions_counts.replies }}</span>{% endif %}
+    {% if reactions_counts.quotes %}<span title="Quotes">🗣️ {{ reactions_counts.quotes }}</span>{% endif %}
+    {% if reactions_counts.mentions %}<span title="Mentions">📣 {{ reactions_counts.mentions }}</span>{% endif %}
+    {% if reactions_counts.webmentions %}<span title="Webmentions">🔗 {{ reactions_counts.webmentions }}</span>{% endif %}
+    {% if reactions_counts.author_replies %}<span title="Author replies">✍️ {{ reactions_counts.author_replies }}</span>{% endif %}
+  </div>
+  {% endif %}
+  <div class="reactions-list">
+    {% for node in reactions_tree %}
+      {{ render_thread_node(node, 0) }}
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
