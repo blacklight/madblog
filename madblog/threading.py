@@ -197,3 +197,57 @@ def build_thread_tree(
         node.children.sort(key=lambda n: n.published or _EPOCH)
 
     return roots
+
+
+def count_reactions(roots: List[ThreadNode]) -> dict:
+    """
+    Walk the thread tree and tally reactions by type.
+
+    :param roots: Root nodes returned by :func:`build_thread_tree`.
+    :return: Dict with keys ``likes``, ``boosts``, ``replies``,
+        ``quotes``, ``mentions``, ``webmentions``, ``author_replies``,
+        and ``total``.
+    """
+    counts: dict[str, int] = {
+        "likes": 0,
+        "boosts": 0,
+        "replies": 0,
+        "quotes": 0,
+        "mentions": 0,
+        "webmentions": 0,
+        "author_replies": 0,
+        "total": 0,
+    }
+
+    stack = list(roots)
+    while stack:
+        node = stack.pop()
+        counts["total"] += 1
+        stack.extend(node.children)
+
+        if node.reaction_type == ReactionType.AUTHOR_REPLY:
+            counts["author_replies"] += 1
+            continue
+
+        if node.reaction_type == ReactionType.WEBMENTION:
+            counts["webmentions"] += 1
+            mt = getattr(node.item, "mention_type", None)
+            type_val = mt.value if hasattr(mt, "value") else str(mt) if mt else ""
+        elif node.reaction_type == ReactionType.AP_INTERACTION:
+            it = getattr(node.item, "interaction_type", None)
+            type_val = it.value if hasattr(it, "value") else str(it) if it else ""
+        else:
+            continue
+
+        if type_val == "like":
+            counts["likes"] += 1
+        elif type_val in ("boost", "repost"):
+            counts["boosts"] += 1
+        elif type_val == "reply":
+            counts["replies"] += 1
+        elif type_val == "quote":
+            counts["quotes"] += 1
+        elif type_val == "mention":
+            counts["mentions"] += 1
+
+    return counts

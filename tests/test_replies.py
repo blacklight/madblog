@@ -850,3 +850,81 @@ class ReplyFederationTest(unittest.TestCase):
 
             # Explicit reply-to should be used, not derived
             self.assertEqual(obj.in_reply_to, "https://mastodon.social/@user/12345")
+
+
+class CountReactionsTest(unittest.TestCase):
+    """Tests for the count_reactions helper."""
+
+    def _make_node(self, reaction_type, type_val=None):
+        from madblog.threading import ThreadNode, ReactionType
+
+        if reaction_type == "author_reply":
+            item = {"full_url": "https://example.com/reply/a/r1"}
+            return ThreadNode(
+                item=item,
+                reaction_type=ReactionType.AUTHOR_REPLY,
+                identity=item["full_url"],
+            )
+
+        from unittest.mock import MagicMock
+
+        item = MagicMock()
+        if reaction_type == "webmention":
+            mt = MagicMock()
+            mt.value = type_val or "mention"
+            item.mention_type = mt
+            return ThreadNode(
+                item=item,
+                reaction_type=ReactionType.WEBMENTION,
+                identity=f"wm-{id(item)}",
+            )
+        else:
+            it = MagicMock()
+            it.value = type_val or "reply"
+            item.interaction_type = it
+            return ThreadNode(
+                item=item,
+                reaction_type=ReactionType.AP_INTERACTION,
+                identity=f"ap-{id(item)}",
+            )
+
+    def test_empty_tree(self):
+        from madblog.threading import count_reactions
+
+        counts = count_reactions([])
+        self.assertEqual(counts["total"], 0)
+
+    def test_counts_all_types(self):
+        from madblog.threading import count_reactions
+
+        like_wm = self._make_node("webmention", "like")
+        repost_wm = self._make_node("webmention", "repost")
+        reply_ap = self._make_node("ap_interaction", "reply")
+        boost_ap = self._make_node("ap_interaction", "boost")
+        quote_ap = self._make_node("ap_interaction", "quote")
+        mention_ap = self._make_node("ap_interaction", "mention")
+        author = self._make_node("author_reply")
+
+        roots = [like_wm, repost_wm, reply_ap, boost_ap, quote_ap, mention_ap, author]
+        counts = count_reactions(roots)
+
+        self.assertEqual(counts["total"], 7)
+        self.assertEqual(counts["likes"], 1)
+        self.assertEqual(counts["boosts"], 2)  # repost + boost
+        self.assertEqual(counts["replies"], 1)
+        self.assertEqual(counts["quotes"], 1)
+        self.assertEqual(counts["mentions"], 1)
+        self.assertEqual(counts["webmentions"], 2)
+        self.assertEqual(counts["author_replies"], 1)
+
+    def test_counts_nested_children(self):
+        from madblog.threading import count_reactions
+
+        root = self._make_node("ap_interaction", "reply")
+        child = self._make_node("ap_interaction", "like")
+        root.children.append(child)
+
+        counts = count_reactions([root])
+        self.assertEqual(counts["total"], 2)
+        self.assertEqual(counts["replies"], 1)
+        self.assertEqual(counts["likes"], 1)

@@ -131,5 +131,75 @@ class TestOnContentChangeMalformedUrl(unittest.TestCase):
         self.storage.on_content_change(ChangeType.DELETED, str(md_file))
 
 
+class TestNormalizeAuthor(unittest.TestCase):
+    """Tests for _normalize_author which fixes legacy author_url data."""
+
+    def test_plain_name_in_author_url_moves_to_author_name(self):
+        """A non-URL author_url should be moved to author_name."""
+        from webmentions import Webmention, WebmentionDirection
+
+        mention = Webmention(
+            source="https://example.com/a",
+            target="https://example.com/b",
+            direction=WebmentionDirection.IN,
+            author_url="Alice",
+            author_name=None,
+        )
+
+        FileWebmentionsStorage._normalize_author(mention)
+
+        self.assertEqual(mention.author_name, "Alice")
+        self.assertIsNone(mention.author_url)
+
+    def test_plain_name_in_author_url_does_not_overwrite_existing_name(self):
+        """If author_name is already set, don't overwrite it."""
+        from webmentions import Webmention, WebmentionDirection
+
+        mention = Webmention(
+            source="https://example.com/a",
+            target="https://example.com/b",
+            direction=WebmentionDirection.IN,
+            author_url="Bob",
+            author_name="Alice",
+        )
+
+        FileWebmentionsStorage._normalize_author(mention)
+
+        self.assertEqual(mention.author_name, "Alice")
+        self.assertIsNone(mention.author_url)
+
+    def test_valid_url_not_modified(self):
+        """A proper URL in author_url should be left as-is."""
+        from webmentions import Webmention, WebmentionDirection
+
+        mention = Webmention(
+            source="https://example.com/a",
+            target="https://example.com/b",
+            direction=WebmentionDirection.IN,
+            author_url="https://alice.example.com",
+            author_name="Alice",
+        )
+
+        FileWebmentionsStorage._normalize_author(mention)
+
+        self.assertEqual(mention.author_url, "https://alice.example.com")
+        self.assertEqual(mention.author_name, "Alice")
+
+    def test_mailto_url_not_modified(self):
+        """A mailto: author_url should be left as-is."""
+        from webmentions import Webmention, WebmentionDirection
+
+        mention = Webmention(
+            source="https://example.com/a",
+            target="https://example.com/b",
+            direction=WebmentionDirection.IN,
+            author_url="mailto:alice@example.com",
+        )
+
+        FileWebmentionsStorage._normalize_author(mention)
+
+        self.assertEqual(mention.author_url, "mailto:alice@example.com")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -181,10 +181,23 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         :return: List of ThreadNode objects (the thread tree roots)
         """
         webmentions = self._get_webmentions(metadata)
-        ap_interactions = self._get_ap_interactions(md_file)
         article_slug = self._article_slug_from_metadata(metadata)
         author_replies = self._get_article_replies(article_slug)
         article_url = config.link + metadata.get("uri", "")
+
+        # Also fetch AP interactions targeting author reply URLs so that
+        # fediverse replies to author replies appear in the thread.
+        reply_ap_urls = []
+        ap_integration = getattr(self, "_ap_integration", None)
+        if ap_integration:
+            for reply in author_replies:
+                permalink = reply.get("permalink", "")
+                if permalink:
+                    reply_ap_urls.append(ap_integration.base_url + permalink)
+
+        ap_interactions = self._get_ap_interactions(
+            md_file, extra_target_urls=reply_ap_urls
+        )
 
         return build_thread_tree(
             webmentions=webmentions,

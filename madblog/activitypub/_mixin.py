@@ -443,38 +443,49 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                 storage.write_json(fpath, data)
                 logger.info("Restored previously blocked follower %s", actor_id)
 
-    def _get_ap_interactions(self, md_file: str) -> list:
+    def _filter_ap_interactions(self, interactions: list) -> list:
+        """Apply blocklist/allowlist filtering to AP interactions."""
+        mod_cache = getattr(self, "_blocklist_cache", None)
+        if mod_cache:
+            return [
+                i for i in interactions if mod_cache.is_permitted(i.source_actor_id)
+            ]
+        if config.blocked_actors:
+            return [
+                i
+                for i in interactions
+                if not is_blocked(i.source_actor_id, config.blocked_actors)
+            ]
+        if config.allowed_actors:
+            return [
+                i
+                for i in interactions
+                if is_allowed(i.source_actor_id, config.allowed_actors)
+            ]
+        return list(interactions)
+
+    def _get_ap_interactions(
+        self, md_file: str, extra_target_urls: list[str] | None = None
+    ) -> list:
         """
         Retrieve raw ActivityPub Interaction objects for a given page.
+
+        :param md_file: The Markdown file for the article.
+        :param extra_target_urls: Additional AP object URLs to fetch
+            interactions for (e.g. author reply URLs).
         """
         ap_integration = getattr(self, "_ap_integration", None)
         if not ap_integration:
             return []
 
+        storage = self.activitypub_handler.storage
         ap_object_url = ap_integration.file_to_url(md_file)
-        interactions = self.activitypub_handler.storage.get_interactions(
-            target_resource=ap_object_url
-        )
+        interactions = list(storage.get_interactions(target_resource=ap_object_url))
 
-        mod_cache = getattr(self, "_blocklist_cache", None)
-        if mod_cache:
-            interactions = [
-                i for i in interactions if mod_cache.is_permitted(i.source_actor_id)
-            ]
-        elif config.blocked_actors:
-            interactions = [
-                i
-                for i in interactions
-                if not is_blocked(i.source_actor_id, config.blocked_actors)
-            ]
-        elif config.allowed_actors:
-            interactions = [
-                i
-                for i in interactions
-                if is_allowed(i.source_actor_id, config.allowed_actors)
-            ]
+        for url in extra_target_urls or []:
+            interactions.extend(storage.get_interactions(target_resource=url))
 
-        return interactions
+        return self._filter_ap_interactions(interactions)
 
     def _get_rendered_ap_interactions(self, md_file: str) -> str:
         """

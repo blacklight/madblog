@@ -242,7 +242,9 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
                 if metadata.get("status") != WebmentionStatus.CONFIRMED.value:
                     continue
 
-                webmentions.append(Webmention.build(metadata))
+                mention = Webmention.build(metadata)
+                self._normalize_author(mention)
+                webmentions.append(mention)
             except Exception as e:
                 logger.error("Error parsing Webmention in %s: %s", md_file, e)
                 continue
@@ -385,6 +387,19 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         safe = re.sub(r"[^\w\s-]", "", text)
         safe = re.sub(r"[-\s]+", "-", safe)
         return safe[:max_length].strip("-")
+
+    @staticmethod
+    def _normalize_author(mention: Webmention) -> None:
+        """
+        Fix legacy data where a plain-text author name was stored in
+        ``author_url`` instead of ``author_name``.
+        """
+        if mention.author_url and not mention.author_url.startswith(
+            ("http://", "https://", "mailto:")
+        ):
+            if not mention.author_name:
+                mention.author_name = mention.author_url
+            mention.author_url = None
 
     # -----------------------------------------------------------------
     # Reply outgoing webmentions

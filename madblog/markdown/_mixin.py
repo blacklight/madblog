@@ -12,6 +12,8 @@ from markdown import Extension
 
 from madblog.config import config
 from madblog.tags import parse_metadata_tags
+from madblog.templates import TemplateUtils
+from madblog.threading import count_reactions
 
 from ._render import render_html
 
@@ -177,6 +179,10 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 author = metadata["author"]
         else:
             author = config.author
+
+        # Fall back to config defaults when article metadata doesn't
+        # provide author_url / author_photo explicitly.
+        if not author_url:
             author_url = config.author_url
 
         if author_url and cls._email_regex.match(author_url):
@@ -186,7 +192,8 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
             if link := metadata["author_photo"].strip():
                 if cls._url_regex.match(link):
                     author_photo = link
-        else:
+
+        if not author_photo:
             author_photo = config.author_photo
 
         return {
@@ -213,6 +220,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
 
         tags = parse_metadata_tags(metadata.get("tags", ""))
         author_info = self._parse_author(metadata)
+        reactions_counts = count_reactions(reactions_tree)
 
         with contextlib.ExitStack() as stack:
             if not has_app_context():
@@ -234,6 +242,8 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
                 reactions_tree=reactions_tree,
+                reactions_counts=reactions_counts,
+                utils=TemplateUtils(),
                 **author_info,
             )
 

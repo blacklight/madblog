@@ -37,17 +37,17 @@
             <img class="u-photo" src="{{ author_photo }}" alt="Author photo" loading="lazy">
           {% endif %}
           {% if author_url %}
-            <a class="p-url" rel="me" href="{{ author_url }}">
+            <a class="u-url" rel="me" href="{{ author_url }}">
           {% endif %}
 
           <span class="p-name">
             {{ author }}
           </span>
-        </span>
 
-        {% if author_url %}
-          </a>
-        {% endif %}
+          {% if author_url %}
+            </a>
+          {% endif %}
+        </span>
 
         {% if published %}
           <div class="published-date">
