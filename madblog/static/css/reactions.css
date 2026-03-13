@@ -145,10 +145,6 @@
   font-size: 1.05em;
 }
 
-.reaction-title a {
-  color: var(--color-fg-primary);
-}
-
 /* Content body */
 .reaction-content {
   margin-top: 0.5em;
