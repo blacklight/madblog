@@ -347,6 +347,19 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         if cached_page.is_client_cache_valid():
             return cached_page.make_304_response()
 
+        # Return ActivityPub response if client prefers it
+        if self._client_prefers_activitypub():
+            ap_response = self._get_activitypub_reply_response(
+                md_file=md_file,
+                metadata=metadata,
+                last_modified=cached_page.last_modified,
+                etag=cached_page.etag,
+                article_slug=article_slug,
+                reply_slug=reply_slug,
+            )
+            if ap_response:
+                return ap_response
+
         title = metadata.get("title") or reply_slug
         if as_markdown:
             with open(md_file, "r") as f:

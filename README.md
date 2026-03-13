@@ -1020,12 +1020,19 @@ server {
         proxy_pass http://madblog;
     }
 
-    # Required for URL-based article search on Mastodon.
-    # When someone searches for an article URL on the blog domain, Madblog
-    # redirects AP clients to the canonical object URL on the AP domain.
-    # This proxy rule lets Mastodon follow that redirect and fetch the
-    # article's AP representation.
+    # Required for URL-based search on Mastodon.
+    # When someone searches for an article or reply URL on the blog domain,
+    # Madblog redirects AP clients to the canonical object URL on the AP
+    # domain.  These proxy rules let Mastodon follow the redirect and fetch
+    # the object's AP representation.
     location /article/ {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass http://madblog;
+    }
+
+    location /reply/ {
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -1034,12 +1041,13 @@ server {
 }
 ```
 
-**Note on article URL search:** When `activitypub_link` differs from `link`,
+**Note on content URL search:** When `activitypub_link` differs from `link`,
 ActivityPub object IDs live on the `activitypub_link` domain (required by
 Mastodon's origin check during inbox delivery). When an AP client fetches an
-article from the blog domain, Madblog automatically redirects to the canonical
-URL on the `activitypub_link` domain. The `/article/` proxy rule above is
-needed so that Mastodon can follow the redirect and resolve the article.
+article or reply from the blog domain, Madblog automatically redirects to the
+canonical URL on the `activitypub_link` domain. The `/article/` and `/reply/`
+proxy rules above are needed so that Mastodon can follow the redirect and
+resolve the object.
 
 If you can’t/won’t proxy, you can also implement WebFinger in your main site:
 respond to `GET /.well-known/webfinger?resource=acct:blog@example.com` with a

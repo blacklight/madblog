@@ -151,6 +151,64 @@ class ReplyRouteTest(unittest.TestCase):
             html = resp.get_data(as_text=True)
             self.assertIn("Jul 02, 2025", html)
 
+    def test_reply_ap_redirect_split_domain(self):
+        """AP client on blog domain gets 302 to AP-domain reply URL."""
+        from unittest.mock import MagicMock
+
+        mock_integration = MagicMock()
+        mock_integration.reply_file_to_url.return_value = (
+            "https://ap.example.com/reply/my-post/thanks-alice"
+        )
+
+        self.app._ap_integration = mock_integration
+        self.app.activitypub_handler = MagicMock()
+
+        orig_ap_link = self.config.activitypub_link
+        self.config.activitypub_link = "https://ap.example.com"
+        try:
+            with self.app.test_client() as client:
+                resp = client.get(
+                    "/reply/my-post/thanks-alice",
+                    headers={
+                        "Accept": "application/activity+json",
+                        "Host": "example.com",
+                    },
+                )
+                self.assertEqual(resp.status_code, 302)
+                self.assertEqual(
+                    resp.headers["Location"],
+                    "https://ap.example.com/reply/my-post/thanks-alice",
+                )
+        finally:
+            self.config.activitypub_link = orig_ap_link
+            del self.app._ap_integration
+            del self.app.activitypub_handler
+
+    def test_reply_no_redirect_html_client(self):
+        """HTML client on blog domain does NOT get redirected."""
+        from unittest.mock import MagicMock
+
+        mock_integration = MagicMock()
+        self.app._ap_integration = mock_integration
+        self.app.activitypub_handler = MagicMock()
+
+        orig_ap_link = self.config.activitypub_link
+        self.config.activitypub_link = "https://ap.example.com"
+        try:
+            with self.app.test_client() as client:
+                resp = client.get(
+                    "/reply/my-post/thanks-alice",
+                    headers={
+                        "Accept": "text/html",
+                        "Host": "example.com",
+                    },
+                )
+                self.assertEqual(resp.status_code, 200)
+        finally:
+            self.config.activitypub_link = orig_ap_link
+            del self.app._ap_integration
+            del self.app.activitypub_handler
+
 
 class RepliesExcludedFromHomeTest(unittest.TestCase):
     """Test that replies do not appear in the home page listing."""
