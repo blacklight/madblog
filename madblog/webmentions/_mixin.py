@@ -76,7 +76,6 @@ class WebmentionsMixin(ABC):  # pylint: disable=too-few-public-methods
         if config.enable_webmentions:
             bind_webmentions(self._app, self.webmentions_handler)
             self.content_monitor.register(self.webmentions_storage.on_content_change)
-            self.webmentions_storage.sync_on_startup()
 
     def _install_webmention_moderation(self):
         """

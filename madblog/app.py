@@ -135,6 +135,10 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         self.content_monitor.register(self._on_content_change_tags)
         self.content_monitor.start()
 
+        # Sync outgoing webmentions for new/modified content
+        if config.enable_webmentions:
+            self.webmentions_storage.sync_on_startup()
+
         # Start replies monitor for federation
         self._start_replies_monitor()
 
