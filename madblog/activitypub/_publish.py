@@ -125,6 +125,7 @@ class ActivityPubPublishMixin:  # pylint: disable=too-few-public-methods
                 actor_url = resolve_actor_url(username, domain)
                 with self._mention_cache_lock:
                     self._mention_cache[key] = actor_url
+                self._save_mention_cache()
             else:
                 # Request path: never block on HTTP
                 actor_url = f"https://{domain}/@{username}"
@@ -133,6 +134,10 @@ class ActivityPubPublishMixin:  # pylint: disable=too-few-public-methods
                 Mention(username=username, domain=domain, actor_url=actor_url)
             )
         return mentions
+
+    def _save_mention_cache(self) -> None:
+        """Save the mention cache. Override in concrete class for persistence."""
+        pass
 
     # -----------------------------------------------------------------
     # Tag building helpers

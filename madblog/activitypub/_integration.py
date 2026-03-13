@@ -72,6 +72,7 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
 
         self.deleted_urls_file = self.workdir / "deleted_urls.json"
         self.file_urls_file = self.workdir / "file_urls.json"
+        self._mention_cache_file = self.workdir / "mention_cache.json"
 
         # StartupSyncMixin configuration
         self._sync_cache_file = self.workdir / "published_objects.json"
@@ -83,7 +84,7 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         self._active_publishes_lock = threading.Lock()
 
         # Cache for resolved WebFinger mention lookups (from mixin)
-        self._mention_cache: dict[tuple[str, str], str] = {}
+        self._mention_cache: dict[tuple[str, str], str] = self._load_mention_cache()
         self._mention_cache_lock = threading.Lock()
 
     # -----------------------------------------------------------------
@@ -116,6 +117,33 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
 
     def reset_published_cache(self) -> None:
         self._sync_reset()
+
+    # -----------------------------------------------------------------
+    # Mention cache persistence
+    # -----------------------------------------------------------------
+
+    def _load_mention_cache(self) -> dict[tuple[str, str], str]:
+        """Load the mention cache from disk."""
+        try:
+            if self._mention_cache_file.exists():
+                with open(self._mention_cache_file, "r") as f:
+                    data = json.load(f)
+                # Convert string keys back to tuples
+                return {tuple(k.split("|")): v for k, v in data.items()}
+        except Exception:
+            logger.warning("Failed to load mention cache")
+        return {}
+
+    def _save_mention_cache(self) -> None:
+        """Save the mention cache to disk."""
+        try:
+            with self._mention_cache_lock:
+                # Convert tuple keys to strings for JSON serialization
+                data = {f"{k[0]}|{k[1]}": v for k, v in self._mention_cache.items()}
+            with open(self._mention_cache_file, "w") as f:
+                json.dump(data, f, indent=2)
+        except Exception:
+            logger.warning("Failed to save mention cache")
 
     # -----------------------------------------------------------------
     # Deleted-URL tracking (collision avoidance)

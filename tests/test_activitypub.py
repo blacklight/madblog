@@ -1502,6 +1502,43 @@ class ActivityPubPublishTest(unittest.TestCase):
             "https://fedi.example/users/eve",
         )
 
+    @skip_if_no_pubby
+    def test_mention_cache_persists_to_disk(self):
+        """Mention cache is saved to disk and survives a restart."""
+        from madblog.activitypub import ActivityPubIntegration
+
+        integration, handler, _, pages_dir = self._make_integration()
+        handler.publish_object = MagicMock()
+
+        mention_file = pages_dir / "persist-test.md"
+        mention_file.write_text(
+            "[//]: # (title: Persist Test)\n\n" "CC @frank@persist.example\n"
+        )
+
+        url = integration.file_to_url(str(mention_file))
+        actor_url = f"{integration.base_url}{integration.handler.actor_path}"
+
+        with patch(
+            "pubby.resolve_actor_url",
+            return_value="https://persist.example/users/frank",
+        ):
+            integration._handle_publish(str(mention_file), url, actor_url)
+
+        # Cache file should exist
+        self.assertTrue(integration._mention_cache_file.exists())
+
+        # Read the cache file directly to verify persistence
+        import json
+
+        with open(integration._mention_cache_file) as f:
+            cached_data = json.load(f)
+
+        self.assertIn("frank|persist.example", cached_data)
+        self.assertEqual(
+            cached_data["frank|persist.example"],
+            "https://persist.example/users/frank",
+        )
+
     # ------------------------------------------------------------------
     # Non-blocking / concurrency
     # ------------------------------------------------------------------
