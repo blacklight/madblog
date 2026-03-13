@@ -686,29 +686,13 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         base_rel = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
         public_url = f"{self.content_base_url}/article/{base_rel}"
 
-        # ---- 1. Build the AP object (WebFinger lookups happen here) ----
-        try:
-            obj, activity_type = self.build_object(
-                filepath,
-                url,
-                actor_url,
-                public_url=public_url,
-                allow_network=True,
-            )
-        except Exception:
-            logger.exception("Failed to build AP object for %s — giving up", url)
-            self._mark_as_published(url, self._get_file_mtime(filepath))
-            return
-
-        # ---- 2. Mark as processed BEFORE delivery --------------------
-        self._mark_as_published(url, self._get_file_mtime(filepath))
-
-        # ---- 3. Deliver (pubby handles per-inbox retries) ------------
-        try:
-            self.handler.publish_object(obj, activity_type=activity_type)
-            logger.info("Published %s for %s", activity_type, url)
-        except Exception:
-            logger.exception("Failed to deliver %s for %s", activity_type, url)
+        self._build_and_publish(
+            filepath,
+            url,
+            lambda: self.build_object(
+                filepath, url, actor_url, public_url=public_url, allow_network=True
+            ),
+        )
 
     def on_content_change(self, change_type: ChangeType, filepath: str) -> None:
         """

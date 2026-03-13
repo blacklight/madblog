@@ -2,6 +2,7 @@ import logging
 import os
 
 from datetime import datetime, timezone
+from typing import Callable
 
 from pubby import Object
 
@@ -23,6 +24,7 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
     """
 
     replies_dir: str | None
+    _sync_directory: Callable[..., None]
 
     def reply_file_to_url(self, filepath: str) -> str:
         """
@@ -167,28 +169,14 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
 
     def _handle_reply_publish(self, filepath: str, url: str, actor_url: str) -> None:
         """Build and publish a Create or Update activity for a reply."""
-        public_url = url  # Reply URLs are the same for AP and public
-
-        try:
-            obj, activity_type = self.build_reply_object(
-                filepath,
-                url,
-                actor_url,
-                public_url=public_url,
-                allow_network=True,
-            )
-        except Exception:
-            logger.exception("Failed to build AP reply object for %s", url)
-            self._mark_as_published(url, self._get_file_mtime(filepath))
-            return
-
-        self._mark_as_published(url, self._get_file_mtime(filepath))
-
-        try:
-            self.handler.publish_object(obj, activity_type=activity_type)
-            logger.info("Published reply %s for %s", activity_type, url)
-        except Exception:
-            logger.exception("Failed to deliver reply %s for %s", activity_type, url)
+        self._build_and_publish(
+            filepath,
+            url,
+            lambda: self.build_reply_object(
+                filepath, url, actor_url, public_url=url, allow_network=True
+            ),
+            label="reply",
+        )
 
     def _handle_reply_delete(self, url: str, actor_url: str) -> None:
         """Publish a Delete activity for a reply."""
@@ -219,24 +207,16 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         """
         Sync reply files on startup, similar to sync_on_startup() for articles.
         """
-        if not self.replies_dir or not os.path.isdir(self.replies_dir):
+        if not self.replies_dir:
             return
 
-        cache = self._load_sync_cache()
-        for root, _, files in os.walk(self.replies_dir):
-            for filename in files:
-                if not filename.endswith(".md"):
-                    continue
+        def _notify(filepath: str, is_new: bool) -> None:
+            change = ChangeType.ADDED if is_new else ChangeType.EDITED
+            self.on_reply_change(change, filepath)
 
-                filepath = os.path.join(root, filename)
-                try:
-                    url = self.reply_file_to_url(filepath)
-                    mtime = os.path.getmtime(filepath)
-                except OSError:
-                    continue
-
-                cached_mtime = cache.get(url, 0)
-                if mtime > cached_mtime:
-                    is_new = url not in cache
-                    change = ChangeType.ADDED if is_new else ChangeType.EDITED
-                    self.on_reply_change(change, filepath)
+        self._sync_directory(
+            self.replies_dir,
+            self.reply_file_to_url,
+            _notify,
+            label="replies",
+        )

@@ -194,6 +194,39 @@ class ActivityPubPublishMixin:  # pylint: disable=too-few-public-methods
         except Exception:
             logger.exception("Failed to publish Delete for %s", url)
 
+    def _build_and_publish(
+        self,
+        filepath: str,
+        url: str,
+        build_fn: Callable[[], tuple],
+        *,
+        label: str = "",
+    ) -> None:
+        """
+        Shared build → mark → deliver cycle for articles and replies.
+
+        :param filepath: Filesystem path of the source Markdown file.
+        :param url: Canonical AP object ``id``.
+        :param build_fn: Zero-arg callable returning ``(Object, activity_type)``.
+        :param label: Human-readable label for log messages (e.g. "reply").
+        """
+        tag = f"{label} " if label else ""
+
+        try:
+            obj, activity_type = build_fn()
+        except Exception:
+            logger.exception("Failed to build AP %sobject for %s", tag, url)
+            self._mark_as_published(url, self._get_file_mtime(filepath))
+            return
+
+        self._mark_as_published(url, self._get_file_mtime(filepath))
+
+        try:
+            self.handler.publish_object(obj, activity_type=activity_type)
+            logger.info("Published %s%s for %s", tag, activity_type, url)
+        except Exception:
+            logger.exception("Failed to deliver %s%s for %s", tag, activity_type, url)
+
     def _get_file_mtime(self, filepath: str) -> float:
         """Get file modification time, returning 0 on error."""
         try:

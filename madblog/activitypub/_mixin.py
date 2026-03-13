@@ -286,14 +286,25 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         ap_quality = self._ap_accept_quality()
         return bool(ap_quality and ap_quality > request.accept_mimetypes["text/html"])
 
-    def _get_activitypub_page_response(
+    def _get_activitypub_object_response(
         self,
         *,
-        md_file: str,
+        ap_url: str,
+        public_url: str,
+        build_fn,
         metadata: dict,
         last_modified: str,
         etag: str,
     ) -> Response | None:
+        """
+        Shared helper: return an AP JSON response (or split-domain redirect)
+        for any content object (article or reply).
+
+        :param ap_url: Canonical AP-domain object ``id``.
+        :param public_url: Human-facing URL stored in the AP ``url`` field.
+        :param build_fn: Callable ``(md_file, ap_url, actor_id, public_url)``
+            that returns ``(Object, activity_type)``.
+        """
         if not (
             hasattr(self, "activitypub_handler") and hasattr(self, "_ap_integration")
         ):
@@ -301,8 +312,6 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
         if not self._ap_accept_quality():
             return None
-
-        ap_url = self._ap_integration.file_to_url(md_file)
 
         # When the AP domain differs from the blog domain and the request
         # arrived at the blog domain, redirect AP clients to the canonical
@@ -319,16 +328,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
                 return redirect(ap_url, code=302)  # type: ignore
 
-        from pubby._model import AP_CONTEXT
-
-        base_url = config.link or request.host_url.rstrip("/")
-        public_url = base_url.rstrip("/") + metadata.get("uri", "")
-        obj, _ = self._ap_integration.build_object(
-            md_file,
-            ap_url,
-            self.activitypub_handler.actor_id,
-            public_url=public_url,
-        )
+        obj, _ = build_fn(ap_url, public_url)
         doc = obj.to_dict()
         doc["@context"] = AP_CONTEXT
 
@@ -338,13 +338,36 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         response.headers["ETag"] = etag
         response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
 
-        article_language = metadata.get("language")
-        if article_language:
-            response.headers["Language"] = article_language
+        language = metadata.get("language")
+        if language:
+            response.headers["Language"] = language
         elif config.language:
             response.headers["Language"] = config.language
 
         return response
+
+    def _get_activitypub_page_response(
+        self,
+        *,
+        md_file: str,
+        metadata: dict,
+        last_modified: str,
+        etag: str,
+    ) -> Response | None:
+        base_url = config.link or request.host_url.rstrip("/")
+        return self._get_activitypub_object_response(
+            ap_url=self._ap_integration.file_to_url(md_file),
+            public_url=base_url.rstrip("/") + metadata.get("uri", ""),
+            build_fn=lambda ap_url, public_url: self._ap_integration.build_object(
+                md_file,
+                ap_url,
+                self.activitypub_handler.actor_id,
+                public_url=public_url,
+            ),
+            metadata=metadata,
+            last_modified=last_modified,
+            etag=etag,
+        )
 
     def _get_activitypub_reply_response(
         self,
@@ -357,54 +380,20 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         reply_slug: str,
     ) -> Response | None:
         """Return an AP JSON response (or redirect) for an author reply."""
-        if not (
-            hasattr(self, "activitypub_handler") and hasattr(self, "_ap_integration")
-        ):
-            return None
-
-        if not self._ap_accept_quality():
-            return None
-
-        ap_url = self._ap_integration.reply_file_to_url(md_file)
-
-        # When the AP domain differs from the blog domain and the request
-        # arrived at the blog domain, redirect AP clients to the canonical
-        # AP-domain URL so Mastodon can resolve the object.
-        ap_link = (config.activitypub_link or "").rstrip("/")
-        blog_link = (config.link or "").rstrip("/")
-        if ap_link and ap_link != blog_link:
-            ap_host = urlparse(ap_link).hostname
-            request_host = request.host.split(":")[0]
-            if request_host != ap_host:
-                from flask import redirect
-
-                return redirect(ap_url, code=302)  # type: ignore
-
-        public_url = (config.link or request.host_url.rstrip("/")).rstrip(
-            "/"
-        ) + f"/reply/{article_slug}/{reply_slug}"
-        obj, _ = self._ap_integration.build_reply_object(
-            md_file,
-            ap_url,
-            self.activitypub_handler.actor_id,
-            public_url=public_url,
+        base_url = (config.link or request.host_url.rstrip("/")).rstrip("/")
+        return self._get_activitypub_object_response(
+            ap_url=self._ap_integration.reply_file_to_url(md_file),
+            public_url=f"{base_url}/reply/{article_slug}/{reply_slug}",
+            build_fn=lambda ap_url, public_url: self._ap_integration.build_reply_object(
+                md_file,
+                ap_url,
+                self.activitypub_handler.actor_id,
+                public_url=public_url,
+            ),
+            metadata=metadata,
+            last_modified=last_modified,
+            etag=etag,
         )
-        doc = obj.to_dict()
-        doc["@context"] = AP_CONTEXT
-
-        response = make_response(json.dumps(doc, ensure_ascii=False))
-        response.mimetype = "application/activity+json"
-        response.headers["Last-Modified"] = last_modified
-        response.headers["ETag"] = etag
-        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
-
-        reply_language = metadata.get("language")
-        if reply_language:
-            response.headers["Language"] = reply_language
-        elif config.language:
-            response.headers["Language"] = config.language
-
-        return response
 
     def _install_activitypub_moderation(self):
         """
