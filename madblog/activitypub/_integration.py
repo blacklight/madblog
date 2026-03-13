@@ -101,10 +101,10 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
     # Published-objects helpers (delegate to mixin)
     # -----------------------------------------------------------------
 
-    def _is_published(self, url: str) -> bool:
+    def _is_published(self, url: str) -> bool:  # type: ignore
         return self._sync_is_tracked(url)
 
-    def _mark_as_published(self, url: str, mtime: float = 0) -> None:
+    def _mark_as_published(self, url: str, mtime: float = 0) -> None:  # type: ignore
         self._sync_mark(url, mtime)
 
     def debug_published_cache(self) -> dict:
@@ -220,7 +220,8 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
     # Markdown / metadata helpers
     # -----------------------------------------------------------------
 
-    def _parse_metadata(self, filepath: str) -> dict:
+    @staticmethod
+    def _parse_metadata(filepath: str) -> dict:  # type: ignore
         """Extract metadata headers from a Markdown file."""
         metadata: dict = {}
         try:
@@ -261,7 +262,8 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
 
         return os.path.splitext(os.path.basename(filepath))[0]
 
-    def _clean_content(self, filepath: str) -> str:
+    @staticmethod
+    def _clean_content(filepath: str) -> str:  # type: ignore
         """Read markdown, strip metadata headers and the top-level heading."""
         try:
             with open(filepath, "r", encoding="utf-8") as f:
@@ -380,7 +382,7 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
                 except OSError:
                     pass
 
-    def _extract_media_attachments(
+    def _extract_media_attachments(  # type: ignore
         self, html: str, md_text: str
     ) -> tuple[str, list[dict]]:
         """
@@ -662,7 +664,8 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         base_rel = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
 
         def _cleanup():
-            self._mark_as_deleted(f"{self.content_base_url}/article/{base_rel}")
+            # Use base_url (AP domain) for collision tracking, matching file_to_url()
+            self._mark_as_deleted(f"{self.base_url}/article/{base_rel}")
             self._remove_file_url(filepath)
 
         self._publish_delete(

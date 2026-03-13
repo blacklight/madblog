@@ -688,6 +688,82 @@ class ActivityPubContentChangeTest(unittest.TestCase):
         self.assertEqual(kwargs[1]["activity_type"], "Delete")
 
     @skip_if_no_pubby
+    def test_delete_then_recreate_uses_collision_avoiding_url(self):
+        """
+        When an article is deleted and then re-created with the same slug,
+        the AP object ID should get a version suffix to avoid Mastodon
+        ignoring the Create (since Mastodon tombstones deleted object IDs).
+        """
+        from pubby import ActivityPubHandler
+        from pubby.crypto import generate_rsa_keypair
+        from pubby.storage.adapters.file import FileActivityPubStorage
+        from madblog.activitypub import ActivityPubIntegration
+
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+
+        root = Path(tmpdir.name)
+        pages_dir = root / "pages"
+        pages_dir.mkdir()
+        ap_dir = root / "ap"
+
+        priv, _ = generate_rsa_keypair()
+        storage = FileActivityPubStorage(data_dir=str(ap_dir))
+        handler = ActivityPubHandler(
+            storage=storage,
+            actor_config={
+                "base_url": "https://ap.example.com",
+                "username": "blog",
+            },
+            private_key=priv,
+        )
+
+        # Split-domain setup: AP on ap.example.com, blog on blog.example.com
+        integration = ActivityPubIntegration(
+            handler=handler,
+            pages_dir=str(pages_dir),
+            base_url="https://ap.example.com",
+            content_base_url="https://blog.example.com",
+        )
+
+        handler.publish_object = MagicMock()
+
+        # Step 1: Create the article
+        test_file = pages_dir / "test.md"
+        test_file.write_text("# Test Article\n\nContent here.")
+        integration.on_content_change(self.ChangeType.ADDED, str(test_file))
+        _join_ap_publish_threads()
+
+        # Verify Create was sent with base URL
+        self.assertEqual(handler.publish_object.call_count, 1)
+        first_obj = handler.publish_object.call_args[0][0]
+        self.assertEqual(first_obj.id, "https://ap.example.com/article/test")
+
+        handler.publish_object.reset_mock()
+
+        # Step 2: Delete the article
+        integration.on_content_change(self.ChangeType.DELETED, str(test_file))
+
+        # Verify Delete was sent
+        self.assertEqual(handler.publish_object.call_count, 1)
+        self.assertEqual(handler.publish_object.call_args[1]["activity_type"], "Delete")
+
+        handler.publish_object.reset_mock()
+
+        # Step 3: Re-create the article with the same slug
+        test_file.write_text("# Test Article\n\nNew content.")
+        integration.on_content_change(self.ChangeType.ADDED, str(test_file))
+        _join_ap_publish_threads()
+
+        # Verify Create was sent with collision-avoiding URL (has ?v= suffix)
+        self.assertEqual(handler.publish_object.call_count, 1)
+        recreated_obj = handler.publish_object.call_args[0][0]
+        self.assertIn("?v=", recreated_obj.id)
+        self.assertTrue(
+            recreated_obj.id.startswith("https://ap.example.com/article/test?v=")
+        )
+
+    @skip_if_no_pubby
     def test_inline_markdown_images_become_attachments(self):
         from pubby import ActivityPubHandler
         from pubby.crypto import generate_rsa_keypair
