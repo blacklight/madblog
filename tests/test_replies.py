@@ -773,3 +773,80 @@ class ReplyFederationTest(unittest.TestCase):
             self.assertIsNone(obj.name)
             self.assertEqual(obj.in_reply_to, "https://mastodon.social/status/123")
             self.assertEqual(activity_type, "Create")
+
+    def test_reply_to_derived_from_directory_structure(self):
+        """When reply-to is not set, it is derived from the article slug."""
+        from unittest.mock import MagicMock, patch
+        from madblog.activitypub._integration import ActivityPubIntegration
+
+        handler = MagicMock()
+        handler.followers_url = "https://example.com/followers"
+        handler.storage.get_interactions.return_value = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            replies_dir = Path(tmpdir) / "replies"
+            article_dir = replies_dir / "my-article"
+            article_dir.mkdir(parents=True)
+
+            reply_file = article_dir / "my-reply.md"
+            reply_file.write_text("This is a reply without explicit reply-to\n")
+
+            integration = ActivityPubIntegration(
+                handler=handler,
+                pages_dir=str(Path(tmpdir) / "markdown"),
+                base_url="https://example.com",
+                replies_dir=str(replies_dir),
+            )
+
+            with patch.object(
+                integration, "_clean_content", return_value="This is a reply"
+            ):
+                obj, _ = integration.build_reply_object(
+                    str(reply_file),
+                    "https://example.com/reply/my-article/my-reply",
+                    "https://example.com/actor",
+                )
+
+            # in_reply_to should be the AP object URL derived from slug
+            self.assertEqual(obj.in_reply_to, "https://example.com/article/my-article")
+
+    def test_explicit_reply_to_overrides_derived(self):
+        """An explicit reply-to metadata takes precedence over directory derivation."""
+        from unittest.mock import MagicMock, patch
+        from madblog.activitypub._integration import ActivityPubIntegration
+
+        handler = MagicMock()
+        handler.followers_url = "https://example.com/followers"
+        handler.storage.get_interactions.return_value = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            replies_dir = Path(tmpdir) / "replies"
+            article_dir = replies_dir / "my-article"
+            article_dir.mkdir(parents=True)
+
+            reply_file = article_dir / "my-reply.md"
+            reply_file.write_text(
+                "[//]: # (reply-to: https://mastodon.social/@user/12345)\n\n"
+                "Replying to a specific fediverse post\n"
+            )
+
+            integration = ActivityPubIntegration(
+                handler=handler,
+                pages_dir=str(Path(tmpdir) / "markdown"),
+                base_url="https://example.com",
+                replies_dir=str(replies_dir),
+            )
+
+            with patch.object(
+                integration,
+                "_clean_content",
+                return_value="Replying to a specific fediverse post",
+            ):
+                obj, _ = integration.build_reply_object(
+                    str(reply_file),
+                    "https://example.com/reply/my-article/my-reply",
+                    "https://example.com/actor",
+                )
+
+            # Explicit reply-to should be used, not derived
+            self.assertEqual(obj.in_reply_to, "https://mastodon.social/@user/12345")

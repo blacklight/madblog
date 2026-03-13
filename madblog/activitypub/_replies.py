@@ -37,12 +37,39 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         rel = os.path.relpath(filepath, self.replies_dir).rsplit(".", 1)[0]
         return f"{self.base_url}/reply/{rel}"
 
+    def _article_slug_from_reply_path(self, filepath: str) -> str | None:
+        """
+        Extract the article slug from a reply file path.
+
+        :param filepath: Path like ``<replies_dir>/<article-slug>/<reply>.md``
+        :return: The article slug, or ``None`` if the path has no parent dir.
+        """
+        if not self.replies_dir:
+            return None
+
+        rel = os.path.relpath(filepath, self.replies_dir)
+        parts = rel.split(os.sep)
+        return parts[0] if len(parts) > 1 else None
+
     def _parse_reply_metadata(self, filepath: str) -> dict:
-        """Extract metadata from a reply Markdown file."""
+        """
+        Extract metadata from a reply Markdown file.
+
+        If ``reply-to`` is not set explicitly, it is derived from the
+        directory structure: ``replies/<article-slug>/…`` maps to the
+        AP object URL ``{base_url}/article/<article-slug>``.
+        """
         metadata = self._parse_metadata(filepath)
-        # Ensure reply-to is present
         if "reply-to" not in metadata:
-            logger.warning("Reply %s missing reply-to metadata", filepath)
+            article_slug = self._article_slug_from_reply_path(filepath)
+            if article_slug:
+                metadata["reply-to"] = f"{self.base_url}/article/{article_slug}"
+                logger.debug(
+                    "Derived reply-to %s from directory structure",
+                    metadata["reply-to"],
+                )
+            else:
+                logger.warning("Reply %s has no reply-to and no article slug", filepath)
         return metadata
 
     def _resolve_reply_target_actor(self, reply_to_url: str) -> str | None:
