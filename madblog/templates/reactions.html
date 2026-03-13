@@ -168,7 +168,7 @@ reply-{{ node.item.full_url | hash_id }}
       {% endif %}
     {% endif %}
     <div class="reaction-footer">
-      <span class="reaction-source-type" title="ActivityPub">🌐 Fediverse</span>
+      <span class="reaction-source-type" title="ActivityPub">🌐 ActivityPub</span>
       {% set source_url = interaction.object_id or interaction.activity_id %}
       {% if source_url %}
         <a href="{{ source_url }}" class="reaction-source" rel="nofollow noopener" target="_blank">View source</a>
