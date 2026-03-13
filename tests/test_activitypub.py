@@ -1568,5 +1568,134 @@ class ActivityPubPublishTest(unittest.TestCase):
         _join_ap_publish_threads(timeout=2)
 
 
+class ReplyMentionTest(unittest.TestCase):
+    """Tests for mention handling in reply objects."""
+
+    @skip_if_no_pubby
+    def test_build_reply_object_includes_mentions_in_cc(self):
+        """build_reply_object should add mentioned actors to CC list."""
+        from pubby import ActivityPubHandler
+        from madblog.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pages_dir = Path(tmpdir) / "pages"
+            pages_dir.mkdir()
+            replies_dir = Path(tmpdir) / "replies"
+            replies_dir.mkdir()
+            state_dir = Path(tmpdir) / "state"
+            state_dir.mkdir()
+
+            # Create a reply with a mention
+            (replies_dir / "test-article").mkdir()
+            reply_file = replies_dir / "test-article" / "test-reply.md"
+            reply_file.write_text(
+                "[//]: # (reply-to: https://mastodon.social/users/alice/statuses/123)\n"
+                "[//]: # (published: 2025-07-01)\n\n"
+                "# Test Reply\n"
+                "Hello @bob@remote.example, thanks for commenting!\n"
+            )
+
+            handler = MagicMock(spec=ActivityPubHandler)
+            handler.actor_path = "/ap/actor"
+            handler.followers_url = "https://example.com/ap/followers"
+            handler.storage = MagicMock()
+            handler.storage.get_interaction_by_object_id.return_value = None
+
+            orig_state_dir = config.state_dir
+            config.state_dir = str(state_dir)
+
+            try:
+                integration = ActivityPubIntegration(
+                    handler=handler,
+                    pages_dir=str(pages_dir),
+                    base_url="https://example.com",
+                    replies_dir=str(replies_dir),
+                )
+
+                url = integration.reply_file_to_url(str(reply_file))
+                actor_url = "https://example.com/ap/actor"
+
+                with patch(
+                    "pubby.resolve_actor_url",
+                    return_value="https://remote.example/users/bob",
+                ):
+                    obj, activity_type = integration.build_reply_object(
+                        str(reply_file), url, actor_url, allow_network=True
+                    )
+
+                # Mentioned actor should be in CC
+                self.assertIn("https://remote.example/users/bob", obj.cc)
+
+                # Mention tag should be present
+                mention_tags = [t for t in obj.tag if t.get("type") == "Mention"]
+                self.assertEqual(len(mention_tags), 1)
+                self.assertEqual(
+                    mention_tags[0]["href"], "https://remote.example/users/bob"
+                )
+                self.assertEqual(mention_tags[0]["name"], "@bob@remote.example")
+
+            finally:
+                config.state_dir = orig_state_dir
+
+    @skip_if_no_pubby
+    def test_build_reply_object_mentions_use_fallback_without_network(self):
+        """build_reply_object with allow_network=False uses fallback URLs."""
+        from pubby import ActivityPubHandler
+        from madblog.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pages_dir = Path(tmpdir) / "pages"
+            pages_dir.mkdir()
+            replies_dir = Path(tmpdir) / "replies"
+            replies_dir.mkdir()
+            state_dir = Path(tmpdir) / "state"
+            state_dir.mkdir()
+
+            (replies_dir / "test-article").mkdir()
+            reply_file = replies_dir / "test-article" / "reply.md"
+            reply_file.write_text(
+                "[//]: # (reply-to: https://example.com/article/test-article)\n\n"
+                "Hello @alice@unreachable.example\n"
+            )
+
+            handler = MagicMock(spec=ActivityPubHandler)
+            handler.actor_path = "/ap/actor"
+            handler.followers_url = "https://example.com/ap/followers"
+            handler.storage = MagicMock()
+            handler.storage.get_interaction_by_object_id.return_value = None
+
+            orig_state_dir = config.state_dir
+            config.state_dir = str(state_dir)
+
+            try:
+                integration = ActivityPubIntegration(
+                    handler=handler,
+                    pages_dir=str(pages_dir),
+                    base_url="https://example.com",
+                    replies_dir=str(replies_dir),
+                )
+
+                url = integration.reply_file_to_url(str(reply_file))
+                actor_url = "https://example.com/ap/actor"
+
+                with patch("pubby.resolve_actor_url") as mock_resolve:
+                    obj, _ = integration.build_reply_object(
+                        str(reply_file), url, actor_url, allow_network=False
+                    )
+                    mock_resolve.assert_not_called()
+
+                # Should use fallback URL
+                mention_tags = [t for t in obj.tag if t.get("type") == "Mention"]
+                self.assertEqual(len(mention_tags), 1)
+                self.assertEqual(
+                    mention_tags[0]["href"], "https://unreachable.example/@alice"
+                )
+
+            finally:
+                config.state_dir = orig_state_dir
+
+
 if __name__ == "__main__":
     unittest.main()
