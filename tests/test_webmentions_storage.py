@@ -201,5 +201,87 @@ class TestNormalizeAuthor(unittest.TestCase):
         self.assertEqual(mention.author_url, "mailto:alice@example.com")
 
 
+class TestNormalizeContent(unittest.TestCase):
+    """Tests for _normalize_content which fixes legacy 'None' string content."""
+
+    def test_none_string_content_cleared(self):
+        """Content stored as literal 'None' should become None."""
+        from webmentions import Webmention, WebmentionDirection
+
+        mention = Webmention(
+            source="https://example.com/a",
+            target="https://example.com/b",
+            direction=WebmentionDirection.IN,
+            content="None",
+        )
+
+        FileWebmentionsStorage._normalize_content(mention)
+
+        self.assertIsNone(mention.content)
+
+    def test_none_string_excerpt_cleared(self):
+        """Excerpt stored as literal 'None' should become None."""
+        from webmentions import Webmention, WebmentionDirection
+
+        mention = Webmention(
+            source="https://example.com/a",
+            target="https://example.com/b",
+            direction=WebmentionDirection.IN,
+            excerpt="None",
+        )
+
+        FileWebmentionsStorage._normalize_content(mention)
+
+        self.assertIsNone(mention.excerpt)
+
+    def test_none_string_title_cleared(self):
+        """Title stored as literal 'None' should become None."""
+        from webmentions import Webmention, WebmentionDirection
+
+        mention = Webmention(
+            source="https://example.com/a",
+            target="https://example.com/b",
+            direction=WebmentionDirection.IN,
+            title="None",
+        )
+
+        FileWebmentionsStorage._normalize_content(mention)
+
+        self.assertIsNone(mention.title)
+
+    def test_real_content_not_modified(self):
+        """Actual content should be left as-is."""
+        from webmentions import Webmention, WebmentionDirection
+
+        mention = Webmention(
+            source="https://example.com/a",
+            target="https://example.com/b",
+            direction=WebmentionDirection.IN,
+            content="<p>Hello world</p>",
+            excerpt="Hello world",
+            title="My Post",
+        )
+
+        FileWebmentionsStorage._normalize_content(mention)
+
+        self.assertEqual(mention.content, "<p>Hello world</p>")
+        self.assertEqual(mention.excerpt, "Hello world")
+        self.assertEqual(mention.title, "My Post")
+
+    def test_format_webmention_none_content_not_written(self):
+        """Serializing a webmention with None content must not write 'None'."""
+        from webmentions import Webmention, WebmentionDirection
+
+        mention = Webmention(
+            source="https://example.com/a",
+            target="https://example.com/b",
+            direction=WebmentionDirection.IN,
+            content=None,
+        )
+
+        md = FileWebmentionsStorage._format_webmention_markdown(mention)
+        self.assertNotIn("\nNone\n", md)
+
+
 if __name__ == "__main__":
     unittest.main()

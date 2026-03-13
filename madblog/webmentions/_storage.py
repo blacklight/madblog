@@ -244,6 +244,7 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
 
                 mention = Webmention.build(metadata)
                 self._normalize_author(mention)
+                self._normalize_content(mention)
                 webmentions.append(mention)
             except Exception as e:
                 logger.error("Error parsing Webmention in %s: %s", md_file, e)
@@ -339,7 +340,7 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
 
             md_content += f"[//]: # ({key}: {value})\n"
 
-        md_content += f"\n{mention.content}\n"
+        md_content += f"\n{mention.content or ''}\n"
         return md_content
 
     @staticmethod
@@ -387,6 +388,19 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         safe = re.sub(r"[^\w\s-]", "", text)
         safe = re.sub(r"[-\s]+", "-", safe)
         return safe[:max_length].strip("-")
+
+    @staticmethod
+    def _normalize_content(mention: Webmention) -> None:
+        """
+        Fix legacy data where ``None`` content was serialized as the
+        literal string ``"None"``.
+        """
+        if mention.content == "None":
+            mention.content = None
+        if mention.excerpt == "None":
+            mention.excerpt = None
+        if mention.title == "None":
+            mention.title = None
 
     @staticmethod
     def _normalize_author(mention: Webmention) -> None:
