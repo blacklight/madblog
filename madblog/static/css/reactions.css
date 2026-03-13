@@ -1,0 +1,181 @@
+/* Reactions section — unified styles for Webmentions, AP interactions, and author replies */
+
+.reactions-section {
+  margin-top: 2em;
+  border-top: 3px solid var(--color-border);
+  padding-top: 0.5em;
+}
+
+.reactions-heading {
+  color: var(--color-fg-secondary);
+  font-weight: normal;
+  margin-bottom: 1em;
+}
+
+/* Individual reaction card */
+.reaction {
+  margin-bottom: 0.5em;
+  padding: 1em;
+  border: 1px solid var(--color-border-tertiary);
+  border-radius: 0.6em;
+  background: var(--color-bg-secondary);
+  color: var(--color-fg-primary);
+}
+
+.reaction a, .reaction a:visited {
+  color: var(--color-link-fg);
+}
+
+/* Header: avatar + meta in a row */
+.reaction-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+}
+
+.reaction-avatar {
+  width: 35px;
+  height: 35px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+img.reaction-avatar {
+  margin: 0;
+}
+
+.reaction-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  min-width: 0;
+}
+
+.reaction-author {
+  color: var(--color-fg-secondary);
+  font-weight: 500;
+}
+
+.reaction-author a {
+  color: var(--color-fg-secondary);
+  text-decoration: none;
+  border-bottom: none;
+}
+
+.reaction-author a:hover {
+  text-decoration: underline;
+}
+
+/* "Author" label on author replies */
+.author-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+
+.author-label {
+  font-size: 0.7em;
+  font-weight: 600;
+  color: var(--color-bg-primary);
+  background: var(--color-fg-tertiary);
+  padding: 0.1em 0.45em;
+  border-radius: 0.3em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Type badge (like, boost, quote, etc.) */
+.reaction-type-badge {
+  font-size: 0.7em;
+  font-weight: 600;
+  color: var(--color-fg-tertiary);
+  background: var(--color-bg-tertiary);
+  padding: 0.15em 0.5em;
+  border-radius: 0.3em;
+  text-transform: capitalize;
+}
+
+/* Reply-to arrow */
+.reaction-reply-to {
+  font-size: 0.85em;
+  color: var(--color-fg-tertiary);
+  text-decoration: none;
+  border-bottom: none;
+}
+
+.reaction-reply-to:hover {
+  color: var(--color-fg-secondary);
+}
+
+/* Date */
+.reaction-date {
+  font-size: 0.7em;
+  color: var(--color-fg-tertiary);
+  white-space: nowrap;
+}
+
+/* Title (for webmentions with a title) */
+.reaction-title {
+  margin-top: 0.5em;
+  font-size: 1.05em;
+}
+
+.reaction-title a {
+  color: var(--color-fg-primary);
+}
+
+/* Content body */
+.reaction-content {
+  margin-top: 0.5em;
+  line-height: 1.45em;
+}
+
+.reaction-content img,
+.reaction-content video,
+.reaction-content audio {
+  max-height: 75vh;
+  max-width: 100%;
+}
+
+/* Footer: source link + permalink */
+.reaction-footer {
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  margin-top: 0.5em;
+}
+
+.reaction-source {
+  font-size: 0.7em;
+  color: var(--color-fg-tertiary);
+  text-decoration: none;
+  border-bottom: none;
+}
+
+.reaction-source:hover {
+  text-decoration: underline;
+}
+
+.reaction-permalink {
+  font-size: 0.7em;
+  text-decoration: none;
+  border-bottom: none;
+  opacity: 0.5;
+}
+
+.reaction-permalink:hover {
+  opacity: 1;
+}
+
+/* Thread indentation — the inline style handles the actual margin,
+   but we can add subtle visual cues for nested replies */
+.reaction-thread {
+  margin-bottom: 0.25em;
+}
+
+.reaction-thread.depth-0 {
+  margin-bottom: 0.5em;
+}
