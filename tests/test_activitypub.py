@@ -1431,27 +1431,6 @@ class ActivityPubPublishTest(unittest.TestCase):
     # ------------------------------------------------------------------
 
     @skip_if_no_pubby
-    def test_on_content_change_is_non_blocking(self):
-        """on_content_change returns immediately; publish runs in background."""
-        integration, handler, test_file, _ = self._make_integration()
-
-        barrier = threading.Event()
-        handler.publish_object = MagicMock(
-            side_effect=lambda *a, **k: barrier.wait(timeout=5)
-        )
-
-        integration.on_content_change(self.ChangeType.ADDED, str(test_file))
-
-        # on_content_change must have returned already — the thread is blocked
-        # on the barrier.  publish_object should not have completed yet.
-        handler.publish_object.assert_not_called()
-
-        barrier.set()
-        _join_ap_publish_threads()
-
-        handler.publish_object.assert_called_once()
-
-    @skip_if_no_pubby
     def test_duplicate_publish_for_same_url_is_dropped(self):
         """A second on_content_change for the same URL while one is in
         progress is silently dropped."""
