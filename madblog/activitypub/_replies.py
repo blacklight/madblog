@@ -173,11 +173,15 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
 
     def _handle_reply_publish(self, filepath: str, url: str, actor_url: str) -> None:
         """Build and publish a Create or Update activity for a reply."""
+        # Compute the public URL using the content domain, not the AP domain
+        rel = os.path.relpath(filepath, self.replies_dir).rsplit(".", 1)[0]
+        public_url = f"{self.content_base_url}/reply/{rel}"
+
         self._build_and_publish(
             filepath,
             url,
             lambda: self.build_reply_object(
-                filepath, url, actor_url, public_url=url, allow_network=True
+                filepath, url, actor_url, public_url=public_url, allow_network=True
             ),
             label="reply",
         )
