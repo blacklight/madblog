@@ -40,6 +40,7 @@ Top-level Python modules:
 | `state` | State directory management and migrations |
 | `sync` | Background sync tasks |
 | `tags` | Tags subsystem |
+| `threading` | Reaction thread tree builder (combines Webmentions, AP interactions, author replies) |
 | `uwsgi.py` | uWSGI entry point |
 | `webmentions` | Webmentions subsystem |
 | `__main__.py` | CLI entry point |
@@ -296,9 +297,9 @@ mentions from Webmentions and ActivityPub into a single "guest registry" view.
 
 - `madblog/routes.py` (`/guestbook`)
   - Returns 404 if `config.enable_guestbook` is false.
-  - Calls `app.get_rendered_guestbook_webmentions()` and
-    `app.get_rendered_guestbook_ap_interactions()`.
-  - Renders `guestbook.html` template with rendered HTML sections.
+  - Retrieves raw Webmentions and AP interactions, builds a threaded
+    reactions tree via `build_thread_tree()`, computes reaction counts,
+    and renders `guestbook.html` with the tree.
   - Sets `Cache-Control: no-store` to ensure fresh data.
 
 ### Frontend
@@ -306,10 +307,9 @@ mentions from Webmentions and ActivityPub into a single "guest registry" view.
 - `madblog/templates/guestbook.html`
   - Displays title, description with interaction instructions (Webmention and/or
     Fediverse mention links depending on enabled features).
-  - Two `<section>` elements: one for webmentions, one for ActivityPub
-    interactions.
+  - Includes the unified `reactions.html` template to render the threaded
+    reactions tree.
   - Empty state message when no entries exist.
-  - Inline CSS for section styling.
 
 - `madblog/templates/common-head.html`
   - Conditionally renders a "Guestbook" navigation link when
@@ -320,6 +320,127 @@ mentions from Webmentions and ActivityPub into a single "guest registry" view.
 - `config.enable_guestbook` (default: `true`)
   - Config file: `enable_guestbook: true|false`
   - Environment variable: `MADBLOG_ENABLE_GUESTBOOK=1|0`
+
+## Author Replies subsystem
+
+Author replies allow the blog owner to respond to incoming reactions
+(Webmentions, ActivityPub interactions, or other replies) as plain
+Markdown files. Replies are threaded inline on article pages and
+federated via ActivityPub.
+
+### Storage layout
+
+Reply files live under `<content_dir>/replies/`, organized by article
+slug:
+
+```
+<content_dir>/replies/<article-slug>/<reply-slug>.md
+```
+
+The special slug `_guestbook` holds replies to guestbook entries.
+Replies are excluded from the home page listing by an explicit guard in
+`BlogApp._get_pages_from_files()`.
+
+### Metadata and `reply-to` derivation
+
+Each reply file uses the same `[//]: # (key: value)` metadata format as
+articles. The `reply-to` key specifies the URL of the reaction being
+replied to (a Webmention source, an AP interaction `object_id`, or
+another reply's permalink).
+
+When `reply-to` is omitted, `ActivityPubRepliesMixin._parse_reply_metadata()`
+derives it from the directory structure:
+`replies/<article-slug>/…` → `{base_url}/article/<article-slug>`.
+
+### Threading model (`madblog/threading.py`)
+
+`build_thread_tree()` combines raw Webmentions, AP interactions, and
+author reply dicts into a single tree of `ThreadNode` objects:
+
+1. Each reaction/reply is assigned a **unique identity**:
+   - Webmentions: `source` URL
+   - AP interactions: `object_id` (fallback: `activity_id`)
+   - Author replies: `full_url` (`config.link + permalink`)
+
+2. Each node's `reply_to` is resolved:
+   - Webmentions: `None` (top-level for now)
+   - AP interactions (reply/quote type): `target_resource`
+   - Author replies: `reply-to` metadata value
+
+3. Nodes are linked: if `reply_to` matches another node's identity, the
+   node becomes a child; otherwise it is a root.
+
+4. Roots are sorted by published date descending; children ascending.
+
+### Dual-domain alias mechanism
+
+When `activitypub_link` differs from `link`, author reply URLs have two
+origins: `config.link + permalink` (public/blog domain) and
+`ap_integration.base_url + permalink` (AP domain). AP interactions
+arriving from the Fediverse use `target_resource` set from the AP
+domain, which would not match the blog-domain identity.
+
+To bridge this, `_get_page_interactions()` annotates each author reply
+with an `ap_full_url` key when the two domains differ. `build_thread_tree()`
+registers author reply nodes under **both** the primary identity and the
+AP alias, so AP interactions can find their parent regardless of which
+domain they target. A deduplication guard (`seen` set on object `id()`)
+prevents alias entries from creating duplicate roots during tree
+construction.
+
+### Interaction loading
+
+`BlogApp._get_page_interactions()` fetches AP interactions for an
+article by querying `storage.get_interactions(target_resource=...)`:
+
+1. The article's own AP URL (from `ap_integration.file_to_url()`).
+2. Each author reply's AP URL (via `extra_target_urls`), so that
+   Fediverse replies to author replies are included in the tree.
+
+pubby's `FileActivityPubStorage` stores interactions in directories
+named after a sanitized + SHA-256-hashed `target_resource`, so the
+lookup URL must match the stored `target_resource` exactly.
+
+### Federation (`madblog/activitypub/_replies.py`)
+
+`ActivityPubRepliesMixin` handles publishing replies as AP `Note`
+objects:
+
+- `build_reply_object()`: builds a `Note` with `in_reply_to` set from
+  the `reply-to` metadata. The `cc` list includes the original author's
+  actor ID (resolved via `get_interaction_by_object_id()`) so the reply
+  threads correctly on their instance.
+- `on_reply_change()`: callback for the `replies_monitor`
+  `ContentMonitor`. Dispatches Create/Update/Delete activities.
+- `sync_replies_on_startup()`: walks `replies_dir` and publishes any
+  new or modified replies missed while the server was down.
+
+A second `ContentMonitor` instance (`replies_monitor`) watches
+`replies_dir` independently from the main `content_monitor` that watches
+`pages_dir`.
+
+### Rendering
+
+The unified `reactions.html` template renders the thread tree
+recursively using Jinja2 macros. It handles all three node types
+(Webmention, AP interaction, author reply) and supports arbitrary
+nesting depth with CSS-based indentation (capped at depth 5).
+
+### Routes
+
+- `GET /reply/<article-slug>/<reply-slug>` → rendered reply page
+- `GET /reply/<article-slug>/<reply-slug>.md` → raw Markdown source
+
+### Key files
+
+| File | Role |
+|---|---|
+| `madblog/app.py` | `_get_article_replies()`, `_get_page_interactions()`, `get_reply()`, `replies_dir`, `replies_monitor` |
+| `madblog/threading.py` | `build_thread_tree()`, `ThreadNode`, `ReactionType`, AP alias handling |
+| `madblog/activitypub/_replies.py` | `ActivityPubRepliesMixin`: AP Note publishing, reply-to derivation, startup sync |
+| `madblog/routes.py` | `/reply/…` routes |
+| `madblog/templates/reply.html` | Reply page template |
+| `madblog/templates/reactions.html` | Unified threaded reactions template |
 
 ## Shared infrastructure
 
@@ -395,8 +516,9 @@ Key architectural choice:
 3. `MarkdownMixin` parses metadata and resolves the markdown file.
 4. `CacheMixin` checks `If-Modified-Since` / `If-None-Match`.
 5. Markdown content is rendered to HTML via `markdown.render_html()`.
-6. Webmentions + ActivityPub interactions are retrieved and rendered and passed
-   into templates.
+6. Webmentions, ActivityPub interactions, and author replies are collected,
+   combined into a threaded tree via `build_thread_tree()`, and passed into
+   templates.
 7. Response headers are set:
    - `Last-Modified`, `ETag`, `Cache-Control`
    - `Link: <...>; rel="webmention"` (if enabled)

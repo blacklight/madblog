@@ -45,6 +45,13 @@
   - [Tags](#tags)
   - [Raw Markdown](#raw-markdown)
   - [Folders](#folders)
+- [Author Replies](#author-replies)
+  - [Directory layout](#directory-layout)
+  - [Reply metadata](#reply-metadata)
+  - [Types of replies](#types-of-replies)
+  - [How threading works](#how-threading-works)
+  - [Federation](#federation)
+  - [Routes](#routes)
 - [Images](#images)
 - [LaTeX support](#latex-support)
 - [Mermaid diagrams](#mermaid-diagrams)
@@ -646,6 +653,125 @@ https://myblog.example.com/article/my-post.md
 
 You can organize Markdown files in folders. If multiple folders are present, pages on the home will be grouped by
 folders.
+
+## Author Replies
+
+Madblog supports **author replies** — Markdown files that let the blog
+author respond to incoming reactions (Webmentions, ActivityPub
+interactions, or other author replies). Replies are stored as plain
+Markdown files alongside your content and are federated via ActivityPub
+as threaded `Note` objects.
+
+### Directory layout
+
+Replies live under `<content_dir>/replies/`, organized by article slug:
+
+```
+<content_dir>/
+  replies/
+    my-post/
+      thanks-alice.md
+      follow-up.md
+    _guestbook/
+      welcome-bob.md
+```
+
+- Each subdirectory name matches the slug of the parent article.
+- The special `_guestbook` slug is used for replies to guestbook entries.
+
+### Reply metadata
+
+Reply files use the same `[//]: #` metadata format as articles:
+
+```markdown
+[//]: # (reply-to: https://mastodon.social/users/alice/statuses/123)
+
+Thanks for the kind words, Alice!
+```
+
+Supported metadata keys:
+
+| Key | Required | Description |
+|-----|----------|-------------|
+| `reply-to` | No | URL of the reaction being replied to (Webmention source, AP `object_id`, or another reply's permalink). If omitted, derived automatically from the directory structure as a reply to the parent article. |
+| `published` | No | Publication date. Inferred from file creation time if absent. |
+| `title` | No | Optional title for the reply. |
+| `author` | No | Overrides the global `author` setting. |
+| `author_url` | No | Overrides the global `author_url` setting. |
+| `author_photo` | No | Overrides the global `author_photo` setting. |
+| `language` | No | Overrides the global `language` setting. |
+
+
+### Types of replies
+
+Text files under `<content_dir>/replies/` are treated as author replies and they
+will not be rendered on the blog index. Mentions also work, and the rendering
+and processing pipeline is the same as for articles.
+
+Madblog supports four types of author replies:
+
+- **Generic replies/posts**: Place the Markdown under `<content_dir>/replies/`
+  directly. No `reply-to` metadata means that the post will be rendered on
+  ActivityPub as a separate post.
+
+- **Replies to someone else's posts**: Place the Markdown under
+  `<content_dir>/replies/`, and add a `reply-to` metadata header pointing to
+  the ActivityPub link or Webmention-compatible URL of the resource you're
+  replying to. These posts will be rendered as threaded replies on ActivityPub
+  clients.
+
+- **Replies to your own articles**: Place the Markdown under `
+  <content_dir>/replies/<post-slug>`, where `<post-slug>` is the slug of the
+  post you're replying to (i.e. the name of your file without the `.md`
+  extension). If the Markdown is in a nested folder then you'll have to specify
+  its relative path too here. These posts will be rendered as author replies on
+  your blog article. Note that it's also possible to add replies by placing the
+  text files under `<content_dir>/replies` directly, and using `reply-to`
+  metadata to point to the permalink of the article you're replying to, but
+  it's advised to use the slug hierarchy instead to make lookup faster.
+
+- **Replies to replies to your articles**: Place the Markdown under
+  `<content_dir>/replies/<post-slug>`, where `<post-slug>` is the slug of the
+  post you're replying to (i.e. the name of your file without the `.md`
+  extension). If the Markdown is in a nested folder then you'll have to specify
+  its relative path too here. These posts will be rendered as author replies on
+  your blog article, under the same parent comment as the original reply.
+
+### How threading works
+
+Replies appear inline on the article page, threaded under the reaction
+they respond to:
+
+1. The `reply-to` URL is matched against known reaction identities
+   (Webmention source URLs, AP interaction `object_id`s, or other reply
+   permalinks).
+2. If a match is found, the reply is nested under that reaction.
+3. If `reply-to` is omitted or points to the article URL, the reply
+   appears as a top-level entry.
+4. Arbitrary nesting depth is supported (replies to replies).
+
+### Federation
+
+When ActivityPub is enabled, author replies are automatically published
+to the Fediverse as `Note` objects with `inReplyTo` set:
+
+- **Create:** saving a new `.md` file under `replies/` triggers a
+  `Create` activity.
+- **Update:** editing an existing reply triggers an `Update` activity.
+- **Delete:** removing the file triggers a `Delete` activity.
+- **CC targeting:** when replying to an AP interaction, the original
+  author's actor is automatically added to the `cc` list so the reply
+  appears as a threaded response on their instance.
+
+Outgoing Webmentions are also sent for any links contained in the reply
+body when Webmentions are enabled.
+
+### Routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/reply/<article-slug>/<reply-slug>` | Rendered reply page |
+| `GET` | `/reply/<article-slug>/<reply-slug>.md` | Raw Markdown source |
 
 ## Images
 
