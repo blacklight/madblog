@@ -348,12 +348,15 @@ class ReplyMetadataParsingTest(unittest.TestCase):
         self.assertEqual(metadata["title"], "Test Reply Title")
 
     def test_reply_published_date(self):
-        """The published date is parsed from metadata."""
+        """The published datetime is parsed from metadata."""
         import datetime
 
         with self.app.app_context():
             metadata = self.app._parse_reply_metadata("my-post", "test-reply")
-        self.assertEqual(metadata["published"], datetime.date(2025, 7, 10))
+        self.assertEqual(
+            metadata["published"],
+            datetime.datetime(2025, 7, 10, tzinfo=datetime.timezone.utc),
+        )
 
 
 class ReplyTitleInferenceTest(unittest.TestCase):

@@ -49,9 +49,10 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 continue
 
             if m.group(1) == "published":
-                metadata[m.group(1)] = datetime.datetime.fromisoformat(
-                    m.group(2)
-                ).date()
+                parsed_dt = datetime.datetime.fromisoformat(m.group(2))
+                if parsed_dt.tzinfo is None:
+                    parsed_dt = parsed_dt.replace(tzinfo=datetime.timezone.utc)
+                metadata[m.group(1)] = parsed_dt
             else:
                 metadata[m.group(1)] = m.group(2)
 
@@ -133,7 +134,9 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
             )
 
         if not metadata.get("published"):
-            metadata["published"] = datetime.date.fromtimestamp(file_stat.st_ctime)
+            metadata["published"] = datetime.datetime.fromtimestamp(
+                file_stat.st_ctime, tz=datetime.timezone.utc
+            )
             metadata["published_inferred"] = True
 
         return metadata
