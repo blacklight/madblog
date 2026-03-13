@@ -218,8 +218,9 @@
 }
 
 .reaction-source-type {
-  font-size: 0.6em;
+  font-size: 0.65em;
   color: var(--color-fg-tertiary);
+  margin-top: 0.1em;
 }
 
 .reaction-source {
