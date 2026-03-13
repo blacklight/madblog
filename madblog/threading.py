@@ -70,12 +70,24 @@ def _get_ap_interaction_reply_to(interaction) -> Optional[str]:
     """
     Extract what an AP interaction is replying to.
 
-    If the interaction itself is a reply to another post (not the article),
-    return that URL.
+    For reply and quote interactions the ``target_resource`` field holds the
+    URL of the object being replied to (set from ``inReplyTo`` by the inbox
+    handler).  For other interaction types (like, boost, mention) we return
+    ``None`` so they are treated as top-level reactions.
     """
-    in_reply_to = getattr(interaction, "in_reply_to", None)
-    if in_reply_to:
-        return in_reply_to
+    interaction_type = getattr(interaction, "interaction_type", None)
+    type_val = None
+
+    if interaction_type:
+        type_val = (
+            interaction_type.value
+            if hasattr(interaction_type, "value")
+            else str(interaction_type) if interaction_type else ""
+        )
+
+    if type_val in ("reply", "quote"):
+        return getattr(interaction, "target_resource", None) or None
+
     return None
 
 
@@ -164,7 +176,7 @@ def build_thread_tree(
 
         published = _to_datetime(reply.get("published"))
 
-        nodes[identity] = ThreadNode(
+        node = nodes[identity] = ThreadNode(
             item=reply,
             reaction_type=ReactionType.AUTHOR_REPLY,
             identity=identity,
@@ -172,10 +184,25 @@ def build_thread_tree(
             published=published,
         )
 
-    # Build the tree by linking children to parents
+        # When activitypub_link differs from link the AP target URL uses a
+        # different origin; register the node under that alias too so that
+        # AP interactions can find their parent.
+        ap_alias = reply.get("ap_full_url")
+        if ap_alias and ap_alias != identity:
+            nodes[ap_alias] = node
+
+    # Build the tree by linking children to parents.
+    # Deduplicate: aliases point to the same ThreadNode object so we must
+    # process each node only once.
     roots: List[ThreadNode] = []
+    seen: set[int] = set()
 
     for node in nodes.values():
+        node_id = id(node)
+        if node_id in seen:
+            continue
+        seen.add(node_id)
+
         parent_id = node.reply_to
 
         # If reply_to is the article URL, treat as a root

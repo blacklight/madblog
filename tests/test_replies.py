@@ -431,6 +431,158 @@ class ThreadingModelTest(unittest.TestCase):
         self.assertEqual(len(tree[0].children), 1)
         self.assertEqual(tree[0].children[0].item["slug"], "reply-2")
 
+    def test_ap_reply_threads_under_parent(self):
+        """An AP reply targeting an author reply nests under it."""
+        from unittest.mock import MagicMock
+        from madblog.threading import build_thread_tree, ReactionType
+
+        author_reply = {
+            "slug": "thanks",
+            "title": "Thanks",
+            "reply_to": "https://mastodon.social/users/alice/statuses/100",
+            "published": "2026-01-02T00:00:00+00:00",
+            "content_html": "<p>Thanks for the comment!</p>",
+            "permalink": "/reply/post/thanks",
+            "full_url": "https://example.com/reply/post/thanks",
+        }
+
+        # Top-level AP reply to the article
+        ap_top = MagicMock()
+        ap_top.object_id = "https://mastodon.social/users/alice/statuses/100"
+        ap_top.activity_id = "https://mastodon.social/users/alice/statuses/100/activity"
+        ap_top.interaction_type = MagicMock(value="reply")
+        ap_top.target_resource = "https://example.com/article/post"
+        ap_top.published = None
+        ap_top.created_at = None
+
+        # Nested AP reply targeting the author reply
+        ap_nested = MagicMock()
+        ap_nested.object_id = "https://mastodon.social/users/alice/statuses/200"
+        ap_nested.activity_id = (
+            "https://mastodon.social/users/alice/statuses/200/activity"
+        )
+        ap_nested.interaction_type = MagicMock(value="reply")
+        ap_nested.target_resource = "https://example.com/reply/post/thanks"
+        ap_nested.published = None
+        ap_nested.created_at = None
+
+        tree = build_thread_tree(
+            webmentions=[],
+            ap_interactions=[ap_top, ap_nested],
+            author_replies=[author_reply],
+            article_url="https://example.com/article/post",
+        )
+
+        # Only the top-level AP reply should be a root
+        self.assertEqual(len(tree), 1)
+        self.assertEqual(tree[0].reaction_type, ReactionType.AP_INTERACTION)
+        self.assertEqual(
+            tree[0].identity,
+            "https://mastodon.social/users/alice/statuses/100",
+        )
+
+        # Author reply is child of top-level AP reply
+        self.assertEqual(len(tree[0].children), 1)
+        self.assertEqual(tree[0].children[0].reaction_type, ReactionType.AUTHOR_REPLY)
+
+        # Nested AP reply is grandchild (child of author reply)
+        self.assertEqual(len(tree[0].children[0].children), 1)
+        self.assertEqual(
+            tree[0].children[0].children[0].reaction_type,
+            ReactionType.AP_INTERACTION,
+        )
+        self.assertEqual(
+            tree[0].children[0].children[0].identity,
+            "https://mastodon.social/users/alice/statuses/200",
+        )
+
+    def test_ap_reply_threads_via_ap_alias(self):
+        """AP reply threads under author reply when AP domain differs from blog domain."""
+        from unittest.mock import MagicMock
+        from madblog.threading import build_thread_tree, ReactionType
+
+        # config.link = https://blog.example.com
+        # config.activitypub_link = https://ap.example.com
+        author_reply = {
+            "slug": "thanks",
+            "title": "Thanks",
+            "reply_to": "https://mastodon.social/users/alice/statuses/100",
+            "published": "2026-01-02T00:00:00+00:00",
+            "content_html": "<p>Thanks!</p>",
+            "permalink": "/reply/post/thanks",
+            "full_url": "https://blog.example.com/reply/post/thanks",
+            "ap_full_url": "https://ap.example.com/reply/post/thanks",
+        }
+
+        ap_top = MagicMock()
+        ap_top.object_id = "https://mastodon.social/users/alice/statuses/100"
+        ap_top.activity_id = "https://mastodon.social/users/alice/statuses/100/activity"
+        ap_top.interaction_type = MagicMock(value="reply")
+        ap_top.target_resource = "https://blog.example.com/article/post"
+        ap_top.published = None
+        ap_top.created_at = None
+
+        # Nested reply targets the AP-domain URL, not the blog-domain URL
+        ap_nested = MagicMock()
+        ap_nested.object_id = "https://mastodon.social/users/alice/statuses/200"
+        ap_nested.activity_id = (
+            "https://mastodon.social/users/alice/statuses/200/activity"
+        )
+        ap_nested.interaction_type = MagicMock(value="reply")
+        ap_nested.target_resource = "https://ap.example.com/reply/post/thanks"
+        ap_nested.published = None
+        ap_nested.created_at = None
+
+        tree = build_thread_tree(
+            webmentions=[],
+            ap_interactions=[ap_top, ap_nested],
+            author_replies=[author_reply],
+            article_url="https://blog.example.com/article/post",
+        )
+
+        # Only the top-level AP reply should be a root
+        self.assertEqual(len(tree), 1)
+
+        # Author reply is child of top-level AP reply
+        self.assertEqual(len(tree[0].children), 1)
+        self.assertEqual(tree[0].children[0].reaction_type, ReactionType.AUTHOR_REPLY)
+        # Identity uses the blog domain (full_url), not the AP domain
+        self.assertEqual(
+            tree[0].children[0].identity,
+            "https://blog.example.com/reply/post/thanks",
+        )
+
+        # Nested AP reply found via AP alias → grandchild
+        self.assertEqual(len(tree[0].children[0].children), 1)
+        self.assertEqual(
+            tree[0].children[0].children[0].identity,
+            "https://mastodon.social/users/alice/statuses/200",
+        )
+
+    def test_ap_like_stays_root(self):
+        """A like interaction should remain at root level, not thread."""
+        from unittest.mock import MagicMock
+        from madblog.threading import build_thread_tree, ReactionType
+
+        ap_like = MagicMock()
+        ap_like.object_id = "https://mastodon.social/users/bob/statuses/300"
+        ap_like.activity_id = "https://mastodon.social/users/bob/statuses/300/activity"
+        ap_like.interaction_type = MagicMock(value="like")
+        ap_like.target_resource = "https://example.com/article/post"
+        ap_like.published = None
+        ap_like.created_at = None
+
+        tree = build_thread_tree(
+            webmentions=[],
+            ap_interactions=[ap_like],
+            author_replies=[],
+            article_url="https://example.com/article/post",
+        )
+
+        self.assertEqual(len(tree), 1)
+        self.assertEqual(tree[0].reaction_type, ReactionType.AP_INTERACTION)
+        self.assertEqual(tree[0].children, [])
+
     def test_reaction_anchor_id_stable(self):
         """Anchor IDs are stable and deterministic."""
         from madblog.threading import reaction_anchor_id

@@ -187,13 +187,19 @@ class BlogApp(  # pylint: disable=too-many-ancestors
 
         # Also fetch AP interactions targeting author reply URLs so that
         # fediverse replies to author replies appear in the thread.
+        # When activitypub_link differs from link the AP target URL and the
+        # public full_url use different origins; annotate each reply with
+        # the AP variant so the thread tree can register both as aliases.
         reply_ap_urls = []
         ap_integration = getattr(self, "_ap_integration", None)
         if ap_integration:
             for reply in author_replies:
                 permalink = reply.get("permalink", "")
                 if permalink:
-                    reply_ap_urls.append(ap_integration.base_url + permalink)
+                    ap_url = ap_integration.base_url + permalink
+                    reply_ap_urls.append(ap_url)
+                    if ap_url != reply.get("full_url"):
+                        reply["ap_full_url"] = ap_url
 
         ap_interactions = self._get_ap_interactions(
             md_file, extra_target_urls=reply_ap_urls
