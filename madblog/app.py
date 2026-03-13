@@ -22,7 +22,7 @@ from .cache import CachedPage, check_cache_validity, generate_etag, get_max_mtim
 from .config import config
 from .feeds import FeedsMixin
 from .guestbook import GuestbookMixin
-from .markdown import MarkdownMixin
+from .markdown import MarkdownMixin, resolve_relative_urls
 from .monitor import ChangeType, ContentMonitor
 from .tags import TagIndex
 from .threading import build_thread_tree
@@ -453,7 +453,9 @@ class BlogApp(  # pylint: disable=too-many-ancestors
                     "title": metadata.get("title", reply_slug),
                     "reply_to": metadata.get("reply-to", ""),
                     "published": metadata.get("published"),
-                    "content_html": render_html(content),
+                    "content_html": render_html(
+                        resolve_relative_urls(content, config.link)
+                    ),
                     "permalink": permalink,
                     "full_url": config.link + permalink,
                     **author_info,
@@ -497,7 +499,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
                 description=metadata.get("description"),
                 published_datetime=metadata.get("published"),
                 published=metadata["published"].strftime("%b %d, %Y"),
-                content=render_html(content),
+                content=render_html(resolve_relative_urls(content, config.link)),
                 reply_to=reply_to,
                 article_slug=article_slug,
                 **author_info,

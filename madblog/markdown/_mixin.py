@@ -15,7 +15,7 @@ from madblog.tags import parse_metadata_tags
 from madblog.templates import TemplateUtils
 from madblog.threading import count_reactions
 
-from ._render import render_html
+from ._render import render_html, resolve_relative_urls
 
 logger = getLogger(__name__)
 
@@ -240,7 +240,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 description=metadata.get("description"),
                 published_datetime=metadata.get("published"),
                 published=metadata["published"].strftime("%b %d, %Y"),
-                content=render_html(content),
+                content=render_html(resolve_relative_urls(content, config.link)),
                 tags=tags,
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
