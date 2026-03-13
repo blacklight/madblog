@@ -80,16 +80,23 @@ def _get_ap_interaction_reply_to(interaction) -> Optional[str]:
 
 
 def _to_datetime(dt: Any) -> Optional[datetime.datetime]:
-    """Convert a date/datetime/string to datetime for sorting."""
+    """Convert a date/datetime/string to a timezone-aware datetime for sorting."""
     if dt is None:
         return None
     if isinstance(dt, datetime.datetime):
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=datetime.timezone.utc)
         return dt
     if isinstance(dt, datetime.date):
-        return datetime.datetime.combine(dt, datetime.time.min)
+        return datetime.datetime.combine(
+            dt, datetime.time.min, tzinfo=datetime.timezone.utc
+        )
     if isinstance(dt, str):
         try:
-            return datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
+            parsed = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=datetime.timezone.utc)
+            return parsed
         except ValueError:
             return None
     return None
@@ -182,10 +189,11 @@ def build_thread_tree(
             roots.append(node)
 
     # Sort roots by published DESC (newest first)
-    roots.sort(key=lambda n: n.published or datetime.datetime.min, reverse=True)
+    _EPOCH = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+    roots.sort(key=lambda n: n.published or _EPOCH, reverse=True)
 
     # Sort children by published ASC (oldest first, for natural conversation flow)
     for node in nodes.values():
-        node.children.sort(key=lambda n: n.published or datetime.datetime.min)
+        node.children.sort(key=lambda n: n.published or _EPOCH)
 
     return roots
