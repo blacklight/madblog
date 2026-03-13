@@ -1,5 +1,8 @@
 import email.utils
 import hashlib
+import os
+from pathlib import Path
+from typing import Union
 
 from flask import Response, has_request_context, make_response, request
 
@@ -18,7 +21,126 @@ def generate_etag(mtime: float) -> str:
     return f'"{etag_hash}"'
 
 
-@staticmethod
+def get_dir_mtime(path: Union[str, Path]) -> float:
+    """
+    Get the modification time of a directory.
+
+    Returns the directory's own mtime, which is updated when files are
+    added, removed, or renamed within it. This is efficient because it
+    doesn't scan all files.
+
+    :param path: Path to the directory
+    :return: Modification timestamp, or 0 if the directory doesn't exist
+    """
+    try:
+        return os.stat(path).st_mtime
+    except (OSError, TypeError):
+        return 0.0
+
+
+def get_max_mtime(*paths: Union[str, Path, None]) -> float:
+    """
+    Get the maximum modification time from multiple paths.
+
+    For directories, uses the directory's own mtime (efficient).
+    For files, uses the file's mtime.
+
+    :param paths: Paths to files or directories (None values are ignored)
+    :return: Maximum modification timestamp found, or 0 if none exist
+    """
+    max_mtime = 0.0
+    for path in paths:
+        if path is None:
+            continue
+        try:
+            mtime = os.stat(path).st_mtime
+            if mtime > max_mtime:
+                max_mtime = mtime
+        except (OSError, TypeError):
+            pass
+    return max_mtime
+
+
+def get_interactions_mtime(
+    *,
+    article_slug: str,
+    mentions_dir: Union[str, Path, None] = None,
+    ap_interactions_dir: Union[str, Path, None] = None,
+    replies_dir: Union[str, Path, None] = None,
+) -> float:
+    """
+    Get the most recent modification time for all interactions related to an article.
+
+    Checks:
+    - Webmentions directory: <mentions_dir>/incoming/<slug>/
+    - ActivityPub interactions directory: <ap_interactions_dir>/
+    - Author replies directory: <replies_dir>/<slug>/
+
+    :param article_slug: The article slug (e.g., "my-article" or "subdir/my-article")
+    :param mentions_dir: Base directory for webmentions storage
+    :param ap_interactions_dir: Directory for ActivityPub interactions
+    :param replies_dir: Base directory for author replies
+    :return: Maximum modification timestamp found, or 0 if none exist
+    """
+    paths_to_check = []
+
+    # Webmentions: <mentions_dir>/incoming/<slug>/
+    if mentions_dir:
+        # For paths like "subdir/my-article", use just the basename for mentions
+        slug_basename = os.path.basename(article_slug)
+        wm_path = Path(mentions_dir) / "incoming" / slug_basename
+        paths_to_check.append(wm_path)
+
+    # ActivityPub interactions: check the whole interactions dir
+    # (interactions are stored by target URL hash, not by slug)
+    if ap_interactions_dir:
+        paths_to_check.append(ap_interactions_dir)
+
+    # Author replies: <replies_dir>/<slug>/
+    if replies_dir:
+        replies_path = Path(replies_dir) / article_slug
+        paths_to_check.append(replies_path)
+
+    return get_max_mtime(*paths_to_check)
+
+
+def get_guestbook_mtime(
+    *,
+    mentions_dir: Union[str, Path, None] = None,
+    ap_interactions_dir: Union[str, Path, None] = None,
+    replies_dir: Union[str, Path, None] = None,
+) -> float:
+    """
+    Get the most recent modification time for guestbook interactions.
+
+    Guestbook entries come from:
+    - Webmentions targeting the home page
+    - ActivityPub interactions (mentions/replies not targeting articles)
+    - Author replies in _guestbook/
+
+    :param mentions_dir: Base directory for webmentions storage
+    :param ap_interactions_dir: Directory for ActivityPub interactions
+    :param replies_dir: Base directory for author replies
+    :return: Maximum modification timestamp found, or 0 if none exist
+    """
+    paths_to_check = []
+
+    # Webmentions targeting the home page are stored in incoming/_homepage/
+    # or in the root incoming/ directory
+    if mentions_dir:
+        paths_to_check.append(Path(mentions_dir) / "incoming")
+
+    # ActivityPub interactions directory
+    if ap_interactions_dir:
+        paths_to_check.append(ap_interactions_dir)
+
+    # Author replies to guestbook are in replies/_guestbook/
+    if replies_dir:
+        paths_to_check.append(Path(replies_dir) / "_guestbook")
+
+    return get_max_mtime(*paths_to_check)
+
+
 def check_cache_validity(file_mtime: float, etag: str) -> bool:
     """
     Check if the client's cached version is still valid.

@@ -378,13 +378,23 @@ class TagRoutesTest(unittest.TestCase):
         html = rsp.data.decode("utf-8")
         self.assertIn("No posts found", html)
 
-    def test_tags_route_no_cache(self):
+    def test_tags_route_cache_headers(self):
         rsp = self.client.get("/tags")
-        self.assertEqual(rsp.headers.get("Cache-Control"), "no-store")
+        # Tags now use proper caching with must-revalidate
+        self.assertEqual(
+            rsp.headers.get("Cache-Control"), "public, max-age=0, must-revalidate"
+        )
+        self.assertIn("ETag", rsp.headers)
+        self.assertIn("Last-Modified", rsp.headers)
 
-    def test_tag_posts_route_no_cache(self):
+    def test_tag_posts_route_cache_headers(self):
         rsp = self.client.get("/tags/python")
-        self.assertEqual(rsp.headers.get("Cache-Control"), "no-store")
+        # Tags now use proper caching with must-revalidate
+        self.assertEqual(
+            rsp.headers.get("Cache-Control"), "public, max-age=0, must-revalidate"
+        )
+        self.assertIn("ETag", rsp.headers)
+        self.assertIn("Last-Modified", rsp.headers)
 
     def test_semantic_tag_links_in_article_head(self):
         """Test that article pages include semantic link rel="tag" elements."""

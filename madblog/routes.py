@@ -17,7 +17,14 @@ from flask import (
 )
 
 from .app import app
-from .cache import generate_etag
+from .cache import (
+    check_cache_validity,
+    generate_etag,
+    get_dir_mtime,
+    get_guestbook_mtime,
+    get_max_mtime,
+    make_304_response,
+)
 from .config import config
 from .feeds import FeedAuthor
 from .templates import TemplateUtils
@@ -34,6 +41,10 @@ _author_with_url_regex = re.compile(r"(.*)\s+<(https?:\/\/[\w\.\-]+\.[a-z]{2,6}\
 def send_from_directory(
     path: str, file: str, alternative_path: Optional[str] = None, **kwargs
 ):
+    """
+    Like `flask.send_from_directory`, but with an optional `alternative_path`.
+    """
+
     if not os.path.exists(os.path.join(path, file)) and alternative_path:
         path = alternative_path
     return send_from_directory_(path, file, **kwargs)
@@ -433,9 +444,35 @@ def rss_route():
 def tags_route():
     from flask import make_response, render_template
 
+    # Use the tag index file mtime for caching
+    # The tag index is updated whenever posts change
+    tag_index_path = config.resolved_state_dir / "cache" / "tags-index.json"
+    mtime = get_max_mtime(tag_index_path, app.pages_dir)
+
+    # Check cache validity
+    last_modified = None
+    etag = None
+
+    if mtime > 0:
+        last_modified = email.utils.formatdate(mtime, usegmt=True)
+        etag = generate_etag(mtime)
+        if check_cache_validity(mtime, etag):
+            return make_304_response(last_modified, etag, {})
+
     tags = app.tag_index.get_all_tags()
     response = make_response(render_template("tags.html", tags=tags, config=config))
-    response.headers["Cache-Control"] = "no-store"
+
+    # Set cache headers
+    if mtime > 0:
+        response.headers["Last-Modified"] = last_modified
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+    else:
+        response.headers["Cache-Control"] = "no-store"
+
+    if config.language:
+        response.headers["Language"] = config.language
+
     return response
 
 
@@ -444,6 +481,19 @@ def tag_posts_route(tag: str):
     from flask import make_response, render_template
 
     from .tags import normalize_tag as _normalize_tag
+
+    # Use the tag index file mtime for caching
+    tag_index_path = config.resolved_state_dir / "cache" / "tags-index.json"
+    mtime = get_max_mtime(tag_index_path, app.pages_dir)
+
+    # Check cache validity
+    last_modified = None
+    etag = None
+    if mtime > 0:
+        last_modified = email.utils.formatdate(mtime, usegmt=True)
+        etag = generate_etag(mtime)
+        if check_cache_validity(mtime, etag):
+            return make_304_response(last_modified, etag, {})
 
     canonical = _normalize_tag(tag)
     posts = app.tag_index.get_posts_for_tag(canonical)
@@ -455,7 +505,18 @@ def tag_posts_route(tag: str):
             config=config,
         )
     )
-    response.headers["Cache-Control"] = "no-store"
+
+    # Set cache headers
+    if mtime > 0:
+        response.headers["Last-Modified"] = last_modified
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+    else:
+        response.headers["Cache-Control"] = "no-store"
+
+    if config.language:
+        response.headers["Language"] = config.language
+
     return response
 
 
@@ -553,7 +614,7 @@ def mastodon_search_route():
 
         all_tags = app.tag_index.get_all_tags()
         prefix = _normalize_tag(q)
-        for tag_name, _count in all_tags:
+        for tag_name, _ in all_tags:
             if tag_name.startswith(prefix):
                 base_url = (config.link or "").rstrip("/")
                 hashtags.append(
@@ -602,9 +663,31 @@ def guestbook_route():
     if not config.enable_guestbook:
         return Response("Guestbook is not enabled", status=404, mimetype="text/plain")
 
-    webmentions = (
-        app.get_guestbook_webmentions() if config.enable_webmentions else []
+    # Compute mtime from interaction directories
+    mentions_dir = str(app.mentions_dir) if hasattr(app, "mentions_dir") else None
+    ap_interactions_dir = None
+    if hasattr(app, "activitypub_storage"):
+        ap_interactions_dir = str(
+            config.resolved_state_dir / "activitypub" / "state" / "interactions"
+        )
+    replies_dir = str(app.replies_dir) if hasattr(app, "replies_dir") else None
+
+    mtime = get_guestbook_mtime(
+        mentions_dir=mentions_dir,
+        ap_interactions_dir=ap_interactions_dir,
+        replies_dir=replies_dir,
     )
+
+    # Check cache validity
+    last_modified = None
+    etag = None
+    if mtime > 0:
+        last_modified = email.utils.formatdate(mtime, usegmt=True)
+        etag = generate_etag(mtime)
+        if check_cache_validity(mtime, etag):
+            return make_304_response(last_modified, etag, {})
+
+    webmentions = app.get_guestbook_webmentions() if config.enable_webmentions else []
     ap_interactions = (
         app.get_guestbook_ap_interactions() if config.enable_activitypub else []
     )
@@ -627,7 +710,18 @@ def guestbook_route():
             utils=TemplateUtils(),
         )
     )
-    response.headers["Cache-Control"] = "no-store"
+
+    # Set cache headers
+    if mtime > 0:
+        response.headers["Last-Modified"] = last_modified
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+    else:
+        response.headers["Cache-Control"] = "no-store"
+
+    if config.language:
+        response.headers["Language"] = config.language
+
     return response
 
 
@@ -766,6 +860,19 @@ def followers_route():
     if not config.enable_activitypub:
         return Response("ActivityPub is not enabled", status=404, mimetype="text/plain")
 
+    # Compute mtime from followers directory
+    followers_dir = config.resolved_state_dir / "activitypub" / "state" / "followers"
+    mtime = get_dir_mtime(followers_dir)
+
+    # Check cache validity
+    last_modified = None
+    etag = None
+    if mtime > 0:
+        last_modified = email.utils.formatdate(mtime, usegmt=True)
+        etag = generate_etag(mtime)
+        if check_cache_validity(mtime, etag):
+            return make_304_response(last_modified, etag, {})
+
     followers = []
     if hasattr(app, "activitypub_storage"):
         try:
@@ -801,7 +908,18 @@ def followers_route():
             config=config,
         )
     )
-    response.headers["Cache-Control"] = "no-store"
+
+    # Set cache headers
+    if mtime > 0:
+        response.headers["Last-Modified"] = last_modified
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+    else:
+        response.headers["Cache-Control"] = "no-store"
+
+    if config.language:
+        response.headers["Language"] = config.language
+
     return response
 
 

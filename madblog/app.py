@@ -1,5 +1,4 @@
 import datetime
-import email.utils
 import hashlib
 import os
 import contextlib
@@ -19,7 +18,7 @@ from flask import (
 )
 
 from .activitypub import ActivityPubMixin
-from .cache import CachedPage, generate_etag
+from .cache import CachedPage, check_cache_validity, generate_etag, get_max_mtime
 from .config import config
 from .feeds import FeedsMixin
 from .guestbook import GuestbookMixin
@@ -285,8 +284,28 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         metadata = self._parse_page_metadata(page)
         md_file = metadata.pop("md_file")
 
-        # Return 304 if client cache is valid
-        cached_page = CachedPage(md_file, metadata=metadata)
+        # Compute article slug for interaction mtime checks
+        article_slug = self._article_slug_from_metadata(metadata)
+
+        # Get AP interactions directory if available
+        ap_interactions_dir = None
+        if hasattr(self, "activitypub_storage"):
+            ap_interactions_dir = str(
+                config.resolved_state_dir / "activitypub" / "state" / "interactions"
+            )
+
+        # Return 304 if client cache is valid (considering both article and interactions)
+        cached_page = CachedPage(
+            md_file,
+            metadata=metadata,
+            article_slug=article_slug,
+            mentions_dir=(
+                str(self.mentions_dir) if hasattr(self, "mentions_dir") else None
+            ),
+            ap_interactions_dir=ap_interactions_dir,
+            replies_dir=str(self.replies_dir),
+        )
+
         if cached_page.is_client_cache_valid():
             return cached_page.make_304_response()
 
@@ -574,9 +593,6 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         :param template_name: Template name to render
         :param view_mode: View mode for the template
         """
-        # Get the most recent modification time from the pages data
-        most_recent_mtime = 0.0
-
         # Get the pages data first (this includes file_mtime for each local page)
         pages = self.get_pages(
             with_content=with_content,
@@ -586,7 +602,10 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             reverse=reverse,
         )
 
-        # Find the most recent modification time from the pages data
+        # Compute the most recent modification time from pages data and
+        # the pages directory itself (to detect added/removed articles)
+        most_recent_mtime = get_max_mtime(self.pages_dir)
+
         for _, page_data in pages:
             # Only consider local files (those with file_mtime), not external feeds
             if "file_mtime" in page_data:
@@ -603,48 +622,21 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         etag = generate_etag(most_recent_mtime) if most_recent_mtime > 0 else None
 
         # Check if the client has a cached version that's still valid
-        # Check both If-Modified-Since and If-None-Match headers
-        cache_valid = False
+        if (
+            most_recent_mtime > 0
+            and etag
+            and check_cache_validity(most_recent_mtime, etag)
+        ):
+            response = make_response("", 304)
+            if last_modified:
+                response.headers["Last-Modified"] = last_modified
+            response.headers["ETag"] = etag
+            response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
 
-        if last_modified and most_recent_mtime > 0 and has_request_context():
-            if_modified_since = request.headers.get("If-Modified-Since")
-            if_none_match = request.headers.get("If-None-Match")
+            if config.language:
+                response.headers["Language"] = config.language
 
-            # Check If-Modified-Since
-            if if_modified_since and not cache_valid:
-                try:
-                    cached_timestamp = email.utils.mktime_tz(
-                        email.utils.parsedate_tz(if_modified_since)  # type: ignore
-                    )
-                    if (
-                        cached_timestamp is not None
-                        and cached_timestamp >= most_recent_mtime
-                    ):
-                        cache_valid = True
-                except (ValueError, TypeError, OverflowError):
-                    # Invalid If-Modified-Since header, ignore it
-                    pass
-
-            # Check If-None-Match (ETag)
-            if if_none_match and etag and not cache_valid:
-                client_etags = [tag.strip() for tag in if_none_match.split(",")]
-                if etag in client_etags or "*" in client_etags:
-                    cache_valid = True
-
-            # Return 304 if cache is valid
-            if cache_valid:
-                response = make_response("", 304)
-                if last_modified:
-                    response.headers["Last-Modified"] = last_modified
-                if etag:
-                    response.headers["ETag"] = etag
-                response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
-
-                # Add Language header
-                if config.language:
-                    response.headers["Language"] = config.language
-
-                return response
+            return response
 
         with contextlib.ExitStack() as stack:
             if not has_app_context():
