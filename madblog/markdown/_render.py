@@ -1,15 +1,16 @@
 import os
 import re
 from logging import getLogger
+from typing import List, Union
 from urllib.parse import urljoin
 
-from markdown import markdown
+from markdown import Extension, markdown
+
+from madblog.config import config
 
 from ._processors import (
     MarkdownActivityPubMentions,
     MarkdownAutolink,
-    MarkdownLatex,
-    MarkdownMermaid,
     MarkdownTags,
     MarkdownTaskList,
     MarkdownTocMarkers,
@@ -17,22 +18,58 @@ from ._processors import (
 
 logger = getLogger(__name__)
 
+# Cached extensions list (built lazily on first render)
+_md_extensions: List[Union[str, Extension]] | None = None
 
-_md_extensions = [
-    "fenced_code",
-    "codehilite",
-    "tables",
-    "toc",
-    "attr_list",
-    "sane_lists",
-    MarkdownAutolink(),
-    MarkdownTaskList(),
-    MarkdownTocMarkers(),
-    MarkdownLatex(),
-    MarkdownMermaid(),
-    MarkdownTags(),
-    MarkdownActivityPubMentions(),
-]
+
+def _build_extensions() -> List[Union[str, Extension]]:
+    """
+    Build the list of Markdown extensions based on current config.
+
+    LaTeX and Mermaid extensions are only loaded if their respective
+    config flags are enabled, avoiding heavy dependency initialization
+    when not needed.
+    """
+    extensions: List[Union[str, Extension]] = [
+        "fenced_code",
+        "codehilite",
+        "tables",
+        "toc",
+        "attr_list",
+        "sane_lists",
+        MarkdownAutolink(),
+        MarkdownTaskList(),
+        MarkdownTocMarkers(),
+    ]
+
+    if config.enable_latex:
+        from ._processors.latex import MarkdownLatex
+
+        extensions.append(MarkdownLatex())
+        logger.debug("LaTeX extension enabled")
+
+    if config.enable_mermaid:
+        from ._processors.mermaid import MarkdownMermaid
+
+        extensions.append(MarkdownMermaid())
+        logger.debug("Mermaid extension enabled")
+
+    extensions.extend(
+        [
+            MarkdownTags(),
+            MarkdownActivityPubMentions(),
+        ]
+    )
+
+    return extensions
+
+
+def _get_extensions() -> List[Union[str, Extension]]:
+    """Return cached extensions list, building it on first call."""
+    global _md_extensions
+    if _md_extensions is None:
+        _md_extensions = _build_extensions()
+    return _md_extensions
 
 
 def render_html(md_text: str) -> str:
@@ -42,7 +79,7 @@ def render_html(md_text: str) -> str:
     try:
         return markdown(
             md_text,
-            extensions=_md_extensions,
+            extensions=_get_extensions(),
         )
     except Exception as e:
         logger.warning("Markdown → HTML failed: %s", e)

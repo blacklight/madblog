@@ -88,3 +88,105 @@ class MemoryOptimisationTest(unittest.TestCase):
                 pass
 
         self.assertEqual(os.environ.get("MALLOC_ARENA_MAX"), "4")
+
+
+class RenderingFeaturesConfigTest(unittest.TestCase):
+    """Tests for enable_latex / enable_mermaid config flags."""
+
+    def setUp(self):
+        # Reset the cached extensions before each test
+        import madblog.markdown._render as render_module
+
+        render_module._md_extensions = None
+
+    def test_latex_disabled_via_config(self):
+        """When enable_latex=False, LaTeX extension should not be loaded."""
+        from madblog.config import config
+
+        config.enable_latex = False
+        config.enable_mermaid = False
+
+        from madblog.markdown._render import _build_extensions
+
+        extensions = _build_extensions()
+        extension_names = [
+            type(ext).__name__ for ext in extensions if not isinstance(ext, str)
+        ]
+
+        self.assertNotIn("MarkdownLatex", extension_names)
+        self.assertNotIn("MarkdownMermaid", extension_names)
+
+    def test_latex_enabled_via_config(self):
+        """When enable_latex=True, LaTeX extension should be loaded."""
+        from madblog.config import config
+
+        config.enable_latex = True
+        config.enable_mermaid = False
+
+        from madblog.markdown._render import _build_extensions
+
+        extensions = _build_extensions()
+        extension_names = [
+            type(ext).__name__ for ext in extensions if not isinstance(ext, str)
+        ]
+
+        self.assertIn("MarkdownLatex", extension_names)
+        self.assertNotIn("MarkdownMermaid", extension_names)
+
+    def test_mermaid_enabled_via_config(self):
+        """When enable_mermaid=True, Mermaid extension should be loaded."""
+        from madblog.config import config
+
+        config.enable_latex = False
+        config.enable_mermaid = True
+
+        from madblog.markdown._render import _build_extensions
+
+        extensions = _build_extensions()
+        extension_names = [
+            type(ext).__name__ for ext in extensions if not isinstance(ext, str)
+        ]
+
+        self.assertNotIn("MarkdownLatex", extension_names)
+        self.assertIn("MarkdownMermaid", extension_names)
+
+    def test_config_from_yaml(self):
+        """Config flags should be readable from YAML."""
+        import tempfile
+        import yaml
+
+        from madblog.config import _init_config_from_file, config
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump({"enable_latex": False, "enable_mermaid": False}, f)
+            f.flush()
+
+            # Reset config
+            config.enable_latex = True
+            config.enable_mermaid = True
+
+            _init_config_from_file(f.name)
+
+            self.assertFalse(config.enable_latex)
+            self.assertFalse(config.enable_mermaid)
+
+            os.unlink(f.name)
+
+    def test_config_from_env(self):
+        """Config flags should be readable from environment variables."""
+        from madblog.config import config, _init_config_from_env
+
+        # Reset
+        config.enable_latex = True
+        config.enable_mermaid = True
+
+        os.environ["MADBLOG_ENABLE_LATEX"] = "0"
+        os.environ["MADBLOG_ENABLE_MERMAID"] = "0"
+
+        try:
+            _init_config_from_env()
+            self.assertFalse(config.enable_latex)
+            self.assertFalse(config.enable_mermaid)
+        finally:
+            os.environ.pop("MADBLOG_ENABLE_LATEX", None)
+            os.environ.pop("MADBLOG_ENABLE_MERMAID", None)

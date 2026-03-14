@@ -790,6 +790,19 @@ LaTeX support requires the following executables available in the `PATH`:
 - `latex`
 - `dvipng`
 
+LaTeX rendering is enabled by default when the dependencies are available. To
+explicitly disable it (e.g., to reduce memory usage), set in `config.yaml`:
+
+```yaml
+enable_latex: false
+```
+
+Or via environment variable:
+
+```shell
+export MADBLOG_ENABLE_LATEX=0
+```
+
 Syntax for inline LaTeX:
 
 ```markdown
@@ -809,6 +822,20 @@ $$
 Madblog supports server-side rendering of [Mermaid](https://mermaid.js.org/)
 diagrams. Both light and dark theme variants are rendered at build time and
 automatically switch based on the reader's system color scheme preference.
+
+Mermaid rendering is enabled by default when the dependencies are available. To
+explicitly disable it (e.g., to reduce memory usage from Chromium/Puppeteer),
+set in `config.yaml`:
+
+```yaml
+enable_mermaid: false
+```
+
+Or via environment variable:
+
+```shell
+export MADBLOG_ENABLE_MERMAID=0
+```
 
 ### Installation
 

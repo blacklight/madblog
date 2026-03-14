@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Config flags for rendering features:** Added `enable_latex` and
+  `enable_mermaid` configuration options (default: `true`) to explicitly
+  disable LaTeX or Mermaid rendering even when dependencies are available.
+  This helps reduce memory usage in environments where these features aren't
+  needed. Configurable via `config.yaml` or environment variables
+  (`MADBLOG_ENABLE_LATEX`, `MADBLOG_ENABLE_MERMAID`).
+
+### Changed
+- **Lazy loading of rendering extensions:** LaTeX and Mermaid markdown
+  extensions are now loaded lazily on first render, not at module import time.
+  This defers memory allocation until the features are actually used and
+  respects the new config flags.
+
 ## 0.9.14
 
 - **Fix:** Guestbook ActivityPub interactions now include **mentions** and

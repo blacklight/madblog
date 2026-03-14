@@ -72,6 +72,10 @@ class Config:
     # Guestbook
     enable_guestbook: bool = True
 
+    # Rendering features
+    enable_latex: bool = True
+    enable_mermaid: bool = True
+
     # Moderation
     blocked_actors: List[str] = field(default_factory=list)
     allowed_actors: List[str] = field(default_factory=list)
@@ -282,6 +286,12 @@ def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statem
     if cfg.get("enable_guestbook") is not None:
         config.enable_guestbook = bool(cfg["enable_guestbook"])
 
+    # Rendering features
+    if cfg.get("enable_latex") is not None:
+        config.enable_latex = bool(cfg["enable_latex"])
+    if cfg.get("enable_mermaid") is not None:
+        config.enable_mermaid = bool(cfg["enable_mermaid"])
+
     # Moderation
     if cfg.get("blocked_actors"):
         config.blocked_actors = list(cfg["blocked_actors"])
@@ -423,6 +433,12 @@ def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-state
     # Guestbook
     if os.getenv("MADBLOG_ENABLE_GUESTBOOK"):
         config.enable_guestbook = os.environ["MADBLOG_ENABLE_GUESTBOOK"] == "1"
+
+    # Rendering features
+    if os.getenv("MADBLOG_ENABLE_LATEX"):
+        config.enable_latex = os.environ["MADBLOG_ENABLE_LATEX"] == "1"
+    if os.getenv("MADBLOG_ENABLE_MERMAID"):
+        config.enable_mermaid = os.environ["MADBLOG_ENABLE_MERMAID"] == "1"
 
     # Moderation
     if os.getenv("MADBLOG_BLOCKED_ACTORS"):
