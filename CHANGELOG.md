@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.2
+
+### Fixed
+- **ActivityPub:** Replies now include the same quote policy fields as articles
+  (`quote_control`, `quote_policy`, and `interaction_policy`), honoring the
+  configured quote control rules.
+
+### Tests
+- Added coverage to ensure reply objects include the expected quote
+  policy/interaction policy fields (e.g., for `activitypub_quote_control =
+  "public"`).
+
 ## 1.0.1
 
 ### Fixed
