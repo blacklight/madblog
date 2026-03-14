@@ -25,6 +25,7 @@ from .feeds import FeedsMixin
 from .guestbook import GuestbookMixin
 from .markdown import MarkdownMixin
 from .monitor import ChangeType, ContentMonitor
+from .reactions import AuthorReactionsIndex
 from .replies import RepliesMixin
 from .tags import TagIndex
 from .webmentions import WebmentionsMixin
@@ -93,6 +94,11 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             content_dir=config.content_dir,
             pages_dir=str(self.pages_dir),
             mentions_dir=str(self.mentions_dir),
+        )
+        self.author_reactions_index = AuthorReactionsIndex(
+            state_dir=config.resolved_state_dir,
+            replies_dir=self.replies_dir,
+            base_url=config.link,
         )
         self.replies_monitor: Optional[ContentMonitor] = None
 
@@ -169,6 +175,9 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         if config.enable_webmentions:
             self.webmentions_storage.sync_on_startup()
 
+        # Load the author-reactions index (likes targeting local pages)
+        self.author_reactions_index.load()
+
         # Start replies monitor for federation
         self._start_replies_monitor()
 
@@ -200,6 +209,9 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         # Register Webmentions callback for outgoing mentions from replies
         if config.enable_webmentions:
             self.replies_monitor.register(self.webmentions_storage.on_reply_change)
+
+        # Register author-reactions index callback
+        self.replies_monitor.register(self.author_reactions_index.on_reply_change)
 
         self.replies_monitor.start()
 

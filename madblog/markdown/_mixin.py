@@ -236,6 +236,12 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
         author_info = self._parse_author(metadata)
         reactions_counts = count_reactions(reactions_tree)
 
+        page_url = config.link + metadata.get("uri", "")
+        reactions_index = getattr(self, "author_reactions_index", None)
+        author_likes = (
+            reactions_index.get_reactions(page_url) if reactions_index else []
+        )
+
         with contextlib.ExitStack() as stack:
             if not has_app_context():
                 stack.enter_context(self._app.app_context())
@@ -245,7 +251,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 config=config,
                 title=title,
                 uri=metadata.get("uri"),
-                url=config.link + metadata.get("uri", ""),
+                url=page_url,
                 external_url=metadata.get("external_url"),
                 image=metadata.get("image"),
                 description=metadata.get("description"),
@@ -257,6 +263,8 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 tags=tags,
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
+                like_of=metadata.get("like-of"),
+                author_likes=author_likes,
                 reactions_tree=reactions_tree,
                 reactions_counts=reactions_counts,
                 utils=TemplateUtils(),

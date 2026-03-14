@@ -238,3 +238,49 @@ class ActivityPubPublishMixin:  # pylint: disable=too-few-public-methods
             return os.path.getmtime(filepath)
         except OSError:
             return 0
+
+    # -----------------------------------------------------------------
+    # Like / Undo-Like helpers
+    # -----------------------------------------------------------------
+
+    def _publish_like(self, like_of_url: str) -> dict:
+        """
+        Build and publish a Like activity targeting *like_of_url*.
+
+        :return: The published Like activity dict (contains ``id``).
+        """
+        like_activity = self.handler.outbox.build_like_activity(like_of_url)
+        try:
+            self.handler.publish_activity(like_activity)
+            logger.info("Published Like targeting %s", like_of_url)
+        except Exception:
+            logger.exception("Failed to publish Like targeting %s", like_of_url)
+        return like_activity
+
+    def _publish_undo_like(
+        self, like_id: str, actor_url: str, object_url: str | None = None
+    ) -> None:
+        """
+        Build and publish an Undo wrapping a previously published Like.
+
+        :param like_id: The ``id`` of the original Like activity.
+        :param actor_url: The actor performing the undo.
+        :param object_url: The URL of the object that was liked.
+            Required by remote servers (e.g. Mastodon) to match
+            the Undo to the original Like.
+        """
+        inner: dict = {
+            "id": like_id,
+            "type": "Like",
+            "actor": actor_url,
+            "to": ["https://www.w3.org/ns/activitystreams#Public"],
+            "cc": [self.handler.followers_url],
+        }
+        if object_url:
+            inner["object"] = object_url
+        undo = self.handler.outbox.build_undo_activity(inner)
+        try:
+            self.handler.publish_activity(undo)
+            logger.info("Published Undo Like %s", like_id)
+        except Exception:
+            logger.exception("Failed to publish Undo Like %s", like_id)

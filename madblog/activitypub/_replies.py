@@ -240,6 +240,72 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
 
         return obj, activity_type
 
+    # -----------------------------------------------------------------
+    # Like activity ID tracking (file_urls with #like suffix)
+    # -----------------------------------------------------------------
+
+    def _set_reply_like_id(
+        self, filepath: str, activity_id: str, object_url: str
+    ) -> None:
+        """Store the Like activity ID and object URL for a reply file."""
+        file_urls = self._load_file_urls()
+        key = "reply/" + os.path.relpath(filepath, self.replies_dir) + "#like"
+        file_urls[key] = activity_id
+        file_urls[key + "-object"] = object_url
+        self._save_file_urls(file_urls)
+
+    def _get_reply_like_id(self, filepath: str) -> str | None:
+        """Get the stored Like activity ID for a reply file."""
+        key = "reply/" + os.path.relpath(filepath, self.replies_dir) + "#like"
+        return self._load_file_urls().get(key)
+
+    def _get_reply_like_object(self, filepath: str) -> str | None:
+        """Get the stored like-of object URL for a reply file."""
+        key = "reply/" + os.path.relpath(filepath, self.replies_dir) + "#like-object"
+        return self._load_file_urls().get(key)
+
+    def _remove_reply_like_id(self, filepath: str) -> None:
+        """Remove the stored Like activity ID and object URL for a reply file."""
+        file_urls = self._load_file_urls()
+        key = "reply/" + os.path.relpath(filepath, self.replies_dir) + "#like"
+        file_urls.pop(key, None)
+        file_urls.pop(key + "-object", None)
+        self._save_file_urls(file_urls)
+
+    # -----------------------------------------------------------------
+    # Like publish / delete handlers
+    # -----------------------------------------------------------------
+
+    def _handle_reply_like_publish(self, filepath: str, actor_url: str) -> None:
+        """Build and publish a Like activity for a reply with like-of."""
+        metadata = self._parse_metadata(filepath)
+        like_of = metadata.get("like-of")
+        if not like_of:
+            return
+
+        # Undo any previously published Like for this file
+        old_like_id = self._get_reply_like_id(filepath)
+        if old_like_id:
+            old_object = self._get_reply_like_object(filepath)
+            self._publish_undo_like(old_like_id, actor_url, object_url=old_object)
+
+        like_activity = self._publish_like(like_of)
+        self._set_reply_like_id(filepath, like_activity["id"], like_of)
+
+    def _handle_reply_like_delete(self, filepath: str, actor_url: str) -> None:
+        """Publish an Undo Like for a deleted reply file."""
+        like_id = self._get_reply_like_id(filepath)
+        if not like_id:
+            return
+
+        object_url = self._get_reply_like_object(filepath)
+        self._publish_undo_like(like_id, actor_url, object_url=object_url)
+        self._remove_reply_like_id(filepath)
+
+    # -----------------------------------------------------------------
+    # Note publish / delete handlers
+    # -----------------------------------------------------------------
+
     def _handle_reply_publish(self, filepath: str, url: str, actor_url: str) -> None:
         """Build and publish a Create or Update activity for a reply."""
         # Compute the public URL using the content domain, not the AP domain
@@ -270,6 +336,9 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         Callback for replies ContentMonitor.
 
         Publishes author replies as AP Notes with in_reply_to set.
+        If the file contains ``like-of`` metadata, a Like activity is
+        also published.  Standalone likes (no ``reply-to``, no content)
+        produce only a Like — no Note.
         """
         if not self.replies_dir:
             return
@@ -278,13 +347,28 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         actor_url = f"{self.base_url}{self.handler.actor_path}"
 
         if change_type.value == "deleted":
+            self._handle_reply_like_delete(filepath, actor_url)
             self._handle_reply_delete(filepath, url, actor_url)
         else:
-            self._spawn_guarded_publish(
-                url,
-                lambda: self._handle_reply_publish(filepath, url, actor_url),
-                f"ap-reply-{os.path.basename(filepath)}",
-            )
+            # Read raw metadata (without reply-to derivation) for branching
+            metadata = self._parse_metadata(filepath)
+            like_of = metadata.get("like-of")
+            has_explicit_reply_to = "reply-to" in metadata
+            has_content = bool(self._clean_content(filepath).strip())
+
+            if like_of:
+                self._spawn_guarded_publish(
+                    url + "#like",
+                    lambda: self._handle_reply_like_publish(filepath, actor_url),
+                    f"ap-like-{os.path.basename(filepath)}",
+                )
+
+            if has_explicit_reply_to or has_content:
+                self._spawn_guarded_publish(
+                    url,
+                    lambda: self._handle_reply_publish(filepath, url, actor_url),
+                    f"ap-reply-{os.path.basename(filepath)}",
+                )
 
     def sync_replies_on_startup(self) -> None:
         """

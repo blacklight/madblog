@@ -428,6 +428,151 @@ class ReplyTitleInferenceTest(unittest.TestCase):
         self.assertEqual(metadata["title"], "no-title")
 
 
+class LikeOfMetadataParsingTest(unittest.TestCase):
+    """Test that like-of metadata is parsed correctly from replies."""
+
+    def setUp(self):
+        from madblog.app import app
+        from madblog.config import config
+
+        self.app = app
+        self.config = config
+
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+
+        root = Path(self._tmpdir.name)
+
+        replies_dir = root / "replies" / "my-post"
+        replies_dir.mkdir(parents=True, exist_ok=True)
+
+        # Reply with like-of only
+        (replies_dir / "like-only.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (like-of: https://remote.social/statuses/42)",
+                    "[//]: # (published: 2025-07-10)",
+                    "",
+                    "# I liked this",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        # Reply with both reply-to and like-of
+        (replies_dir / "reply-and-like.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (reply-to: https://remote.social/statuses/999)",
+                    "[//]: # (like-of: https://remote.social/statuses/42)",
+                    "[//]: # (published: 2025-07-10)",
+                    "",
+                    "# Reply with like",
+                    "Some content.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        # Reply with no like-of
+        (replies_dir / "no-like.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (reply-to: https://remote.social/statuses/999)",
+                    "[//]: # (published: 2025-07-10)",
+                    "",
+                    "# Plain reply",
+                    "Content.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        self._orig_content_dir = config.content_dir
+        self._orig_link = config.link
+
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+
+        self.app.replies_dir = root / "replies"
+
+    def tearDown(self):
+        self.config.content_dir = self._orig_content_dir
+        self.config.link = self._orig_link
+
+    def test_like_of_extracted(self):
+        """The like-of metadata field is correctly parsed."""
+        with self.app.app_context():
+            metadata = self.app._parse_reply_metadata("my-post", "like-only")
+        self.assertEqual(metadata["like-of"], "https://remote.social/statuses/42")
+
+    def test_reply_to_and_like_of_coexist(self):
+        """Both reply-to and like-of can be present in the same file."""
+        with self.app.app_context():
+            metadata = self.app._parse_reply_metadata("my-post", "reply-and-like")
+        self.assertEqual(metadata["reply-to"], "https://remote.social/statuses/999")
+        self.assertEqual(metadata["like-of"], "https://remote.social/statuses/42")
+
+    def test_like_of_absent_when_not_set(self):
+        """like-of is not present in metadata when not set in the file."""
+        with self.app.app_context():
+            metadata = self.app._parse_reply_metadata("my-post", "no-like")
+        self.assertNotIn("like-of", metadata)
+
+
+class LikeOfPageMetadataParsingTest(unittest.TestCase):
+    """Test that like-of metadata is parsed correctly from article pages."""
+
+    def setUp(self):
+        from madblog.app import app
+        from madblog.config import config
+
+        self.app = app
+        self.config = config
+
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+
+        root = Path(self._tmpdir.name)
+
+        pages_dir = root / "pages"
+        pages_dir.mkdir(parents=True, exist_ok=True)
+
+        (pages_dir / "like-post.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (like-of: https://remote.social/statuses/55)",
+                    "[//]: # (published: 2025-07-10)",
+                    "",
+                    "# I liked this post",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        self._orig_content_dir = config.content_dir
+        self._orig_link = config.link
+
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+
+        self.app.pages_dir = pages_dir
+
+    def tearDown(self):
+        self.config.content_dir = self._orig_content_dir
+        self.config.link = self._orig_link
+
+    def test_like_of_extracted_from_page(self):
+        """The like-of metadata field is correctly parsed from a page."""
+        with self.app.app_context():
+            metadata = self.app._parse_page_metadata("like-post")
+        self.assertEqual(metadata["like-of"], "https://remote.social/statuses/55")
+
+
 class ThreadingModelTest(unittest.TestCase):
     """Tests for the threading model."""
 

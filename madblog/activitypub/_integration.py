@@ -687,6 +687,66 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         return obj, activity_type
 
     # -----------------------------------------------------------------
+    # Like activity ID tracking for articles (file_urls with #like suffix)
+    # -----------------------------------------------------------------
+
+    def _set_like_id(self, filepath: str, activity_id: str, object_url: str) -> None:
+        """Store the Like activity ID and object URL for an article file."""
+        file_urls = self._load_file_urls()
+        key = os.path.relpath(filepath, self.pages_dir) + "#like"
+        file_urls[key] = activity_id
+        file_urls[key + "-object"] = object_url
+        self._save_file_urls(file_urls)
+
+    def _get_like_id(self, filepath: str) -> str | None:
+        """Get the stored Like activity ID for an article file."""
+        key = os.path.relpath(filepath, self.pages_dir) + "#like"
+        return self._load_file_urls().get(key)
+
+    def _get_like_object(self, filepath: str) -> str | None:
+        """Get the stored like-of object URL for an article file."""
+        key = os.path.relpath(filepath, self.pages_dir) + "#like-object"
+        return self._load_file_urls().get(key)
+
+    def _remove_like_id(self, filepath: str) -> None:
+        """Remove the stored Like activity ID and object URL for an article file."""
+        file_urls = self._load_file_urls()
+        key = os.path.relpath(filepath, self.pages_dir) + "#like"
+        file_urls.pop(key, None)
+        file_urls.pop(key + "-object", None)
+        self._save_file_urls(file_urls)
+
+    # -----------------------------------------------------------------
+    # Like publish / delete handlers for articles
+    # -----------------------------------------------------------------
+
+    def _handle_like_publish(self, filepath: str, actor_url: str) -> None:
+        """Build and publish a Like activity for an article with like-of."""
+        metadata = self._parse_metadata(filepath)
+        like_of = metadata.get("like-of")
+        if not like_of:
+            return
+
+        # Undo any previously published Like for this file
+        old_like_id = self._get_like_id(filepath)
+        if old_like_id:
+            old_object = self._get_like_object(filepath)
+            self._publish_undo_like(old_like_id, actor_url, object_url=old_object)
+
+        like_activity = self._publish_like(like_of)
+        self._set_like_id(filepath, like_activity["id"], like_of)
+
+    def _handle_like_delete(self, filepath: str, actor_url: str) -> None:
+        """Publish an Undo Like for a deleted article file."""
+        like_id = self._get_like_id(filepath)
+        if not like_id:
+            return
+
+        object_url = self._get_like_object(filepath)
+        self._publish_undo_like(like_id, actor_url, object_url=object_url)
+        self._remove_like_id(filepath)
+
+    # -----------------------------------------------------------------
     # Content-change handlers
     # -----------------------------------------------------------------
 
@@ -736,13 +796,14 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
 
         On create/edit: publish a Note/Article to followers in a
         background thread so that slow WebFinger look-ups or delivery
-        failures do not block the content-monitor loop.
+        failures do not block the content-monitor loop.  If the article
+        contains ``like-of`` metadata, a Like activity is also published.
 
         At most :data:`_MAX_CONCURRENT_PUBLISHES` threads run in
         parallel, and duplicate requests for the same URL are dropped.
 
         On delete: send a Delete activity (synchronous — no mentions
-        involved).
+        involved).  If a Like was published, also send Undo Like.
         """
         # Skip files under replies/ - handled by on_reply_change
         if self.replies_dir and filepath.startswith(self.replies_dir + os.sep):
@@ -752,10 +813,21 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         actor_url = f"{self.base_url}{self.handler.actor_path}"
 
         if change_type.value == "deleted":
+            self._handle_like_delete(filepath, actor_url)
             self._handle_delete(filepath, url, actor_url)
         else:
+            # Always publish the Article
             self._spawn_guarded_publish(
                 url,
                 lambda: self._handle_publish(filepath, url, actor_url),
                 f"ap-publish-{os.path.basename(filepath)}",
             )
+
+            # Also publish a Like if like-of is present
+            metadata = self._parse_metadata(filepath)
+            if metadata.get("like-of"):
+                self._spawn_guarded_publish(
+                    url + "#like",
+                    lambda: self._handle_like_publish(filepath, actor_url),
+                    f"ap-like-{os.path.basename(filepath)}",
+                )
