@@ -68,6 +68,28 @@
       {{ content | safe }}
     </div>
 
+    {% if like_of %}
+    <footer class="author-reactions">
+      <div class="author-reaction">
+        <span class="author-reaction-icon" title="Liked">⭐</span>
+        <a class="u-like-of" href="{{ like_of }}"
+           rel="nofollow noopener" target="_blank">
+          {{ like_of }}
+        </a>
+      </div>
+    </footer>
+    {% endif %}
+
+    {% if author_likes %}
+    <div class="author-liked-by" title="Liked by the author">
+      {% if author_photo %}
+        <img class="author-liked-avatar" src="{{ author_photo }}"
+             alt="" loading="lazy">
+      {% endif %}
+      ⭐
+    </div>
+    {% endif %}
+
     {% with utils=utils %}
       {% include 'reactions.html' %}
     {% endwith %}
