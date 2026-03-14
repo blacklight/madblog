@@ -209,6 +209,20 @@
   content: 'show less \25B4';
 }
 
+/* Reaction counters */
+.reaction-counts {
+  display: flex;
+  align-items: center;
+  margin: 0.5em 0;
+  color: var(--color-fg-tertiary);
+}
+
+.interaction-counts {
+  display: inline-flex;
+  gap: 1.2em;
+  font-size: 1.05em;
+}
+
 /* Footer: source link + permalink */
 .reaction-footer {
   display: flex;
