@@ -162,6 +162,36 @@ class ActivityPubPublishMixin:  # pylint: disable=too-few-public-methods
         )
 
     # -----------------------------------------------------------------
+    # Quote policy building
+    # -----------------------------------------------------------------
+
+    def _build_quote_policy(self) -> tuple[dict | None, str | None, dict | None]:
+        """
+        Build quote policy fields from config.
+
+        :return: Tuple of ``(quote_control, quote_policy, interaction_policy)``.
+        """
+        from madblog.config import config
+
+        if not config.activitypub_quote_control:
+            return None, None, None
+
+        quote_control = {"quotePolicy": config.activitypub_quote_control}
+        quote_policy = config.activitypub_quote_control
+
+        if config.activitypub_quote_control == "public":
+            allowed = ["https://www.w3.org/ns/activitystreams#Public"]
+        elif config.activitypub_quote_control == "followers":
+            allowed = [self.handler.followers_url]
+        elif config.activitypub_quote_control == "following":
+            allowed = [self.handler.following_url]
+        else:  # "nobody" or unknown
+            allowed = []
+
+        interaction_policy = {"canQuote": {"automaticApproval": allowed}}
+        return quote_control, quote_policy, interaction_policy
+
+    # -----------------------------------------------------------------
     # Common publish helpers
     # -----------------------------------------------------------------
 
