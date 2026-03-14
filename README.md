@@ -708,11 +708,14 @@ Text files under `<content_dir>/replies/` are treated as author replies and they
 will not be rendered on the blog index. Mentions also work, and the rendering
 and processing pipeline is the same as for articles.
 
-Madblog supports four types of author replies:
+Madblog supports several types of author replies:
 
 - **Generic replies/posts**: Place the Markdown under `<content_dir>/replies/`
   directly. No `reply-to` metadata means that the post will be rendered on
-  ActivityPub as a separate post.
+  ActivityPub as a separate post. Posts under `<content_dir>/replies/` with no
+  `reply-to` basically won't be rendered on the blog directly, but they are
+  still discoverable by URL and rendered to ActivityPub - it's similar to an
+  "**Unlisted**" post on Mastodon.
 
 - **Replies to someone else's posts**: Place the Markdown under
   `<content_dir>/replies/`, and add a `reply-to` metadata header pointing to
@@ -736,6 +739,11 @@ Madblog supports four types of author replies:
   extension). If the Markdown is in a nested folder then you'll have to specify
   its relative path too here. These posts will be rendered as author replies on
   your blog article, under the same parent comment as the original reply.
+
+- **Guestbook posts**: Place the Markdown under
+  `<content_dir>/replies/_guestbook/`. These posts will be rendered as replies
+  under `/_guestbook/`. Replies to other users' posts are also supported through
+  the `reply-to` metadata.
 
 ### How threading works
 
