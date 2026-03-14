@@ -1,4 +1,4 @@
-{% with title=title, description=description, image=image, url=url, type='article', styles=['/css/blog.css', '/css/code.css'] %}
+{% with title=title, description=description, image=image, url=url, type='article', styles=['/css/blog.css', '/css/code.css', '/css/reactions.css'] %}
   {% include 'common-head.html' %}
 {% endwith %}
 
@@ -67,6 +67,10 @@
     <div class="content e-content">
       {{ content | safe }}
     </div>
+
+    {% with utils=utils %}
+      {% include 'reactions.html' %}
+    {% endwith %}
 
   </article>
 </main>
