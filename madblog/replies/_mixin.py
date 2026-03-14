@@ -428,6 +428,12 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
         reply_to = metadata.get("reply-to", "")
         reactions_counts = count_reactions(reactions_tree)
 
+        reply_url = config.link + metadata.get("uri", "")
+        reactions_index = getattr(self, "author_reactions_index", None)
+        author_likes = (
+            reactions_index.get_reactions(reply_url) if reactions_index else []
+        )
+
         with contextlib.ExitStack() as stack:
             if not has_app_context():
                 stack.enter_context(self._app.app_context())
@@ -437,7 +443,7 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
                 config=config,
                 title=title,
                 uri=metadata.get("uri"),
-                url=config.link + metadata.get("uri", ""),
+                url=reply_url,
                 image=metadata.get("image"),
                 description=metadata.get("description"),
                 published_datetime=metadata.get("published"),
@@ -449,6 +455,7 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
                 ),
                 reply_to=reply_to,
                 like_of=metadata.get("like-of"),
+                author_likes=author_likes,
                 article_slug=article_slug,
                 reactions_tree=reactions_tree,
                 reactions_counts=reactions_counts,

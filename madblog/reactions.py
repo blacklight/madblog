@@ -1,13 +1,23 @@
 """
 Threading model for interleaving reactions (Webmentions, AP interactions)
-with author replies.
+with author replies, plus a persisted index of author reactions (likes, etc.).
 """
 
 import datetime
 import hashlib
+import json
+import logging
+import os
+import re
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+from threading import Lock
 from typing import Any, List, Optional
+
+from madblog.monitor import ChangeType
+
+logger = logging.getLogger(__name__)
 
 
 class ReactionType(Enum):
@@ -256,13 +266,16 @@ def count_reactions(roots: List[ThreadNode]) -> dict:
             counts["author_replies"] += 1
             continue
 
+        type_val = None
         if node.reaction_type == ReactionType.WEBMENTION:
             counts["webmentions"] += 1
             mt = getattr(node.item, "mention_type", None)
-            type_val = mt.value if hasattr(mt, "value") else str(mt) if mt else ""
+            if mt:
+                type_val = mt.value if hasattr(mt, "value") else str(mt) if mt else ""
         elif node.reaction_type == ReactionType.AP_INTERACTION:
             it = getattr(node.item, "interaction_type", None)
-            type_val = it.value if hasattr(it, "value") else str(it) if it else ""
+            if it:
+                type_val = it.value if hasattr(it, "value") else str(it) if it else ""
         else:
             continue
 
@@ -278,3 +291,184 @@ def count_reactions(roots: List[ThreadNode]) -> dict:
             counts["mentions"] += 1
 
     return counts
+
+
+# ------------------------------------------------------------------
+# Author-reactions index (JSON-persisted)
+# ------------------------------------------------------------------
+
+_METADATA_RE = re.compile(r"^\[//\]: # \(([^:]+):\s*(.*)\)\s*$")
+
+
+class AuthorReactionsIndex:
+    """
+    JSON-persisted reverse index of author reactions.
+
+    Maps ``target_url → [reaction_info]`` so that target pages can
+    display an "author liked this" indicator without scanning all reply
+    files on every render.
+
+    Only *local* targets (URLs starting with *base_url*) are tracked.
+    """
+
+    def __init__(
+        self,
+        state_dir: Path,
+        replies_dir: Path,
+        base_url: str,
+    ):
+        self._state_dir = Path(state_dir)
+        self._replies_dir = Path(replies_dir)
+        self._base_url = base_url.rstrip("/")
+        self._index_file = self._state_dir / "author_reactions_index.json"
+        self._index: dict[str, list[dict]] = {}
+        self._lock = Lock()
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
+    def load(self) -> None:
+        """
+        Load the index from JSON on disk.
+
+        If the file does not exist (first run or migration), perform a
+        one-time full scan of all ``.md`` files under ``replies_dir``
+        to build the index, then persist it.
+        """
+        if self._index_file.exists():
+            try:
+                with open(self._index_file, "r") as f:
+                    self._index = json.load(f)
+                return
+            except Exception:
+                logger.warning("Failed to load author reactions index; rebuilding")
+
+        self._full_scan()
+        self.save()
+
+    def save(self) -> None:
+        """Persist the in-memory index to JSON."""
+        self._state_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(self._index_file, "w") as f:
+                json.dump(self._index, f, indent=2)
+        except Exception:
+            logger.warning("Failed to save author reactions index")
+
+    # ------------------------------------------------------------------
+    # Full scan (first run)
+    # ------------------------------------------------------------------
+
+    def _full_scan(self) -> None:
+        """Scan all ``.md`` files under ``replies_dir`` to build the index."""
+        self._index = {}
+        if not self._replies_dir.is_dir():
+            return
+
+        for md_file in self._replies_dir.rglob("*.md"):
+            self._index_file_metadata(str(md_file))
+
+    # ------------------------------------------------------------------
+    # Single-file metadata extraction
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_like_of(filepath: str) -> str | None:
+        """
+        Read a Markdown file and return the ``like-of`` value, or
+        ``None`` if it is not set.
+        """
+        try:
+            with open(filepath, "r") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    # Stop at the first heading (end of metadata block)
+                    if line.startswith("# "):
+                        break
+                    m = _METADATA_RE.match(line)
+                    if m and m.group(1) == "like-of":
+                        return m.group(2).strip()
+        except Exception:
+            pass
+        return None
+
+    def _is_local_url(self, url: str) -> bool:
+        """Check whether *url* is under ``base_url``."""
+        return url.startswith(self._base_url + "/")
+
+    def _source_url_for_file(self, filepath: str) -> str:
+        """Convert a reply file path to its public ``/reply/…`` URL."""
+        rel = os.path.relpath(filepath, self._replies_dir)
+        stem = rel.rsplit(".", 1)[0]
+        return f"/reply/{stem}"
+
+    def _source_file_for_file(self, filepath: str) -> str:
+        """Return the path relative to ``replies_dir``."""
+        return os.path.relpath(filepath, self._replies_dir)
+
+    def _index_file_metadata(self, filepath: str) -> None:
+        """Parse a single file and add any local ``like-of`` to the index."""
+        like_of = self._extract_like_of(filepath)
+        if not like_of or not self._is_local_url(like_of):
+            return
+
+        source_file = self._source_file_for_file(filepath)
+        entry = {
+            "type": "like",
+            "source_url": self._source_url_for_file(filepath),
+            "source_file": source_file,
+        }
+
+        entries = self._index.setdefault(like_of, [])
+        # Avoid duplicates (same source file)
+        for existing in entries:
+            if existing.get("source_file") == source_file:
+                return
+        entries.append(entry)
+
+    def _remove_entries_for_file(self, filepath: str) -> None:
+        """Remove all index entries whose source is *filepath*."""
+        source_file = self._source_file_for_file(filepath)
+        for target_url in list(self._index):
+            self._index[target_url] = [
+                e
+                for e in self._index[target_url]
+                if e.get("source_file") != source_file
+            ]
+            if not self._index[target_url]:
+                del self._index[target_url]
+
+    # ------------------------------------------------------------------
+    # Monitor callback
+    # ------------------------------------------------------------------
+
+    def on_reply_change(
+        self, change_type: ChangeType, filepath: str
+    ) -> None:  # noqa: F821
+        """
+        Callback for the replies ``ContentMonitor``.
+
+        On create/edit: re-index the file.  On delete: remove its entries.
+        Always flushes to disk.
+        """
+        with self._lock:
+            self._remove_entries_for_file(filepath)
+            if change_type.value != "deleted":
+                self._index_file_metadata(filepath)
+            self.save()
+
+    # ------------------------------------------------------------------
+    # Query
+    # ------------------------------------------------------------------
+
+    def get_reactions(self, target_url: str) -> list[dict]:
+        """
+        Return author reactions targeting *target_url*.
+
+        :param target_url: The full URL of the page to look up.
+        :return: List of reaction dicts (each with ``type``,
+            ``source_url``, and ``source_file``).
+        """
+        return self._index.get(target_url, [])
