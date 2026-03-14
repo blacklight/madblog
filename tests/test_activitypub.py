@@ -1752,6 +1752,74 @@ class ReplyMentionTest(unittest.TestCase):
             finally:
                 config.state_dir = orig_state_dir
 
+    @skip_if_no_pubby
+    def test_build_reply_object_includes_quote_policy(self):
+        """build_reply_object should include quote policy fields like articles."""
+        from pubby import ActivityPubHandler
+        from madblog.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pages_dir = Path(tmpdir) / "pages"
+            pages_dir.mkdir()
+            replies_dir = Path(tmpdir) / "replies"
+            replies_dir.mkdir()
+            state_dir = Path(tmpdir) / "state"
+            state_dir.mkdir()
+
+            (replies_dir / "test-article").mkdir()
+            reply_file = replies_dir / "test-article" / "reply.md"
+            reply_file.write_text(
+                "[//]: # (reply-to: https://example.com/article/test-article)\n\n"
+                "Test reply content\n"
+            )
+
+            handler = MagicMock(spec=ActivityPubHandler)
+            handler.actor_path = "/ap/actor"
+            handler.followers_url = "https://example.com/ap/followers"
+            handler.following_url = "https://example.com/ap/following"
+            handler.storage = MagicMock()
+            handler.storage.get_interaction_by_object_id.return_value = None
+
+            orig_state_dir = config.state_dir
+            orig_quote_control = config.activitypub_quote_control
+
+            try:
+                config.state_dir = str(state_dir)
+                config.activitypub_quote_control = "public"
+
+                integration = ActivityPubIntegration(
+                    handler=handler,
+                    pages_dir=str(pages_dir),
+                    base_url="https://example.com",
+                    replies_dir=str(replies_dir),
+                )
+
+                url = integration.reply_file_to_url(str(reply_file))
+                actor_url = "https://example.com/ap/actor"
+
+                obj, _ = integration.build_reply_object(
+                    str(reply_file), url, actor_url, allow_network=False
+                )
+
+                # Quote policy fields should be present
+                self.assertEqual(obj.quote_control, {"quotePolicy": "public"})
+                self.assertEqual(obj.quote_policy, "public")
+                self.assertEqual(
+                    obj.interaction_policy,
+                    {
+                        "canQuote": {
+                            "automaticApproval": [
+                                "https://www.w3.org/ns/activitystreams#Public"
+                            ]
+                        }
+                    },
+                )
+
+            finally:
+                config.state_dir = orig_state_dir
+                config.activitypub_quote_control = orig_quote_control
+
 
 class ReplyCollisionAvoidanceTest(unittest.TestCase):
     """Test collision avoidance for reply delete/recreate scenarios."""

@@ -194,6 +194,28 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
 
         activity_type = "Update" if self._is_published(url) else "Create"
 
+        # Build quote policy (same logic as articles)
+        quote_control = None
+        quote_policy = None
+        interaction_policy = None
+        if config.activitypub_quote_control:
+            quote_control = {"quotePolicy": config.activitypub_quote_control}
+            quote_policy = config.activitypub_quote_control
+
+            if config.activitypub_quote_control == "public":
+                allowed = ["https://www.w3.org/ns/activitystreams#Public"]
+            elif config.activitypub_quote_control == "followers":
+                allowed = [self.handler.followers_url]
+            elif config.activitypub_quote_control == "following":
+                allowed = [self.handler.following_url]
+            elif config.activitypub_quote_control == "nobody":
+                allowed = []
+            else:
+                allowed = []
+
+            can_quote = {"automaticApproval": allowed}
+            interaction_policy = {"canQuote": can_quote}
+
         obj = Object(
             id=url,
             type="Note",  # Replies are Notes, not Articles
@@ -208,6 +230,9 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
             cc=cc_list,
             tag=mention_tags + hashtag_tags,
             attachment=attachments,
+            quote_control=quote_control,
+            quote_policy=quote_policy,
+            interaction_policy=interaction_policy,
         )
 
         obj.media_type = "text/html"
