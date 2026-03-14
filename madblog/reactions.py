@@ -373,6 +373,159 @@ def count_reactions(roots: List[ThreadNode]) -> dict:
     return counts
 
 
+def _count_interactions_list(interactions: list) -> dict[str, int]:
+    """
+    Count interactions by type from a flat list.
+
+    :param interactions: List of Interaction objects.
+    :return: Dict with keys ``likes``, ``boosts``, ``replies``,
+        ``quotes``, ``mentions``, ``webmentions``, ``author_replies``,
+        and ``total``.
+    """
+    counts: dict[str, int] = {
+        "likes": 0,
+        "boosts": 0,
+        "replies": 0,
+        "quotes": 0,
+        "mentions": 0,
+        "webmentions": 0,
+        "author_replies": 0,
+        "total": 0,
+    }
+
+    for interaction in interactions:
+        counts["total"] += 1
+        itype = getattr(interaction, "interaction_type", None)
+        if not itype:
+            continue
+
+        type_val = itype.value if hasattr(itype, "value") else str(itype)
+
+        if type_val == "like":
+            counts["likes"] += 1
+        elif type_val in ("boost", "repost"):
+            counts["boosts"] += 1
+        elif type_val == "reply":
+            counts["replies"] += 1
+        elif type_val == "quote":
+            counts["quotes"] += 1
+        elif type_val == "mention":
+            counts["mentions"] += 1
+        elif type_val == "webmention":
+            counts["webmentions"] += 1
+        elif type_val == "author_reply":
+            counts["author_replies"] += 1
+
+    return counts
+
+
+def collect_interaction_counts(
+    roots: List[ThreadNode],
+    get_interactions_fn,
+    blog_url: str = "",
+    ap_url: str = "",
+) -> dict[str, dict[str, int]]:
+    """
+    Collect reaction counts for each node in the thread tree.
+
+    For AP interactions, uses ``object_id`` as the lookup key.
+    For webmentions, uses ``source`` URL (translated to AP URL if local).
+    For author replies, uses ``ap_full_url`` or ``full_url``.
+
+    Also counts author reply children directly from the tree since
+    they are stored locally, not in the AP storage.
+
+    The ``get_interactions_fn`` callback is called once per unique
+    key to retrieve reactions targeting that object.
+
+    :param roots: Root nodes returned by :func:`build_thread_tree`.
+    :param get_interactions_fn: Callable that takes a ``target_resource``
+        string and returns a list of Interaction objects.
+    :param blog_url: The blog's main URL (config.link).
+    :param ap_url: The blog's ActivityPub URL (activitypub_link).
+    :return: Dict mapping identity URL → counts dict (same structure
+        as :func:`count_reactions`).
+    """
+    result: dict[str, dict[str, int]] = {}
+    seen: set[str] = set()
+
+    def translate_url(url: str) -> str:
+        """Translate blog URL to AP URL if applicable."""
+        if blog_url and ap_url and url.startswith(blog_url):
+            return ap_url + url[len(blog_url) :]
+        return url
+
+    def count_author_reply_children(node: ThreadNode) -> int:
+        """Count author reply children in the subtree."""
+        count = 0
+        for child in node.children:
+            if child.reaction_type == ReactionType.AUTHOR_REPLY:
+                count += 1
+            count += count_author_reply_children(child)
+        return count
+
+    stack = list(roots)
+    while stack:
+        node = stack.pop()
+        stack.extend(node.children)
+
+        # Determine the lookup key and display key based on reaction type
+        lookup_key: str | None = None
+        display_key: str | None = None
+
+        if node.reaction_type == ReactionType.AP_INTERACTION:
+            lookup_key = getattr(node.item, "object_id", None)
+            display_key = lookup_key
+        elif node.reaction_type == ReactionType.WEBMENTION:
+            source = getattr(node.item, "source", None)
+            if source:
+                display_key = source
+                lookup_key = translate_url(source)
+        elif node.reaction_type == ReactionType.AUTHOR_REPLY:
+            if isinstance(node.item, dict):
+                # Prefer ap_full_url for lookups, fall back to full_url
+                display_key = node.item.get("full_url")
+                lookup_key = node.item.get("ap_full_url") or display_key
+                if lookup_key:
+                    lookup_key = translate_url(lookup_key)
+
+        if not lookup_key or not display_key:
+            continue
+
+        if lookup_key in seen:
+            continue
+
+        seen.add(lookup_key)
+        interactions = get_interactions_fn(lookup_key)
+
+        # Start with AP interaction counts
+        counts = (
+            _count_interactions_list(interactions)
+            if interactions
+            else {
+                "likes": 0,
+                "boosts": 0,
+                "replies": 0,
+                "quotes": 0,
+                "mentions": 0,
+                "webmentions": 0,
+                "author_replies": 0,
+                "total": 0,
+            }
+        )
+
+        # Add author reply children from the thread tree
+        ar_count = count_author_reply_children(node)
+        if ar_count:
+            counts["author_replies"] += ar_count
+            counts["total"] += ar_count
+
+        if counts["total"]:
+            result[display_key] = counts
+
+    return result
+
+
 # ------------------------------------------------------------------
 # Author-reactions index (JSON-persisted)
 # ------------------------------------------------------------------

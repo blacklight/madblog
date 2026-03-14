@@ -1589,3 +1589,287 @@ class ReplyToFallbackTest(unittest.TestCase):
             metadata["reply-to"],
             "https://mastodon.social/@user/123",
         )
+
+
+class CollectInteractionCountsTest(unittest.TestCase):
+    """Tests for collect_interaction_counts function."""
+
+    def test_empty_tree_returns_empty_dict(self):
+        """An empty tree returns an empty counts dict."""
+        from madblog.reactions import collect_interaction_counts
+
+        result = collect_interaction_counts([], lambda _: [])
+        self.assertEqual(result, {})
+
+    def test_webmention_nodes_queried(self):
+        """Webmention nodes are queried for interaction counts using source."""
+        from madblog.reactions import (
+            ReactionType,
+            ThreadNode,
+            collect_interaction_counts,
+        )
+
+        class FakeWebmention:
+            source = "https://example.com/wm"
+
+        class FakeLike:
+            interaction_type = type("IT", (), {"value": "like"})()
+
+        node = ThreadNode(
+            item=FakeWebmention(),
+            reaction_type=ReactionType.WEBMENTION,
+            identity="https://example.com/wm",
+        )
+
+        def mock_get_interactions(target):
+            if target == "https://example.com/wm":
+                return [FakeLike()]
+            return []
+
+        result = collect_interaction_counts([node], mock_get_interactions)
+        self.assertIn("https://example.com/wm", result)
+        self.assertEqual(result["https://example.com/wm"]["likes"], 1)
+
+    def test_author_reply_nodes_queried(self):
+        """Author reply nodes are queried for interaction counts using full_url."""
+        from madblog.reactions import (
+            ReactionType,
+            ThreadNode,
+            collect_interaction_counts,
+        )
+
+        class FakeLike:
+            interaction_type = type("IT", (), {"value": "like"})()
+
+        reply = {"full_url": "https://example.com/reply/test/reply1"}
+        node = ThreadNode(
+            item=reply,
+            reaction_type=ReactionType.AUTHOR_REPLY,
+            identity="https://example.com/reply/test/reply1",
+        )
+
+        def mock_get_interactions(target):
+            if target == "https://example.com/reply/test/reply1":
+                return [FakeLike(), FakeLike()]
+            return []
+
+        result = collect_interaction_counts([node], mock_get_interactions)
+        self.assertIn("https://example.com/reply/test/reply1", result)
+        self.assertEqual(result["https://example.com/reply/test/reply1"]["likes"], 2)
+
+    def test_ap_interaction_counts_collected(self):
+        """AP interaction nodes have their counts collected."""
+        from madblog.reactions import (
+            ReactionType,
+            ThreadNode,
+            collect_interaction_counts,
+        )
+
+        class FakeInteraction:
+            object_id = "https://mastodon.social/statuses/123"
+            interaction_type = type("IT", (), {"value": "reply"})()
+
+        class FakeLike:
+            interaction_type = type("IT", (), {"value": "like"})()
+
+        class FakeBoost:
+            interaction_type = type("IT", (), {"value": "boost"})()
+
+        node = ThreadNode(
+            item=FakeInteraction(),
+            reaction_type=ReactionType.AP_INTERACTION,
+            identity="https://mastodon.social/statuses/123",
+        )
+
+        def mock_get_interactions(target):
+            if target == "https://mastodon.social/statuses/123":
+                return [FakeLike(), FakeLike(), FakeBoost()]
+            return []
+
+        result = collect_interaction_counts([node], mock_get_interactions)
+        self.assertIn("https://mastodon.social/statuses/123", result)
+        counts = result["https://mastodon.social/statuses/123"]
+        self.assertEqual(counts["likes"], 2)
+        self.assertEqual(counts["boosts"], 1)
+        self.assertEqual(counts["total"], 3)
+
+    def test_nested_nodes_processed(self):
+        """Child nodes in the tree are also processed."""
+        from madblog.reactions import (
+            ReactionType,
+            ThreadNode,
+            collect_interaction_counts,
+        )
+
+        class FakeInteraction:
+            def __init__(self, oid):
+                self.object_id = oid
+                self.interaction_type = type("IT", (), {"value": "reply"})()
+
+        class FakeLike:
+            interaction_type = type("IT", (), {"value": "like"})()
+
+        parent = ThreadNode(
+            item=FakeInteraction("https://example.com/1"),
+            reaction_type=ReactionType.AP_INTERACTION,
+            identity="https://example.com/1",
+        )
+        child = ThreadNode(
+            item=FakeInteraction("https://example.com/2"),
+            reaction_type=ReactionType.AP_INTERACTION,
+            identity="https://example.com/2",
+        )
+        parent.children.append(child)
+
+        def mock_get_interactions(target):
+            if target == "https://example.com/2":
+                return [FakeLike()]
+            return []
+
+        result = collect_interaction_counts([parent], mock_get_interactions)
+        self.assertIn("https://example.com/2", result)
+        self.assertEqual(result["https://example.com/2"]["likes"], 1)
+
+    def test_duplicate_object_ids_queried_once(self):
+        """Same object_id appearing multiple times is only queried once."""
+        from madblog.reactions import (
+            ReactionType,
+            ThreadNode,
+            collect_interaction_counts,
+        )
+
+        class FakeInteraction:
+            object_id = "https://example.com/dup"
+            interaction_type = type("IT", (), {"value": "reply"})()
+
+        node1 = ThreadNode(
+            item=FakeInteraction(),
+            reaction_type=ReactionType.AP_INTERACTION,
+            identity="https://example.com/dup",
+        )
+        node2 = ThreadNode(
+            item=FakeInteraction(),
+            reaction_type=ReactionType.AP_INTERACTION,
+            identity="https://example.com/dup",
+        )
+
+        calls = []
+
+        def mock_get_interactions(target):
+            calls.append(target)
+            return []
+
+        collect_interaction_counts([node1, node2], mock_get_interactions)
+        self.assertEqual(len(calls), 1)
+
+    def test_url_translation_for_author_replies(self):
+        """Author reply URLs are translated from blog URL to AP URL."""
+        from madblog.reactions import (
+            ReactionType,
+            ThreadNode,
+            collect_interaction_counts,
+        )
+
+        class FakeLike:
+            interaction_type = type("IT", (), {"value": "like"})()
+
+        reply = {
+            "full_url": "https://blog.example.com/reply/a1/test",
+            "ap_full_url": "https://ap.example.com/reply/a1/test",
+        }
+        node = ThreadNode(
+            item=reply,
+            reaction_type=ReactionType.AUTHOR_REPLY,
+            identity="https://blog.example.com/reply/a1/test",
+        )
+
+        calls = []
+
+        def mock_get_interactions(target):
+            calls.append(target)
+            if target == "https://ap.example.com/reply/a1/test":
+                return [FakeLike()]
+            return []
+
+        result = collect_interaction_counts(
+            [node],
+            mock_get_interactions,
+            blog_url="https://blog.example.com",
+            ap_url="https://ap.example.com",
+        )
+        # Should query using ap_full_url
+        self.assertEqual(calls, ["https://ap.example.com/reply/a1/test"])
+        # Result should be keyed by full_url (display key)
+        self.assertIn("https://blog.example.com/reply/a1/test", result)
+        self.assertEqual(result["https://blog.example.com/reply/a1/test"]["likes"], 1)
+
+    def test_url_translation_for_webmentions(self):
+        """Local webmention source URLs are translated to AP URLs."""
+        from madblog.reactions import (
+            ReactionType,
+            ThreadNode,
+            collect_interaction_counts,
+        )
+
+        class FakeWebmention:
+            source = "https://blog.example.com/article/b6"
+
+        class FakeLike:
+            interaction_type = type("IT", (), {"value": "like"})()
+
+        node = ThreadNode(
+            item=FakeWebmention(),
+            reaction_type=ReactionType.WEBMENTION,
+            identity="https://blog.example.com/article/b6",
+        )
+
+        calls = []
+
+        def mock_get_interactions(target):
+            calls.append(target)
+            if target == "https://ap.example.com/article/b6":
+                return [FakeLike()]
+            return []
+
+        result = collect_interaction_counts(
+            [node],
+            mock_get_interactions,
+            blog_url="https://blog.example.com",
+            ap_url="https://ap.example.com",
+        )
+        # Should query using translated AP URL
+        self.assertEqual(calls, ["https://ap.example.com/article/b6"])
+        # Result should be keyed by source URL (display key)
+        self.assertIn("https://blog.example.com/article/b6", result)
+
+    def test_author_reply_children_counted(self):
+        """Author reply children in the tree are counted."""
+        from madblog.reactions import (
+            ReactionType,
+            ThreadNode,
+            collect_interaction_counts,
+        )
+
+        class FakeInteraction:
+            object_id = "https://mastodon.social/statuses/123"
+            interaction_type = type("IT", (), {"value": "reply"})()
+
+        parent = ThreadNode(
+            item=FakeInteraction(),
+            reaction_type=ReactionType.AP_INTERACTION,
+            identity="https://mastodon.social/statuses/123",
+        )
+        author_reply = ThreadNode(
+            item={"full_url": "https://example.com/reply/a1/test"},
+            reaction_type=ReactionType.AUTHOR_REPLY,
+            identity="https://example.com/reply/a1/test",
+        )
+        parent.children.append(author_reply)
+
+        result = collect_interaction_counts([parent], lambda _: [])
+        # Parent should have author_replies count of 1
+        self.assertIn("https://mastodon.social/statuses/123", result)
+        self.assertEqual(
+            result["https://mastodon.social/statuses/123"]["author_replies"], 1
+        )
+        self.assertEqual(result["https://mastodon.social/statuses/123"]["total"], 1)

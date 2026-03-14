@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0
+## 1.1.1
 
 ### Added
 - **Author reactions (likes):** Blog authors can now "like" posts on the
@@ -9,6 +9,12 @@
   undone when the file is deleted or the metadata removed. A footer on the
   source page shows the liked URL, and target pages display a badge when
   liked by another of your posts.
+- **Per-interaction reaction counters:** Individual reactions (ActivityPub
+  interactions, Webmentions, and author replies) now display inline counters
+  showing their own likes, replies, boosts, etc. Counters are fetched via
+  efficient O(1) indexed lookups and include author reply children counted
+  directly from the thread tree. URL translation handles cases where
+  `activitypub_link` differs from the main blog `link`.
 
 ### Fixed
 - **Guestbook thread leaking:** Fediverse replies to author replies (targeting

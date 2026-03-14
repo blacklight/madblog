@@ -13,7 +13,7 @@ from markdown import Extension
 from madblog.config import config
 from madblog.tags import parse_metadata_tags
 from madblog.templates import TemplateUtils
-from madblog.reactions import count_reactions
+from madblog.reactions import collect_interaction_counts, count_reactions
 
 from ._render import render_html, resolve_relative_urls
 
@@ -242,6 +242,19 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
             reactions_index.get_reactions(page_url) if reactions_index else []
         )
 
+        # Compute per-interaction reaction counts using O(1) indexed lookups
+        interaction_counts: dict = {}
+        ap_handler = getattr(self, "activitypub_handler", None)
+        if ap_handler:
+            storage = ap_handler.storage
+            ap_link = getattr(config, "activitypub_link", "") or config.link
+            interaction_counts = collect_interaction_counts(
+                reactions_tree,
+                lambda target: list(storage.get_interactions(target_resource=target)),
+                blog_url=config.link,
+                ap_url=ap_link,
+            )
+
         with contextlib.ExitStack() as stack:
             if not has_app_context():
                 stack.enter_context(self._app.app_context())
@@ -267,6 +280,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 author_likes=author_likes,
                 reactions_tree=reactions_tree,
                 reactions_counts=reactions_counts,
+                interaction_counts=interaction_counts,
                 utils=TemplateUtils(),
                 **author_info,
             )
