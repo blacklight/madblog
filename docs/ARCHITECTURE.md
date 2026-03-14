@@ -15,6 +15,7 @@ that composes independent feature areas via mixins:
 - `WebmentionsMixin` for inbound/outbound Webmentions storage and processing
 - `ActivityPubMixin` for ActivityPub actor + object publishing (optional)
 - `GuestbookMixin` for aggregating public mentions into a guestbook page
+- `RepliesMixin` for author reply management and interaction threading
 
 The runtime app is created in `madblog/app.py` and routes are registered in
 `madblog/routes.py`.
@@ -34,13 +35,14 @@ Top-level Python modules:
 | `feeds` | RSS+Atom feed handling |
 | `guestbook` | Guestbook support |
 | `markdown` | Markdown subsystem |
+| `reactions` | Reaction thread tree builder (combines Webmentions, AP interactions, author replies) |
+| `replies` | Author replies management and interaction threading |
 | `monitor` | Background filesystem monitor |
 | `notifications` | Notifications handling |
 | `routes` | Flask routes |
 | `state` | State directory management and migrations |
 | `sync` | Background sync tasks |
 | `tags` | Tags subsystem |
-| `threading` | Reaction thread tree builder (combines Webmentions, AP interactions, author replies) |
 | `uwsgi.py` | uWSGI entry point |
 | `webmentions` | Webmentions subsystem |
 | `__main__.py` | CLI entry point |
@@ -95,8 +97,8 @@ Configuration controls:
 - `madblog/app.py`
   - Defines `BlogApp`, which inherits:
     - `flask.Flask`
-    - `ActivityPubMixin`, `CacheMixin`, `FeedsMixin`, `GuestbookMixin`,
-      `MarkdownMixin`, `WebmentionsMixin`
+    - `RepliesMixin`, `ActivityPubMixin`, `CacheMixin`, `FeedsMixin`,
+      `GuestbookMixin`, `MarkdownMixin`, `WebmentionsMixin`
   - Establishes content directory layout:
     - Markdown pages: `<content_dir>/markdown` (fallback: `<content_dir>`)
     - Assets: `<content_dir>/{img,css,js,fonts,templates}` with fallback to
@@ -352,7 +354,7 @@ When `reply-to` is omitted, `ActivityPubRepliesMixin._parse_reply_metadata()`
 derives it from the directory structure:
 `replies/<article-slug>/…` → `{base_url}/article/<article-slug>`.
 
-### Threading model (`madblog/threading.py`)
+### Threading model (`madblog/reactions.py`)
 
 `build_thread_tree()` combines raw Webmentions, AP interactions, and
 author reply dicts into a single tree of `ThreadNode` objects:
@@ -435,10 +437,11 @@ nesting depth with CSS-based indentation (capped at depth 5).
 
 | File | Role |
 |---|---|
-| `madblog/app.py` | `_get_article_replies()`, `_get_page_interactions()`, `get_reply()`, `replies_dir`, `replies_monitor` |
-| `madblog/threading.py` | `build_thread_tree()`, `ThreadNode`, `ReactionType`, AP alias handling |
-| `madblog/activitypub/_replies.py` | `ActivityPubRepliesMixin`: AP Note publishing, reply-to derivation, startup sync |
+| `madblog/app.py` | `get_reply()`, `replies_dir`, `replies_monitor` |
 | `madblog/routes.py` | `/reply/…` routes |
+| `madblog/reactions.py` | `build_thread_tree()`, `ThreadNode`, `ReactionType`, AP alias handling |
+| `madblog/replies/_mixin.py` | `RepliesMixin`: `_get_article_replies()`, `_get_page_interactions()`, `_get_reply_interactions()`, `_render_reply_html()` |
+| `madblog/activitypub/_replies.py` | `ActivityPubRepliesMixin`: AP Note publishing, reply-to derivation, startup sync |
 | `madblog/templates/reply.html` | Reply page template |
 | `madblog/templates/reactions.html` | Unified threaded reactions template |
 
