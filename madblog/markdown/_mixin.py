@@ -257,6 +257,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 tags=tags,
                 skip_header=skip_header,
                 skip_html_head=skip_html_head,
+                like_of=metadata.get("like-of"),
                 reactions_tree=reactions_tree,
                 reactions_counts=reactions_counts,
                 utils=TemplateUtils(),

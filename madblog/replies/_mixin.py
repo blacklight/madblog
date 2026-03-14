@@ -448,6 +448,7 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
                     )
                 ),
                 reply_to=reply_to,
+                like_of=metadata.get("like-of"),
                 article_slug=article_slug,
                 reactions_tree=reactions_tree,
                 reactions_counts=reactions_counts,
