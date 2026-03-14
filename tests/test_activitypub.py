@@ -11,10 +11,12 @@ from unittest.mock import MagicMock, patch
 
 
 def _join_ap_publish_threads(timeout: float = 1) -> None:
-    """Wait for any background ``ap-publish-*`` or ``ap-reply-*`` threads to finish."""
+    """Wait for any background ``ap-publish-*``, ``ap-reply-*`` or ``ap-like-*`` threads."""
     for t in threading.enumerate():
         if (
-            t.name.startswith("ap-publish-") or t.name.startswith("ap-reply-")
+            t.name.startswith("ap-publish-")
+            or t.name.startswith("ap-reply-")
+            or t.name.startswith("ap-like-")
         ) and t.is_alive():
             t.join(timeout=timeout)
 
@@ -1932,6 +1934,293 @@ class ReplyCollisionAvoidanceTest(unittest.TestCase):
             )
         finally:
             config.state_dir = orig_state_dir
+
+
+class ReplyLikeActivityTest(unittest.TestCase):
+    """Tests for Like activity publishing from reply files."""
+
+    def setUp(self):
+        from madblog.monitor import ChangeType
+
+        self.ChangeType = ChangeType
+
+    def _make_integration(self, root):
+        from pubby import ActivityPubHandler
+        from pubby.crypto import generate_rsa_keypair
+        from pubby.storage.adapters.file import FileActivityPubStorage
+        from madblog.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        pages_dir = root / "pages"
+        pages_dir.mkdir(exist_ok=True)
+        replies_dir = root / "replies"
+        replies_dir.mkdir(exist_ok=True)
+        ap_dir = root / "ap"
+
+        priv, _ = generate_rsa_keypair()
+        storage = FileActivityPubStorage(data_dir=str(ap_dir))
+        handler = ActivityPubHandler(
+            storage=storage,
+            actor_config={
+                "base_url": "https://example.com",
+                "username": "blog",
+            },
+            private_key=priv,
+        )
+
+        self._orig_state_dir = config.state_dir
+        config.state_dir = str(root / "state")
+
+        integration = ActivityPubIntegration(
+            handler=handler,
+            pages_dir=str(pages_dir),
+            base_url="https://example.com",
+            replies_dir=str(replies_dir),
+        )
+
+        return integration, handler, pages_dir, replies_dir
+
+    def tearDown(self):
+        from madblog.config import config
+
+        if hasattr(self, "_orig_state_dir"):
+            config.state_dir = self._orig_state_dir
+
+    @skip_if_no_pubby
+    def test_standalone_like_reply_publishes_only_like(self):
+        """A reply with only like-of (no reply-to, no content) publishes Like, not Note."""
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        integration, handler, _, replies_dir = self._make_integration(root)
+
+        art_dir = replies_dir / "some-article"
+        art_dir.mkdir()
+        reply_file = art_dir / "liked-it.md"
+        reply_file.write_text(
+            "[//]: # (like-of: https://remote.social/statuses/42)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "# Liked\n",
+            encoding="utf-8",
+        )
+
+        handler.publish_object = MagicMock()
+        handler.publish_activity = MagicMock()
+
+        integration.on_reply_change(self.ChangeType.ADDED, str(reply_file))
+        _join_ap_publish_threads()
+
+        # Like activity should be published
+        handler.publish_activity.assert_called_once()
+        like_activity = handler.publish_activity.call_args[0][0]
+        self.assertEqual(like_activity["type"], "Like")
+        self.assertEqual(like_activity["object"], "https://remote.social/statuses/42")
+
+        # No Note should be published (no reply-to, no content beyond heading)
+        handler.publish_object.assert_not_called()
+
+    @skip_if_no_pubby
+    def test_delete_like_reply_publishes_undo_like(self):
+        """Deleting a reply that had like-of publishes Undo Like."""
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        integration, handler, _, replies_dir = self._make_integration(root)
+
+        art_dir = replies_dir / "some-article"
+        art_dir.mkdir()
+        reply_file = art_dir / "liked-it.md"
+        reply_file.write_text(
+            "[//]: # (like-of: https://remote.social/statuses/42)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "# Liked\n",
+            encoding="utf-8",
+        )
+
+        # First publish the Like
+        handler.publish_object = MagicMock()
+        handler.publish_activity = MagicMock()
+        integration.on_reply_change(self.ChangeType.ADDED, str(reply_file))
+        _join_ap_publish_threads()
+
+        # Now delete
+        handler.publish_activity.reset_mock()
+        handler.publish_object.reset_mock()
+        integration.on_reply_change(self.ChangeType.DELETED, str(reply_file))
+
+        # Should publish Undo Like
+        undo_calls = [
+            c
+            for c in handler.publish_activity.call_args_list
+            if c[0][0].get("type") == "Undo"
+        ]
+        self.assertEqual(len(undo_calls), 1)
+        undo_activity = undo_calls[0][0][0]
+        self.assertEqual(undo_activity["object"]["type"], "Like")
+
+    @skip_if_no_pubby
+    def test_reply_with_both_reply_to_and_like_of(self):
+        """A reply with both reply-to and like-of publishes both Note and Like."""
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        integration, handler, _, replies_dir = self._make_integration(root)
+
+        art_dir = replies_dir / "some-article"
+        art_dir.mkdir()
+        reply_file = art_dir / "reply-and-like.md"
+        reply_file.write_text(
+            "[//]: # (reply-to: https://remote.social/statuses/42)\n"
+            "[//]: # (like-of: https://remote.social/statuses/42)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "\n"
+            "# Great post!\n"
+            "I really enjoyed this.\n",
+            encoding="utf-8",
+        )
+
+        handler.publish_object = MagicMock()
+        handler.publish_activity = MagicMock()
+
+        integration.on_reply_change(self.ChangeType.ADDED, str(reply_file))
+        _join_ap_publish_threads()
+
+        # Like activity published
+        handler.publish_activity.assert_called_once()
+        like_activity = handler.publish_activity.call_args[0][0]
+        self.assertEqual(like_activity["type"], "Like")
+
+        # Note also published
+        handler.publish_object.assert_called_once()
+        obj = handler.publish_object.call_args[0][0]
+        self.assertEqual(obj.type, "Note")
+
+
+class ArticleLikeActivityTest(unittest.TestCase):
+    """Tests for Like activity publishing from article files."""
+
+    def setUp(self):
+        from madblog.monitor import ChangeType
+
+        self.ChangeType = ChangeType
+
+    def _make_integration(self, root):
+        from pubby import ActivityPubHandler
+        from pubby.crypto import generate_rsa_keypair
+        from pubby.storage.adapters.file import FileActivityPubStorage
+        from madblog.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        pages_dir = root / "pages"
+        pages_dir.mkdir(exist_ok=True)
+        ap_dir = root / "ap"
+
+        priv, _ = generate_rsa_keypair()
+        storage = FileActivityPubStorage(data_dir=str(ap_dir))
+        handler = ActivityPubHandler(
+            storage=storage,
+            actor_config={
+                "base_url": "https://example.com",
+                "username": "blog",
+            },
+            private_key=priv,
+        )
+
+        self._orig_state_dir = config.state_dir
+        config.state_dir = str(root / "state")
+
+        integration = ActivityPubIntegration(
+            handler=handler,
+            pages_dir=str(pages_dir),
+            base_url="https://example.com",
+        )
+
+        return integration, handler, pages_dir
+
+    def tearDown(self):
+        from madblog.config import config
+
+        if hasattr(self, "_orig_state_dir"):
+            config.state_dir = self._orig_state_dir
+
+    @skip_if_no_pubby
+    def test_article_with_like_of_publishes_both_article_and_like(self):
+        """An article with like-of publishes both Create Article and Like."""
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        integration, handler, pages_dir = self._make_integration(root)
+
+        article = pages_dir / "like-post.md"
+        article.write_text(
+            "[//]: # (title: I liked this)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "[//]: # (like-of: https://remote.social/statuses/99)\n"
+            "\n"
+            "# I liked this\n"
+            "This is a great post.\n",
+            encoding="utf-8",
+        )
+
+        handler.publish_object = MagicMock()
+        handler.publish_activity = MagicMock()
+
+        integration.on_content_change(self.ChangeType.ADDED, str(article))
+        _join_ap_publish_threads()
+
+        # Article published
+        handler.publish_object.assert_called_once()
+        obj = handler.publish_object.call_args[0][0]
+        self.assertIn("I liked this", obj.content)
+
+        # Like activity published
+        handler.publish_activity.assert_called_once()
+        like_activity = handler.publish_activity.call_args[0][0]
+        self.assertEqual(like_activity["type"], "Like")
+        self.assertEqual(like_activity["object"], "https://remote.social/statuses/99")
+
+    @skip_if_no_pubby
+    def test_delete_article_with_like_publishes_undo_like_and_delete(self):
+        """Deleting an article that had like-of publishes Undo Like and Delete."""
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        integration, handler, pages_dir = self._make_integration(root)
+
+        article = pages_dir / "like-post.md"
+        article.write_text(
+            "[//]: # (title: I liked this)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "[//]: # (like-of: https://remote.social/statuses/99)\n"
+            "\n"
+            "# I liked this\n"
+            "Great post.\n",
+            encoding="utf-8",
+        )
+
+        # First publish
+        handler.publish_object = MagicMock()
+        handler.publish_activity = MagicMock()
+        integration.on_content_change(self.ChangeType.ADDED, str(article))
+        _join_ap_publish_threads()
+
+        # Now delete
+        handler.publish_object.reset_mock()
+        handler.publish_activity.reset_mock()
+        integration.on_content_change(self.ChangeType.DELETED, str(article))
+
+        # Delete Article published
+        handler.publish_object.assert_called_once()
+        self.assertEqual(handler.publish_object.call_args[1]["activity_type"], "Delete")
+
+        # Undo Like published
+        undo_calls = [
+            c
+            for c in handler.publish_activity.call_args_list
+            if c[0][0].get("type") == "Undo"
+        ]
+        self.assertEqual(len(undo_calls), 1)
+        self.assertEqual(undo_calls[0][0][0]["object"]["type"], "Like")
 
 
 if __name__ == "__main__":
