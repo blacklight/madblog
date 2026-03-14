@@ -1,3 +1,18 @@
+{# Macro to render reaction counts summary #}
+{% macro render_counts(counts, css_class='', element='span') %}
+{% if counts and counts.total %}
+<{{ element }} class="{{ css_class }}">
+  {% if counts.likes %}<span title="Likes">⭐ {{ counts.likes }}</span>{% endif %}
+  {% if counts.boosts %}<span title="Boosts">🔁 {{ counts.boosts }}</span>{% endif %}
+  {% if counts.replies %}<span title="Replies">💬 {{ counts.replies }}</span>{% endif %}
+  {% if counts.quotes %}<span title="Quotes">🗣️ {{ counts.quotes }}</span>{% endif %}
+  {% if counts.mentions %}<span title="Mentions">📣 {{ counts.mentions }}</span>{% endif %}
+  {% if counts.webmentions %}<span title="Webmentions">🔗 {{ counts.webmentions }}</span>{% endif %}
+  {% if counts.author_replies %}<span title="Author replies">✍️ {{ counts.author_replies }}</span>{% endif %}
+</{{ element }}>
+{% endif %}
+{% endmacro %}
+
 {# Recursive macro to render a thread node and its children #}
 {% macro render_thread_node(node, depth=0, parent_anchor=None) %}
   {% set max_indent = 5 %}
@@ -208,6 +223,10 @@ reply-{{ node.item.full_url | hash_id }}
         </div>
       {% endif %}
     {% endif %}
+    <div class="reaction-counts">
+      {% set wm_counts = interaction_counts.get(wm.source, {}) if interaction_counts is defined else {} %}
+      {{ render_counts(wm_counts, 'interaction-counts') }}
+    </div>
     <div class="reaction-footer">
       <span class="reaction-source-type" title="Webmention">🔗 Webmention</span>
       <a href="{{ wm.source }}" class="reaction-source" rel="nofollow noopener" target="_blank">View source</a>
@@ -219,6 +238,7 @@ reply-{{ node.item.full_url | hash_id }}
 {# Render a single AP interaction #}
 {% macro render_ap_interaction(interaction, identity, parent_anchor=None) %}
   {% set anchor_id = 'ap-' ~ (identity | hash_id) %}
+  {% set counts = interaction_counts.get(interaction.object_id, {}) if interaction_counts is defined else {} %}
   <div class="reaction reaction-ap reaction-ap-{{ interaction.interaction_type.value }}" id="{{ anchor_id }}">
     <div class="reaction-header">
       {% if interaction.author_photo %}
@@ -274,6 +294,9 @@ reply-{{ node.item.full_url | hash_id }}
         <label class="reaction-expand"><input type="checkbox" class="reaction-toggle"></label>
       {% endif %}
     {% endif %}
+    <div class="reaction-counts">
+      {{ render_counts(counts, 'interaction-counts') }}
+    </div>
     <div class="reaction-footer">
       <span class="reaction-source-type" title="ActivityPub">🌐 ActivityPub</span>
       {% set source_url = interaction.object_id or interaction.activity_id %}
@@ -325,6 +348,10 @@ reply-{{ node.item.full_url | hash_id }}
     {% if reply.content_html|length > 1000 %}
       <label class="reaction-expand"><input type="checkbox" class="reaction-toggle"></label>
     {% endif %}
+    <div class="reaction-counts">
+      {% set reply_counts = interaction_counts.get(reply.full_url, {}) if interaction_counts is defined else {} %}
+      {{ render_counts(reply_counts, 'interaction-counts') }}
+    </div>
     <div class="reaction-footer">
       <a href="{{ reply.permalink }}" class="reaction-source">View full reply</a>
       <a href="#{{ anchor_id }}" class="reaction-permalink" title="Permalink">🔗</a>
@@ -336,17 +363,7 @@ reply-{{ node.item.full_url | hash_id }}
 {% if reactions_tree %}
 <section class="reactions-section">
   <h2 class="reactions-heading">Reactions</h2>
-  {% if reactions_counts and reactions_counts.total > 0 %}
-  <div class="reactions-summary">
-    {% if reactions_counts.likes %}<span title="Likes">⭐ {{ reactions_counts.likes }}</span>{% endif %}
-    {% if reactions_counts.boosts %}<span title="Boosts">🔁 {{ reactions_counts.boosts }}</span>{% endif %}
-    {% if reactions_counts.replies %}<span title="Replies">💬 {{ reactions_counts.replies }}</span>{% endif %}
-    {% if reactions_counts.quotes %}<span title="Quotes">🗣️ {{ reactions_counts.quotes }}</span>{% endif %}
-    {% if reactions_counts.mentions %}<span title="Mentions">📣 {{ reactions_counts.mentions }}</span>{% endif %}
-    {% if reactions_counts.webmentions %}<span title="Webmentions">🔗 {{ reactions_counts.webmentions }}</span>{% endif %}
-    {% if reactions_counts.author_replies %}<span title="Author replies">✍️ {{ reactions_counts.author_replies }}</span>{% endif %}
-  </div>
-  {% endif %}
+  {{ render_counts(reactions_counts, 'reactions-summary', 'div') }}
   <div class="reactions-list">
     {% for node in reactions_tree %}
       {{ render_thread_node(node, 0) }}
