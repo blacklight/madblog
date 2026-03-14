@@ -433,14 +433,14 @@ class ThreadingModelTest(unittest.TestCase):
 
     def test_build_thread_tree_empty(self):
         """Empty inputs return empty tree."""
-        from madblog.threading import build_thread_tree
+        from madblog.reactions import build_thread_tree
 
         tree = build_thread_tree([], [], [], "https://example.com/article/test")
         self.assertEqual(tree, [])
 
     def test_author_replies_become_root_nodes(self):
         """Author replies to the article URL become root nodes."""
-        from madblog.threading import build_thread_tree, ReactionType
+        from madblog.reactions import build_thread_tree, ReactionType
 
         replies = [
             {
@@ -462,7 +462,7 @@ class ThreadingModelTest(unittest.TestCase):
 
     def test_nested_replies_become_children(self):
         """A reply to another reply becomes a child node."""
-        from madblog.threading import build_thread_tree
+        from madblog.reactions import build_thread_tree
 
         replies = [
             {
@@ -495,7 +495,7 @@ class ThreadingModelTest(unittest.TestCase):
     def test_ap_reply_threads_under_parent(self):
         """An AP reply targeting an author reply nests under it."""
         from unittest.mock import MagicMock
-        from madblog.threading import build_thread_tree, ReactionType
+        from madblog.reactions import build_thread_tree, ReactionType
 
         author_reply = {
             "slug": "thanks",
@@ -560,7 +560,7 @@ class ThreadingModelTest(unittest.TestCase):
     def test_ap_reply_threads_via_ap_alias(self):
         """AP reply threads under author reply when AP domain differs from blog domain."""
         from unittest.mock import MagicMock
-        from madblog.threading import build_thread_tree, ReactionType
+        from madblog.reactions import build_thread_tree, ReactionType
 
         # config.link = https://blog.example.com
         # config.activitypub_link = https://ap.example.com
@@ -623,7 +623,7 @@ class ThreadingModelTest(unittest.TestCase):
     def test_ap_like_stays_root(self):
         """A like interaction should remain at root level, not thread."""
         from unittest.mock import MagicMock
-        from madblog.threading import build_thread_tree, ReactionType
+        from madblog.reactions import build_thread_tree, ReactionType
 
         ap_like = MagicMock()
         ap_like.object_id = "https://mastodon.social/users/bob/statuses/300"
@@ -646,7 +646,7 @@ class ThreadingModelTest(unittest.TestCase):
 
     def test_reaction_anchor_id_stable(self):
         """Anchor IDs are stable and deterministic."""
-        from madblog.threading import reaction_anchor_id
+        from madblog.reactions import reaction_anchor_id
 
         id1 = reaction_anchor_id("wm", "https://example.com/post/123")
         id2 = reaction_anchor_id("wm", "https://example.com/post/123")
@@ -844,7 +844,7 @@ class PermalinkNavigationTest(unittest.TestCase):
 
     def test_anchor_id_format(self):
         """Anchor IDs follow the expected format."""
-        from madblog.threading import reaction_anchor_id
+        from madblog.reactions import reaction_anchor_id
 
         wm_anchor = reaction_anchor_id("wm", "https://example.com/post/123")
         ap_anchor = reaction_anchor_id("ap", "https://mastodon.social/statuses/456")
@@ -863,7 +863,7 @@ class PermalinkNavigationTest(unittest.TestCase):
 
     def test_anchor_ids_are_deterministic(self):
         """Same input produces same anchor ID."""
-        from madblog.threading import reaction_anchor_id
+        from madblog.reactions import reaction_anchor_id
 
         url = "https://example.com/unique/post"
         id1 = reaction_anchor_id("wm", url)
@@ -872,7 +872,7 @@ class PermalinkNavigationTest(unittest.TestCase):
 
     def test_different_urls_produce_different_anchors(self):
         """Different URLs produce different anchor IDs."""
-        from madblog.threading import reaction_anchor_id
+        from madblog.reactions import reaction_anchor_id
 
         id1 = reaction_anchor_id("wm", "https://example.com/post/1")
         id2 = reaction_anchor_id("wm", "https://example.com/post/2")
@@ -1069,7 +1069,7 @@ class CountReactionsTest(unittest.TestCase):
     """Tests for the count_reactions helper."""
 
     def _make_node(self, reaction_type, type_val=None):
-        from madblog.threading import ThreadNode, ReactionType
+        from madblog.reactions import ThreadNode, ReactionType
 
         if reaction_type == "author_reply":
             item = {"full_url": "https://example.com/reply/a/r1"}
@@ -1102,13 +1102,13 @@ class CountReactionsTest(unittest.TestCase):
             )
 
     def test_empty_tree(self):
-        from madblog.threading import count_reactions
+        from madblog.reactions import count_reactions
 
         counts = count_reactions([])
         self.assertEqual(counts["total"], 0)
 
     def test_counts_all_types(self):
-        from madblog.threading import count_reactions
+        from madblog.reactions import count_reactions
 
         like_wm = self._make_node("webmention", "like")
         repost_wm = self._make_node("webmention", "repost")
@@ -1131,7 +1131,7 @@ class CountReactionsTest(unittest.TestCase):
         self.assertEqual(counts["author_replies"], 1)
 
     def test_counts_nested_children(self):
-        from madblog.threading import count_reactions
+        from madblog.reactions import count_reactions
 
         root = self._make_node("ap_interaction", "reply")
         child = self._make_node("ap_interaction", "like")

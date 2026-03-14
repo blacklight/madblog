@@ -13,7 +13,7 @@ from markdown import Extension
 from madblog.config import config
 from madblog.tags import parse_metadata_tags
 from madblog.templates import TemplateUtils
-from madblog.threading import count_reactions
+from madblog.reactions import count_reactions
 
 from ._render import render_html, resolve_relative_urls
 

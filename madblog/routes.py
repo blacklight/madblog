@@ -28,7 +28,7 @@ from .cache import (
 from .config import config
 from .feeds import FeedAuthor
 from .templates import TemplateUtils
-from .threading import build_thread_tree, count_reactions
+from .reactions import build_thread_tree, count_reactions
 from ._sorters import PagesSortByTimeGroupedByFolder
 
 logger = logging.getLogger(__name__)
