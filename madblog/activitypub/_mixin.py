@@ -411,7 +411,39 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         article_slug: str,
         reply_slug: str,
     ) -> Response | None:
-        """Return an AP JSON response (or redirect) for an author reply."""
+        """
+        Return an AP JSON response (or redirect) for an author reply.
+
+        For standalone likes (``like-of`` present, no ``reply-to``, no
+        content beyond heading), the response is a ``Like`` activity
+        rather than a ``Note`` object.
+        """
+        if not (
+            hasattr(self, "activitypub_handler") and hasattr(self, "_ap_integration")
+        ):
+            return None
+
+        if not self._ap_accept_quality():
+            return None
+
+        like_of = metadata.get("like-of")
+        has_reply_to = "reply-to" in metadata
+        has_content = bool(
+            self._ap_integration._clean_content(  # pylint: disable=protected-access
+                md_file
+            ).strip()
+        )
+
+        if like_of and not has_reply_to and not has_content:
+            # Standalone like: return the Like activity JSON
+            return self._get_activitypub_like_response(
+                md_file=md_file,
+                like_of=like_of,
+                metadata=metadata,
+                last_modified=last_modified,
+                etag=etag,
+            )
+
         base_url = (config.link or request.host_url.rstrip("/")).rstrip("/")
         return self._get_activitypub_object_response(
             ap_url=self._ap_integration.reply_file_to_url(md_file),
@@ -426,6 +458,71 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             last_modified=last_modified,
             etag=etag,
         )
+
+    def _get_activitypub_like_response(
+        self,
+        *,
+        md_file: str,
+        like_of: str,
+        metadata: dict,
+        last_modified: str,
+        etag: str,
+    ) -> Response | None:
+        """
+        Return a Like activity JSON response for a standalone like.
+
+        If the Like was previously published and its activity ID is
+        stored, use that ID.  Otherwise build a fresh Like activity dict.
+        """
+        # Split-domain redirect check
+        ap_link = (config.activitypub_link or "").rstrip("/")
+        blog_link = (config.link or "").rstrip("/")
+        if ap_link and ap_link != blog_link:
+            ap_host = urlparse(ap_link).hostname
+            request_host = request.host.split(":")[0]
+            if request_host != ap_host:
+                from flask import redirect
+
+                ap_url = self._ap_integration.reply_file_to_url(md_file)
+                return redirect(ap_url, code=302)  # type: ignore
+
+        # Try to retrieve the stored Like activity ID
+        stored_like_id = (
+            self._ap_integration._get_reply_like_id(  # pylint: disable=protected-access
+                md_file
+            )
+        )
+
+        actor_id = self.activitypub_handler.actor_id
+
+        if stored_like_id:
+            # Reconstruct a minimal Like activity from stored data
+            doc = {
+                "@context": AP_CONTEXT,
+                "id": stored_like_id,
+                "type": "Like",
+                "actor": actor_id,
+                "object": like_of,
+                "to": ["https://www.w3.org/ns/activitystreams#Public"],
+                "cc": [self.activitypub_handler.followers_url],
+            }
+        else:
+            # Build a fresh Like activity (not yet published)
+            doc = self.activitypub_handler.outbox.build_like_activity(like_of)
+
+        response = make_response(json.dumps(doc, ensure_ascii=False))
+        response.mimetype = "application/activity+json"
+        response.headers["Last-Modified"] = last_modified
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+
+        language = metadata.get("language")
+        if language:
+            response.headers["Language"] = language
+        elif config.language:
+            response.headers["Language"] = config.language
+
+        return response
 
     def _install_activitypub_moderation(self):
         """

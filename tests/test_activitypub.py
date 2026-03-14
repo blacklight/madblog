@@ -2223,5 +2223,130 @@ class ArticleLikeActivityTest(unittest.TestCase):
         self.assertEqual(undo_calls[0][0][0]["object"]["type"], "Like")
 
 
+class StandaloneLikeContentNegotiationTest(unittest.TestCase):
+    """Tests for AP content negotiation returning Like activity for standalone likes."""
+
+    @skip_if_no_pubby
+    def setUp(self):
+        from madblog.config import config
+
+        self.config = config
+        self._orig_activitypub_domain = config.activitypub_domain
+        self._orig_activitypub_link = config.activitypub_link
+        self._tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self._tmpdir.cleanup)
+
+        root = Path(self._tmpdir.name)
+        markdown_dir = root / "markdown"
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+        replies_dir = root / "replies"
+        replies_dir.mkdir(parents=True, exist_ok=True)
+
+        self.replies_dir = replies_dir
+        self.markdown_dir = markdown_dir
+
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+        config.enable_activitypub = True
+        config.activitypub_link = None
+        config.activitypub_domain = None
+        config.activitypub_private_key_path = None
+        config.author = "Test Author"
+
+        from madblog.app import BlogApp
+
+        self.app = BlogApp(__name__)
+
+    def tearDown(self):
+        if hasattr(self, "app") and hasattr(self.app, "_ap_startup_thread"):
+            self.app._ap_startup_thread.join(timeout=5)
+
+        if hasattr(self, "config"):
+            self.config.enable_activitypub = False
+            self.config.activitypub_link = self._orig_activitypub_link
+            self.config.activitypub_domain = self._orig_activitypub_domain
+
+    @skip_if_no_pubby
+    def test_standalone_like_returns_like_activity_json(self):
+        """A standalone like reply returns a Like activity via AP content negotiation."""
+        art_dir = self.replies_dir / "_guestbook"
+        art_dir.mkdir()
+        reply_file = art_dir / "liked-it.md"
+        reply_file.write_text(
+            "[//]: # (like-of: https://remote.social/statuses/42)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "# Liked\n",
+            encoding="utf-8",
+        )
+
+        with self.app.test_request_context(
+            "/reply/_guestbook/liked-it",
+            headers={"Accept": "application/activity+json"},
+        ):
+            resp = self.app.get_reply("_guestbook", "liked-it")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.mimetype, "application/activity+json")
+        data = resp.get_json()
+        self.assertEqual(data["type"], "Like")
+        self.assertEqual(data["object"], "https://remote.social/statuses/42")
+        self.assertIn("actor", data)
+
+    @skip_if_no_pubby
+    def test_like_with_reply_to_returns_note(self):
+        """A reply with both like-of and reply-to returns a Note, not a Like."""
+        art_dir = self.replies_dir / "_guestbook"
+        art_dir.mkdir(exist_ok=True)
+        reply_file = art_dir / "reply-and-like.md"
+        reply_file.write_text(
+            "[//]: # (like-of: https://remote.social/statuses/42)\n"
+            "[//]: # (reply-to: https://remote.social/statuses/42)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "\n"
+            "# Reply and Like\n"
+            "\n"
+            "Great post, I liked it!\n",
+            encoding="utf-8",
+        )
+
+        with self.app.test_request_context(
+            "/reply/_guestbook/reply-and-like",
+            headers={"Accept": "application/activity+json"},
+        ):
+            resp = self.app.get_reply("_guestbook", "reply-and-like")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.mimetype, "application/activity+json")
+        data = resp.get_json()
+        self.assertEqual(data["type"], "Note")
+
+    @skip_if_no_pubby
+    def test_like_with_content_returns_note(self):
+        """A reply with like-of and content (but no reply-to) returns a Note."""
+        art_dir = self.replies_dir / "_guestbook"
+        art_dir.mkdir(exist_ok=True)
+        reply_file = art_dir / "like-with-body.md"
+        reply_file.write_text(
+            "[//]: # (like-of: https://remote.social/statuses/42)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "\n"
+            "# Like with body\n"
+            "\n"
+            "I liked this and here is why.\n",
+            encoding="utf-8",
+        )
+
+        with self.app.test_request_context(
+            "/reply/_guestbook/like-with-body",
+            headers={"Accept": "application/activity+json"},
+        ):
+            resp = self.app.get_reply("_guestbook", "like-with-body")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.mimetype, "application/activity+json")
+        data = resp.get_json()
+        self.assertEqual(data["type"], "Note")
+
+
 if __name__ == "__main__":
     unittest.main()
