@@ -1,0 +1,456 @@
+"""
+Replies mixin for Madblog.
+
+Provides methods to:
+- Retrieve and parse author replies
+- Build interaction trees for articles and replies
+- Render reply pages
+"""
+
+import contextlib
+import datetime
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import IO, Callable
+
+from flask import Flask, has_app_context, render_template
+
+from madblog.config import config
+from madblog.markdown import resolve_relative_urls
+from madblog.templates import TemplateUtils
+from madblog.reactions import build_thread_tree, count_reactions
+
+
+class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
+    """
+    Mixin that provides author reply and interaction threading functionality.
+
+    Expects the following to be provided by the concrete class or other mixins:
+    - replies_dir: Path to the replies directory
+    - _parse_reply_metadata(article_slug, reply_slug) -> dict (from MarkdownMixin)
+    - _parse_markdown_content(f) -> str (from MarkdownMixin)
+    - _parse_author(metadata) -> dict (from MarkdownMixin)
+    - _get_webmentions(metadata) -> list (from WebmentionsMixin)
+    - _get_ap_interactions(md_file, extra_target_urls) -> list (from ActivityPubMixin)
+    """
+
+    replies_dir: Path
+
+    _get_ap_interactions: Callable[..., list]
+    _get_webmentions: Callable[[dict], list]
+    _parse_author: Callable[[dict], dict]
+    _parse_markdown_content: Callable[[IO], str]
+    _parse_reply_metadata: Callable[[str, str], dict]
+
+    @property
+    @abstractmethod
+    def _app(self) -> Flask: ...
+
+    @staticmethod
+    def _article_slug_from_metadata(metadata: dict) -> str:
+        """
+        Derive the article slug from the metadata URI.
+
+        E.g. ``/article/2025/my-post`` → ``2025/my-post``
+        """
+        uri = metadata.get("uri", "")
+        if uri.startswith("/article/"):
+            return uri[len("/article/") :]
+        return uri.lstrip("/")
+
+    def _get_article_replies(self, article_slug: str) -> list:
+        """
+        Scan replies/<article_slug>/ and return a list of parsed reply dicts.
+
+        Each dict contains: slug, title, reply_to, published, content_html,
+        permalink, author, author_url, author_photo.
+        """
+        from madblog.markdown import render_html
+
+        replies_subdir = self.replies_dir / article_slug
+        if not replies_subdir.is_dir():
+            return []
+
+        replies = []
+        for md_path in replies_subdir.glob("*.md"):
+            reply_slug = md_path.stem
+            try:
+                metadata = self._parse_reply_metadata(article_slug, reply_slug)
+            except Exception:
+                continue
+
+            md_file = metadata.pop("md_file")
+            with open(md_file, "r") as f:
+                content = self._parse_markdown_content(f)
+
+            author_info = self._parse_author(metadata)
+            permalink = f"/reply/{article_slug}/{reply_slug}"
+
+            replies.append(
+                {
+                    "slug": reply_slug,
+                    "title": metadata.get("title", reply_slug),
+                    "reply_to": metadata.get("reply-to", ""),
+                    "published": metadata.get("published"),
+                    "content_html": render_html(
+                        resolve_relative_urls(content, config.link, permalink, "/reply")
+                    ),
+                    "permalink": permalink,
+                    "full_url": config.link + permalink,
+                    **author_info,
+                }
+            )
+
+        # Sort by published date ascending (oldest first)
+        replies.sort(key=lambda r: r.get("published") or datetime.date.min)
+        return replies
+
+    def _annotate_replies_with_ap_urls(
+        self, replies: list, ap_base_url: str
+    ) -> set[str]:
+        """
+        Annotate author replies with their ActivityPub URLs and return the set
+        of all AP URLs (for use as extra target URLs when fetching interactions).
+
+        :param replies: List of reply dicts to annotate in-place
+        :param ap_base_url: The ActivityPub base URL
+        :return: Set of all AP URLs for the replies
+        """
+        ap_urls = set()
+        for reply in replies:
+            permalink = reply.get("permalink", "")
+            if permalink:
+                ap_url = ap_base_url + permalink
+                ap_urls.add(ap_url)
+                if ap_url != reply.get("full_url"):
+                    reply["ap_full_url"] = ap_url
+                # Also add the content URL variant
+                content_url = reply.get("full_url", "")
+                if content_url:
+                    ap_urls.add(content_url)
+        return ap_urls
+
+    @staticmethod
+    def _is_article_interaction(
+        interaction,
+        article_url: str,
+        ap_object_url: str | None,
+        reply_ap_urls: set[str],
+    ) -> bool:
+        """
+        Check if an interaction should be shown on the article page.
+
+        Interactions targeting the article itself are always included.
+        For interactions targeting author reply URLs, only replies and quotes
+        are included (likes/boosts on replies appear only on the reply page).
+        """
+        target = getattr(interaction, "target_resource", None)
+        if not target:
+            return True
+
+        # Interactions targeting the article itself are always included
+        if target in (ap_object_url, article_url):
+            return True
+
+        # For interactions targeting reply URLs, only include replies/quotes
+        if target in reply_ap_urls:
+            itype = getattr(interaction, "interaction_type", None)
+            type_val = None
+            if itype:
+                type_val = (
+                    itype.value
+                    if hasattr(itype, "value")
+                    else str(itype) if itype else ""
+                )
+
+            return type_val in ("reply", "quote")
+
+        return True
+
+    def _get_page_interactions(
+        self,
+        md_file: str,
+        metadata: dict,
+    ) -> list:
+        """
+        Retrieve reactions (Webmentions, AP interactions, author replies)
+        for a page and build a threaded tree.
+
+        :return: List of ThreadNode objects (the thread tree roots)
+        """
+        webmentions = self._get_webmentions(metadata)
+        article_slug = self._article_slug_from_metadata(metadata)
+        author_replies = self._get_article_replies(article_slug)
+        article_url = config.link + metadata.get("uri", "")
+
+        # Also fetch AP interactions targeting author reply URLs so that
+        # fediverse replies to author replies appear in the thread.
+        ap_integration = getattr(self, "_ap_integration", None)
+        reply_ap_urls: set[str] = set()
+        if ap_integration:
+            reply_ap_urls = self._annotate_replies_with_ap_urls(
+                author_replies, ap_integration.base_url
+            )
+
+        ap_interactions = self._get_ap_interactions(
+            md_file, extra_target_urls=list(reply_ap_urls)
+        )
+
+        # Filter out non-reply interactions targeting author reply URLs.
+        # Likes/boosts on replies should only appear on the reply page.
+        ap_object_url = None
+        if ap_integration:
+            ap_object_url = ap_integration.file_to_url(md_file)
+
+        ap_interactions = [
+            i
+            for i in ap_interactions
+            if self._is_article_interaction(
+                i,
+                article_url=article_url,
+                ap_object_url=ap_object_url,
+                reply_ap_urls=reply_ap_urls,
+            )
+        ]
+
+        return build_thread_tree(
+            webmentions=webmentions,
+            ap_interactions=ap_interactions,
+            author_replies=author_replies,
+            article_url=article_url,
+        )
+
+    def _find_descendant_replies(
+        self,
+        candidate_replies: dict[str, dict],
+        valid_parent_urls: set[str],
+        ap_base_url: str | None,
+    ) -> list[dict]:
+        """
+        Find author replies that are descendants of a given set of parent URLs.
+
+        This iteratively finds replies whose reply-to matches a known valid URL,
+        then adds their URLs to the valid set and continues until no more
+        descendants are found.
+
+        :param candidate_replies: Dict mapping slug -> reply dict
+        :param valid_parent_urls: Set of URLs that are valid parents (modified in-place)
+        :param ap_base_url: ActivityPub base URL (or None if AP is disabled)
+        :return: List of descendant reply dicts
+        """
+        descendant_replies = []
+        changed = True
+
+        while changed:
+            changed = False
+            for slug, reply in list(candidate_replies.items()):
+                reply_to = reply.get("reply_to", "")
+                if reply_to not in valid_parent_urls:
+                    continue
+
+                descendant_replies.append(reply)
+
+                # Add this reply's URLs to valid_parent_urls
+                if reply.get("full_url"):
+                    valid_parent_urls.add(reply["full_url"])
+
+                if not ap_base_url:
+                    del candidate_replies[slug]
+                    changed = True
+                    continue
+
+                permalink = reply.get("permalink", "")
+                if not permalink:
+                    del candidate_replies[slug]
+                    changed = True
+                    continue
+
+                nested_ap_url = ap_base_url + permalink
+                valid_parent_urls.add(nested_ap_url)
+                if nested_ap_url != reply.get("full_url"):
+                    reply["ap_full_url"] = nested_ap_url
+
+                del candidate_replies[slug]
+                changed = True
+
+        return descendant_replies
+
+    @staticmethod
+    def _collect_reply_ap_urls(replies: list[dict], ap_base_url: str) -> set[str]:
+        """
+        Collect ActivityPub URLs for a list of author replies.
+
+        :param replies: List of reply dicts with 'permalink' and 'full_url' keys
+        :param ap_base_url: ActivityPub base URL
+        :return: Set of AP URLs for the replies
+        """
+        urls = set()
+        for reply in replies:
+            permalink = reply.get("permalink", "")
+            if not permalink:
+                continue
+
+            urls.add(ap_base_url + permalink)
+            content_url = reply.get("full_url", "")
+            if content_url:
+                urls.add(content_url)
+
+        return urls
+
+    @staticmethod
+    def _add_interaction_urls(interactions: list, url_set: set[str]) -> None:
+        """
+        Add object_id and activity_id from interactions to a URL set.
+
+        :param interactions: List of AP interaction objects
+        :param url_set: Set to add URLs to (modified in-place)
+        """
+        for interaction in interactions:
+            obj_id = getattr(interaction, "object_id", None)
+            if obj_id:
+                url_set.add(obj_id)
+            act_id = getattr(interaction, "activity_id", None)
+            if act_id:
+                url_set.add(act_id)
+
+    def _get_reply_interactions(
+        self, md_file: str, metadata: dict, article_slug: str, reply_slug: str
+    ) -> list:
+        """
+        Retrieve reactions (Webmentions, AP interactions, nested author replies)
+        for a reply page and build a threaded tree.
+
+        Only includes reactions that are actual descendants of the current reply,
+        not sibling threads.
+
+        :return: List of ThreadNode objects (the thread tree roots)
+        """
+        reply_url = config.link + metadata.get("uri", "")
+        reply_uri = metadata.get("uri", "")
+        ap_integration = getattr(self, "_ap_integration", None)
+        ap_base_url = ap_integration.base_url if ap_integration else None
+
+        # Build set of valid parent URLs (the current reply and its AP variant)
+        valid_parent_urls = {reply_url}
+        if ap_base_url:
+            valid_parent_urls.add(ap_base_url + reply_uri)
+
+        # Get candidate replies (all except current)
+        all_author_replies = self._get_article_replies(article_slug)
+        candidate_replies = {
+            r.get("slug"): r for r in all_author_replies if r.get("slug") != reply_slug
+        }
+
+        # First pass: find direct descendant replies
+        descendant_replies = self._find_descendant_replies(
+            candidate_replies, valid_parent_urls, ap_base_url
+        )
+
+        # Build extra target URLs for fetching interactions
+        extra_target_urls = self._build_extra_target_urls(
+            reply_url, reply_uri, descendant_replies, ap_base_url
+        )
+
+        # Fetch webmentions and AP interactions
+        webmentions = self._get_webmentions(metadata)
+        ap_interactions = self._get_ap_interactions(
+            md_file, extra_target_urls=list(extra_target_urls)
+        )
+
+        # Add interaction URLs to valid parents for second pass
+        self._add_interaction_urls(ap_interactions, valid_parent_urls)
+
+        # Second pass: find descendants via interactions (e.g., reply to fediverse reply)
+        more_descendants = self._find_descendant_replies(
+            candidate_replies, valid_parent_urls, ap_base_url
+        )
+
+        if more_descendants:
+            descendant_replies.extend(more_descendants)
+            if ap_base_url:
+                extra_target_urls.update(
+                    self._collect_reply_ap_urls(more_descendants, ap_base_url)
+                )
+                ap_interactions = self._get_ap_interactions(
+                    md_file, extra_target_urls=list(extra_target_urls)
+                )
+
+        return build_thread_tree(
+            webmentions=webmentions,
+            ap_interactions=ap_interactions,
+            author_replies=descendant_replies,
+            article_url=reply_url,
+        )
+
+    def _build_extra_target_urls(
+        self,
+        reply_url: str,
+        reply_uri: str,
+        descendant_replies: list,
+        ap_base_url: str | None,
+    ) -> set[str]:
+        """
+        Build the set of extra target URLs for fetching AP interactions.
+
+        Includes the AP URL variant for the current reply plus URLs for all
+        descendant author replies.
+        """
+        if not ap_base_url:
+            return set()
+
+        extra_urls = self._collect_reply_ap_urls(descendant_replies, ap_base_url)
+
+        # Add AP URL variant for the current reply if it differs
+        ap_url = ap_base_url + reply_uri
+        if ap_url != reply_url:
+            extra_urls.add(ap_url)
+
+        return extra_urls
+
+    def _render_reply_html(
+        self,
+        *,
+        md_file: str,
+        metadata: dict,
+        title: str,
+        article_slug: str,
+        reactions_tree: list,
+    ) -> str:
+        """
+        Render a reply Markdown file to HTML using the reply template.
+        """
+        from madblog.markdown import render_html
+
+        with open(md_file, "r") as f:
+            content = self._parse_markdown_content(f)
+
+        author_info = self._parse_author(metadata)
+        reply_to = metadata.get("reply-to", "")
+        reactions_counts = count_reactions(reactions_tree)
+
+        with contextlib.ExitStack() as stack:
+            if not has_app_context():
+                stack.enter_context(self._app.app_context())
+
+            return render_template(
+                "reply.html",
+                config=config,
+                title=title,
+                uri=metadata.get("uri"),
+                url=config.link + metadata.get("uri", ""),
+                image=metadata.get("image"),
+                description=metadata.get("description"),
+                published_datetime=metadata.get("published"),
+                published=metadata["published"].strftime("%b %d, %Y"),
+                content=render_html(
+                    resolve_relative_urls(
+                        content, config.link, metadata.get("uri", ""), "/reply"
+                    )
+                ),
+                reply_to=reply_to,
+                article_slug=article_slug,
+                reactions_tree=reactions_tree,
+                reactions_counts=reactions_counts,
+                utils=TemplateUtils(),
+                **author_info,
+            )
