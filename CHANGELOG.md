@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Guestbook thread leaking:** Fediverse replies to author replies (targeting
+  `/reply/` URLs) and replies-to-replies (targeting remote fediverse URLs that
+  are part of an article thread) were incorrectly shown in the guestbook. The
+  guestbook filter now recognizes both `/article/` and `/reply/` URLs, and
+  walks the reply chain via `get_interaction_by_object_id` to detect remote
+  targets belonging to article threads.
+- **Article page missing nested fediverse replies:** Fediverse
+  reply-to-reply chains (e.g. a Mastodon reply to another Mastodon reply
+  on an author reply) were not fetched for the article page. The article
+  and reply page interaction logic now iteratively follows reply chains
+  by collecting `object_id`s and fetching interactions targeting them.
+
 ## 1.0.2
 
 ### Fixed

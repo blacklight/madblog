@@ -789,6 +789,94 @@ class ThreadingModelTest(unittest.TestCase):
         self.assertEqual(tree[0].reaction_type, ReactionType.AP_INTERACTION)
         self.assertEqual(tree[0].children, [])
 
+    def test_collect_reply_object_ids(self):
+        """_collect_reply_object_ids returns object_ids of reply/quote interactions."""
+        from unittest.mock import MagicMock
+        from madblog.replies._mixin import RepliesMixin
+
+        reply = MagicMock()
+        reply.interaction_type = MagicMock(value="reply")
+        reply.object_id = "https://remote.social/statuses/100"
+
+        like = MagicMock()
+        like.interaction_type = MagicMock(value="like")
+        like.object_id = "https://remote.social/statuses/200"
+
+        quote = MagicMock()
+        quote.interaction_type = MagicMock(value="quote")
+        quote.object_id = "https://remote.social/statuses/300"
+
+        ids = RepliesMixin._collect_reply_object_ids([reply, like, quote])
+        self.assertEqual(
+            ids,
+            {
+                "https://remote.social/statuses/100",
+                "https://remote.social/statuses/300",
+            },
+        )
+
+    def test_nested_fediverse_reply_threads_on_article(self):
+        """A fediverse reply-to-reply chains correctly on the article page.
+
+        Scenario: article → author reply → fediverse reply A → fediverse reply B
+        Both A and B should appear in the thread tree, with B as child of A.
+        """
+        from unittest.mock import MagicMock
+        from madblog.reactions import build_thread_tree, ReactionType
+
+        author_reply = {
+            "slug": "ar1",
+            "title": "Author Reply",
+            "reply_to": "https://example.com/article/post",
+            "published": "2026-01-01T00:00:00+00:00",
+            "content_html": "<p>Author reply</p>",
+            "permalink": "/reply/post/ar1",
+            "full_url": "https://example.com/reply/post/ar1",
+        }
+
+        # Fediverse reply A targets the author reply
+        ap_a = MagicMock()
+        ap_a.object_id = "https://mastodon.social/users/alice/statuses/100"
+        ap_a.activity_id = "https://mastodon.social/users/alice/statuses/100/activity"
+        ap_a.interaction_type = MagicMock(value="reply")
+        ap_a.target_resource = "https://example.com/reply/post/ar1"
+        ap_a.published = "2026-01-02T00:00:00+00:00"
+        ap_a.created_at = None
+
+        # Fediverse reply B targets reply A's Mastodon URL
+        ap_b = MagicMock()
+        ap_b.object_id = "https://mastodon.social/users/bob/statuses/200"
+        ap_b.activity_id = "https://mastodon.social/users/bob/statuses/200/activity"
+        ap_b.interaction_type = MagicMock(value="reply")
+        ap_b.target_resource = "https://mastodon.social/users/alice/statuses/100"
+        ap_b.published = "2026-01-03T00:00:00+00:00"
+        ap_b.created_at = None
+
+        tree = build_thread_tree(
+            webmentions=[],
+            ap_interactions=[ap_a, ap_b],
+            author_replies=[author_reply],
+            article_url="https://example.com/article/post",
+        )
+
+        # Author reply is root
+        self.assertEqual(len(tree), 1)
+        self.assertEqual(tree[0].reaction_type, ReactionType.AUTHOR_REPLY)
+
+        # Reply A is child of author reply
+        self.assertEqual(len(tree[0].children), 1)
+        self.assertEqual(
+            tree[0].children[0].identity,
+            "https://mastodon.social/users/alice/statuses/100",
+        )
+
+        # Reply B is child of reply A
+        self.assertEqual(len(tree[0].children[0].children), 1)
+        self.assertEqual(
+            tree[0].children[0].children[0].identity,
+            "https://mastodon.social/users/bob/statuses/200",
+        )
+
     def test_reaction_anchor_id_stable(self):
         """Anchor IDs are stable and deterministic."""
         from madblog.reactions import reaction_anchor_id

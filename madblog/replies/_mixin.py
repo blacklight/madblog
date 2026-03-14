@@ -167,6 +167,83 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
 
         return True
 
+    @staticmethod
+    def _collect_reply_object_ids(interactions: list) -> set[str]:
+        """
+        Collect ``object_id`` values from reply/quote interactions.
+
+        These can be used as extra target URLs for a subsequent fetch so
+        that nested fediverse replies (reply-to-reply) are also retrieved.
+        """
+        ids: set[str] = set()
+        for interaction in interactions:
+            itype = getattr(interaction, "interaction_type", None)
+            type_val = None
+            if itype:
+                type_val = (
+                    itype.value
+                    if hasattr(itype, "value")
+                    else str(itype) if itype else ""
+                )
+            if type_val not in ("reply", "quote"):
+                continue
+
+            obj_id = getattr(interaction, "object_id", None)
+            if obj_id:
+                ids.add(obj_id)
+        return ids
+
+    def _follow_reply_chains(self, md_file: str, ap_interactions: list) -> list:
+        """
+        Iteratively follow fediverse reply chains.
+
+        Collects ``object_id`` values from reply/quote interactions already
+        fetched and queries the storage for interactions targeting those IDs.
+        Repeats until no new interactions are discovered (bounded to 10
+        iterations).
+
+        :param md_file: The Markdown file (forwarded to ``_get_ap_interactions``).
+        :param ap_interactions: Initial list of AP interactions (extended
+            **in-place** with newly discovered interactions).
+        :return: The same *ap_interactions* list, extended with any new items.
+        """
+        # Track target_resources already queried (to avoid re-querying)
+        queried_targets: set[str] = set()
+        # Track object_ids already in our result set (to avoid duplicates)
+        seen_object_ids: set[str] = set()
+        for i in ap_interactions:
+            obj_id = getattr(i, "object_id", None)
+            if obj_id:
+                seen_object_ids.add(obj_id)
+
+        _MAX_DEPTH = 10
+        for _ in range(_MAX_DEPTH):
+            new_target_ids = self._collect_reply_object_ids(ap_interactions)
+            new_target_ids -= queried_targets
+
+            if not new_target_ids:
+                break
+
+            queried_targets.update(new_target_ids)
+            new_interactions = self._get_ap_interactions(
+                md_file, extra_target_urls=list(new_target_ids)
+            )
+
+            # Keep only genuinely new interactions
+            fresh = []
+            for i in new_interactions:
+                obj_id = getattr(i, "object_id", None)
+                if obj_id and obj_id not in seen_object_ids:
+                    seen_object_ids.add(obj_id)
+                    fresh.append(i)
+
+            if not fresh:
+                break
+
+            ap_interactions.extend(fresh)
+
+        return ap_interactions
+
     def _get_page_interactions(
         self,
         md_file: str,
@@ -195,6 +272,9 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
         ap_interactions = self._get_ap_interactions(
             md_file, extra_target_urls=list(reply_ap_urls)
         )
+
+        # Follow nested fediverse reply chains
+        self._follow_reply_chains(md_file, ap_interactions)
 
         # Filter out non-reply interactions targeting author reply URLs.
         # Likes/boosts on replies should only appear on the reply page.
@@ -374,6 +454,9 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
                 ap_interactions = self._get_ap_interactions(
                     md_file, extra_target_urls=list(extra_target_urls)
                 )
+
+        # Follow nested fediverse reply chains
+        self._follow_reply_chains(md_file, ap_interactions)
 
         return build_thread_tree(
             webmentions=webmentions,

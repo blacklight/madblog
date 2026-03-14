@@ -85,6 +85,67 @@ class GuestbookMixin(ABC):
 
         return False
 
+    def _is_article_thread_url(self, url: str) -> bool:
+        """
+        Check if a URL belongs to an article thread.
+
+        Matches both ``/article/`` and ``/reply/`` URLs on the blog domain.
+        """
+        if not url:
+            return False
+
+        base_url = (config.link or "").rstrip("/")
+        ap_base_url = (config.activitypub_link or base_url).rstrip("/")
+
+        for base in (base_url, ap_base_url):
+            if url.startswith(f"{base}/article/") or url.startswith(f"{base}/reply/"):
+                return True
+
+        return False
+
+    def _is_in_article_thread(  # pylint: disable=too-many-return-statements
+        self, target: str, _visited: set[str] | None = None
+    ) -> bool:
+        """
+        Check whether *target* belongs to an article thread.
+
+        First checks if *target* is a local article/reply URL.  If not,
+        looks up the target as an ``object_id`` in the interaction storage
+        and walks the chain up to a bounded depth to see if the ancestor
+        targets a blog article or reply.
+        """
+        if self._is_article_thread_url(target):
+            return True
+
+        if not hasattr(self, "activitypub_handler"):
+            return False
+
+        storage = self.activitypub_handler.storage
+        if not hasattr(storage, "get_interaction_by_object_id"):
+            return False
+
+        if _visited is None:
+            _visited = set()
+
+        # Walk the reply chain (bounded to avoid infinite loops)
+        _MAX_DEPTH = 10
+        if len(_visited) >= _MAX_DEPTH:
+            return False
+
+        if target in _visited:
+            return False
+        _visited.add(target)
+
+        parent = storage.get_interaction_by_object_id(target)
+        if parent is None:
+            return False
+
+        parent_target = getattr(parent, "target_resource", None)
+        if not parent_target:
+            return False
+
+        return self._is_in_article_thread(parent_target, _visited)
+
     def get_guestbook_webmentions(self) -> List:
         """
         Retrieve webmentions that target the home page.
@@ -174,10 +235,10 @@ class GuestbookMixin(ABC):
                 if type_value == "mention":
                     pass  # Always include direct mentions
                 elif type_value == "reply":
-                    # Include replies only if they are NOT targeting an article
-                    # (replies to articles are shown on the article page)
+                    # Include replies only if they are NOT part of an
+                    # article thread (those are shown on the article page)
                     target = getattr(interaction, "target_resource", "")
-                    if self._is_article_url(target):
+                    if self._is_in_article_thread(target):
                         continue
                 else:
                     continue  # Exclude likes, boosts, quotes

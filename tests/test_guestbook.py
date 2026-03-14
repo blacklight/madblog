@@ -89,6 +89,34 @@ class GuestbookMixinTest(unittest.TestCase):
         self.assertFalse(app._is_article_url("https://example.com/tags/python"))
         self.assertFalse(app._is_article_url(""))
 
+    def test_is_article_thread_url(self):
+        from madblog.guestbook._mixin import GuestbookMixin
+
+        class MockApp(GuestbookMixin):
+            mentions_dir = Path("/tmp")
+
+            @property
+            def _app(self):
+                return MagicMock()
+
+        app = MockApp()
+
+        # Should match articles
+        self.assertTrue(app._is_article_thread_url("https://example.com/article/test"))
+
+        # Should match author reply URLs
+        self.assertTrue(
+            app._is_article_thread_url("https://example.com/reply/my-post/reply-1")
+        )
+
+        # Should not match non-article/non-reply URLs
+        self.assertFalse(app._is_article_thread_url("https://example.com"))
+        self.assertFalse(app._is_article_thread_url("https://example.com/tags/python"))
+        self.assertFalse(
+            app._is_article_thread_url("https://remote.social/users/alice/statuses/123")
+        )
+        self.assertFalse(app._is_article_thread_url(""))
+
 
 class GuestbookAPInteractionsTest(unittest.TestCase):
     """Test that get_guestbook_ap_interactions filters interaction types correctly."""
@@ -118,6 +146,7 @@ class GuestbookAPInteractionsTest(unittest.TestCase):
         storage = MagicMock()
         storage.get_interactions.return_value = interactions
         storage.get_interactions_mentioning.return_value = mentioning_interactions or []
+        storage.get_interaction_by_object_id.return_value = None
 
         handler = MagicMock()
         handler.actor_id = "https://example.com/ap/actor"
@@ -165,6 +194,53 @@ class GuestbookAPInteractionsTest(unittest.TestCase):
             "reply", "https://example.com/article/my-post", "3"
         )
         app = self._make_mixin([], mentioning_interactions=[reply])
+        result = app.get_guestbook_ap_interactions()
+        self.assertEqual(len(result), 0)
+
+    def test_reply_to_author_reply_excluded(self):
+        """Replies to author reply URLs should NOT appear in the guestbook."""
+        reply = self._make_interaction(
+            "reply", "https://example.com/reply/my-post/reply-1", "r1"
+        )
+        app = self._make_mixin([], mentioning_interactions=[reply])
+        result = app.get_guestbook_ap_interactions()
+        self.assertEqual(len(result), 0)
+
+    def test_reply_to_fediverse_reply_in_article_thread_excluded(self):
+        """Replies to fediverse replies that are part of an article thread
+        should NOT appear in the guestbook."""
+        # The parent interaction targets an author reply URL
+        parent_interaction = MagicMock(
+            target_resource="https://example.com/reply/my-post/reply-1",
+            object_id="https://remote.social/users/alice/statuses/100",
+        )
+
+        # The child reply targets the parent's Mastodon URL
+        child_reply = self._make_interaction(
+            "reply", "https://remote.social/users/alice/statuses/100", "child1"
+        )
+
+        # Set up storage to return the parent when looking up by object_id
+        from madblog.guestbook._mixin import GuestbookMixin
+
+        storage = MagicMock()
+        storage.get_interactions.return_value = []
+        storage.get_interactions_mentioning.return_value = [child_reply]
+        storage.get_interaction_by_object_id.return_value = parent_interaction
+
+        handler = MagicMock()
+        handler.actor_id = "https://example.com/ap/actor"
+        handler.storage = storage
+
+        class MockApp(GuestbookMixin):
+            mentions_dir = Path("/tmp")
+            activitypub_handler = handler
+
+            @property
+            def _app(self):
+                return MagicMock()
+
+        app = MockApp()
         result = app.get_guestbook_ap_interactions()
         self.assertEqual(len(result), 0)
 
