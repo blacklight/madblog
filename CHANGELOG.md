@@ -1,6 +1,19 @@
 # Changelog
 
-## Unreleased
+## 1.0.1
+
+### Fixed
+- **activitypub:** Serve homepage content for HTML requests to `/ap/actor` and
+  `/@<username>` instead of issuing an HTTP redirect, enabling Mastodon
+  `rel="me"` profile verification. Adds `meta_redirect_to` support to inject a
+  meta refresh redirect while still showing the correct HTML content, and
+  updates content negotiation logic and tests accordingly.
+- **docs:** Clarify author replies behavior: replies without `reply-to` act
+  like “unlisted” posts (not shown on the index but available by
+  URL/ActivityPub). Document guestbook posts under `replies/_guestbook/` and
+  how replies work there.
+
+## 1.0.0
 
 ### Added
 - **Author replies:** Blog authors can now write replies to comments directly
