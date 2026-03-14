@@ -877,6 +877,82 @@ class ThreadingModelTest(unittest.TestCase):
             "https://mastodon.social/users/bob/statuses/200",
         )
 
+    def test_fediverse_url_aliases_canonical_to_pretty(self):
+        """Canonical /users/user/statuses/ID produces /@user aliases."""
+        from madblog.reactions import _fediverse_url_aliases
+
+        aliases = _fediverse_url_aliases(
+            "https://mastodon.social/users/alice/statuses/12345"
+        )
+        self.assertIn("https://mastodon.social/@alice/statuses/12345", aliases)
+        self.assertIn("https://mastodon.social/@alice/12345", aliases)
+
+    def test_fediverse_url_aliases_pretty_to_canonical(self):
+        """Pretty /@user/statuses/ID produces /users/user canonical alias."""
+        from madblog.reactions import _fediverse_url_aliases
+
+        aliases = _fediverse_url_aliases(
+            "https://mastodon.social/@alice/statuses/12345"
+        )
+        self.assertEqual(
+            aliases, ["https://mastodon.social/users/alice/statuses/12345"]
+        )
+
+    def test_fediverse_url_aliases_short_pretty_to_canonical(self):
+        """Short pretty /@user/ID produces /users/user/statuses canonical alias."""
+        from madblog.reactions import _fediverse_url_aliases
+
+        aliases = _fediverse_url_aliases("https://mastodon.social/@alice/12345")
+        self.assertEqual(
+            aliases, ["https://mastodon.social/users/alice/statuses/12345"]
+        )
+
+    def test_fediverse_url_aliases_non_mastodon(self):
+        """Non-Mastodon URLs produce no aliases."""
+        from madblog.reactions import _fediverse_url_aliases
+
+        self.assertEqual(_fediverse_url_aliases("https://example.com/article/post"), [])
+        self.assertEqual(_fediverse_url_aliases(""), [])
+
+    def test_author_reply_to_pretty_mastodon_url(self):
+        """Author reply using /@user pretty URL threads under AP interaction
+        that uses /users/user canonical URL."""
+        from unittest.mock import MagicMock
+        from madblog.reactions import build_thread_tree, ReactionType
+
+        # AP interaction uses canonical object_id
+        ap = MagicMock()
+        ap.object_id = "https://mastodon.social/users/alice/statuses/100"
+        ap.activity_id = "https://mastodon.social/users/alice/statuses/100/activity"
+        ap.interaction_type = MagicMock(value="reply")
+        ap.target_resource = "https://example.com/article/post"
+        ap.published = "2026-01-01T00:00:00+00:00"
+        ap.created_at = None
+
+        # Author reply uses pretty /@user URL as reply-to
+        author_reply = {
+            "slug": "ar1",
+            "title": "Author Reply",
+            "reply_to": "https://mastodon.social/@alice/statuses/100",
+            "published": "2026-01-02T00:00:00+00:00",
+            "content_html": "<p>Reply</p>",
+            "permalink": "/reply/post/ar1",
+            "full_url": "https://example.com/reply/post/ar1",
+        }
+
+        tree = build_thread_tree(
+            webmentions=[],
+            ap_interactions=[ap],
+            author_replies=[author_reply],
+            article_url="https://example.com/article/post",
+        )
+
+        # AP interaction is root, author reply is its child
+        self.assertEqual(len(tree), 1)
+        self.assertEqual(tree[0].reaction_type, ReactionType.AP_INTERACTION)
+        self.assertEqual(len(tree[0].children), 1)
+        self.assertEqual(tree[0].children[0].reaction_type, ReactionType.AUTHOR_REPLY)
+
     def test_reaction_anchor_id_stable(self):
         """Anchor IDs are stable and deterministic."""
         from madblog.reactions import reaction_anchor_id

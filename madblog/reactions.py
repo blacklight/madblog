@@ -66,6 +66,42 @@ def _get_ap_interaction_identity(interaction) -> str:
     )
 
 
+def _fediverse_url_aliases(url: str) -> list[str]:
+    """
+    Return alternative URL forms for the same fediverse resource.
+
+    Mastodon (and compatible software) exposes two URL forms:
+
+    - **Pretty** (web UI): ``https://instance/@user/statuses/ID``
+      or ``https://instance/@user/ID``
+    - **Canonical** (ActivityPub): ``https://instance/users/user/statuses/ID``
+
+    This helper returns the other form(s) so that nodes can be found
+    regardless of which format was used in a ``reply-to`` header.
+    """
+    aliases: list[str] = []
+
+    # /@user/statuses/ID → /users/user/statuses/ID
+    if "/@" in url:
+        m = re.match(r"^(https?://[^/]+)/@([^/]+)/statuses/(.+)$", url)
+        if m:
+            aliases.append(f"{m.group(1)}/users/{m.group(2)}/statuses/{m.group(3)}")
+            return aliases
+        # /@user/ID (no /statuses/ segment) → /users/user/statuses/ID
+        m = re.match(r"^(https?://[^/]+)/@([^/]+)/(\d+)$", url)
+        if m:
+            aliases.append(f"{m.group(1)}/users/{m.group(2)}/statuses/{m.group(3)}")
+            return aliases
+
+    # /users/user/statuses/ID → /@user/statuses/ID and /@user/ID
+    m = re.match(r"^(https?://[^/]+)/users/([^/]+)/statuses/(.+)$", url)
+    if m:
+        aliases.append(f"{m.group(1)}/@{m.group(2)}/statuses/{m.group(3)}")
+        aliases.append(f"{m.group(1)}/@{m.group(2)}/{m.group(3)}")
+
+    return aliases
+
+
 def _get_webmention_reply_to(*_) -> Optional[str]:
     """
     Extract what a Webmention is replying to.
@@ -170,13 +206,19 @@ def build_thread_tree(
             or getattr(interaction, "created_at", None)
         )
 
-        nodes[identity] = ThreadNode(
+        node = nodes[identity] = ThreadNode(
             item=interaction,
             reaction_type=ReactionType.AP_INTERACTION,
             identity=identity,
             reply_to=_get_ap_interaction_reply_to(interaction),
             published=published,
         )
+
+        # Register under URL aliases (e.g. Mastodon /@user ↔ /users/user)
+        # so that author reply-to using either format resolves correctly.
+        for alias in _fediverse_url_aliases(identity):
+            if alias not in nodes:
+                nodes[alias] = node
 
     # Create nodes for author replies
     for reply in author_replies:

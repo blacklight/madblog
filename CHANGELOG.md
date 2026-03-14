@@ -14,6 +14,11 @@
   on an author reply) were not fetched for the article page. The article
   and reply page interaction logic now iteratively follows reply chains
   by collecting `object_id`s and fetching interactions targeting them.
+- **Reply-to Mastodon pretty URLs:** Author replies using the Mastodon
+  web UI URL format (`/@user/statuses/ID`) in their `reply-to` header
+  were not threaded under the corresponding AP interaction (which uses
+  the canonical `/users/user/statuses/ID` format). AP interaction nodes
+  are now registered under both URL forms.
 
 ## 1.0.2
 
