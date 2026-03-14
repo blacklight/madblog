@@ -75,6 +75,10 @@ link: https://myblog.example.com
 # will be removed) instead of being marked as deleted (optional, default: false)
 # webmentions_hard_delete: false
 
+# Whether to enable the guestbook page (optional, default: true)
+# The guestbook aggregates homepage mentions from Webmentions and ActivityPub.
+# enable_guestbook: true
+
 # Default status for incoming Webmentions (if Webmentions are enabled) (optional,
 # default: "confirmed"). If set to "pending" then the Webmention will be stored
 # under the `mentions` directory as a Markdown file, with metadata header `status`
@@ -88,6 +92,25 @@ link: https://myblog.example.com
 #   - Lifestyle
 #   - Travel
 #   - Food
+
+#### (Optional) Rendering Features ####
+
+# Whether to enable LaTeX rendering (optional, default: true)
+# Set to false to disable LaTeX even if dependencies are available.
+# Configurable via MADBLOG_ENABLE_LATEX environment variable.
+# enable_latex: true
+
+# Whether to enable Mermaid diagram rendering (optional, default: true)
+# Set to false to disable Mermaid even if dependencies are available.
+# Configurable via MADBLOG_ENABLE_MERMAID environment variable.
+# enable_mermaid: true
+
+#### (Optional) State Directory ####
+
+# Directory where Madblog stores its state (ActivityPub keys, mentions, cache).
+# If not set, defaults to <content_dir>/.madblog
+# Configurable via MADBLOG_STATE_DIR environment variable.
+# state_dir: /path/to/.madblog
 
 #### (Optional) Feed aggregator mode ####
 # A list of external RSS/Atom URLs that should also be rendered in the blog
@@ -226,3 +249,14 @@ link: https://myblog.example.com
 #   - spammer.example.com
 #   - "@troll@evil.social"
 #   - /spam-ring\.example\..*/
+
+# An allowlist of actors whose Webmentions and ActivityPub interactions
+# will be accepted. If set, only actors matching an entry in this list
+# will be stored/rendered. Mutually exclusive with blocked_actors.
+#
+# Uses the same format as blocked_actors (domains, URLs, FQNs, or regexes).
+# Can also be specified via the MADBLOG_ALLOWED_ACTORS environment variable.
+#
+# allowed_actors:
+#   - trusted.example.com
+#   - "@friend@mastodon.social"
