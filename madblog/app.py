@@ -476,6 +476,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         reverse: bool = True,
         template_name: str = "index.html",
         view_mode: str = "cards",
+        meta_redirect_to: str | None = None,
         **extra_context,
     ) -> Response:
         """
@@ -488,6 +489,10 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         :param reverse: Reverse sort order
         :param template_name: Template name to render
         :param view_mode: View mode for the template
+        :param meta_redirect_to: If set, inject a meta refresh tag to redirect
+            to this URL. This is used for profile URLs (/@username, /ap/actor)
+            where the page content must be served (for rel="me" verification)
+            but human users should be redirected to the canonical home page.
         """
         # Get the pages data first (this includes file_mtime for each local page)
         pages = self.get_pages(
@@ -538,15 +543,24 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             if not has_app_context():
                 stack.enter_context(self.app_context())
 
-            response = make_response(
-                render_template(
-                    template_name,
-                    pages=pages,
-                    config=config,
-                    view_mode=view_mode,
-                    **extra_context,
-                )
+            html = render_template(
+                template_name,
+                pages=pages,
+                config=config,
+                view_mode=view_mode,
+                **extra_context,
             )
+
+        # Inject meta refresh for profile URLs (/@username, /ap/actor) so that
+        # the page content is served for rel="me" verification while human
+        # users are redirected to the canonical home page.
+        if meta_redirect_to:
+            meta_refresh = (
+                f'<meta http-equiv="refresh" content="0; url={meta_redirect_to}" />'
+            )
+            html = html.replace("</head>", f"{meta_refresh}</head>", 1)
+
+        response = make_response(html)
 
         # Create response with cache headers
         if last_modified:

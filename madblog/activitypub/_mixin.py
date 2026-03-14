@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from logging import getLogger
 from pathlib import Path
 
-from flask import Flask, Response, has_request_context, make_response, redirect, request
+from flask import Flask, Response, has_request_context, make_response, request
 from pubby import ActivityPubHandler
 from pubby._model import AP_CONTEXT
 from pubby.storage.adapters.file import FileActivityPubStorage
@@ -224,21 +224,35 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         app: Flask = self  # type: ignore
         bind_activitypub(app, self.activitypub_handler)
 
-        # Content negotiation for /ap/actor: redirect to profile page when
+        # Content negotiation for /ap/actor: serve the home page when
         # the client prefers HTML (e.g. a browser following the actor link).
         # This must be registered as a before_request handler because pubby's
         # route always returns JSON.
+        # Instead of redirecting, we serve the actual page content so that
+        # Mastodon can find rel="me" links for profile verification. A JavaScript
+        # redirect is injected to send human users to the canonical home page.
         @app.before_request
         def _actor_html_redirect():
             if request.path == "/ap/actor" and request.method == "GET":
                 if not self._ap_accept_quality():
-                    # Client does not want ActivityPub JSON; redirect to profile.
-                    # Use absolute URL based on config.link since the profile
-                    # page lives there, not necessarily at activitypub_link.
-                    profile_url = (
-                        f'{config.link.rstrip("/")}/@{config.activitypub_username}'
+                    # Client does not want ActivityPub JSON; serve home page
+                    # with JS redirect instead of HTTP redirect.
+                    from .._sorters import PagesSortByTimeGroupedByFolder
+
+                    view_mode = request.args.get("view", config.view_mode)
+                    if view_mode not in ("cards", "list", "full"):
+                        view_mode = config.view_mode
+
+                    return app.get_pages_response(  # type: ignore
+                        sorter=PagesSortByTimeGroupedByFolder,
+                        with_content=(view_mode == "full"),
+                        skip_header=True,
+                        skip_html_head=True,
+                        template_name="index.html",
+                        view_mode=view_mode,
+                        followers_count=len(self.activitypub_storage.get_followers()),
+                        meta_redirect_to="/",
                     )
-                    return redirect(profile_url, code=302)
             return None
 
         bind_mastodon_api(

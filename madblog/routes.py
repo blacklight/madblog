@@ -80,12 +80,29 @@ def home_route():
 
 
 @app.route("/@<username>", methods=["GET"])
-def profile_redirect(username: str):
-    """Redirect /@username to the homepage (actor profile URL)."""
-    from flask import redirect
+def profile_route(username: str):
+    """
+    Serve the home page at /@username (the ActivityPub profile URL).
 
+    Instead of redirecting to /, the actual page content is served so that
+    Mastodon can find rel="me" links for profile verification. A JavaScript
+    redirect is injected to send human users to the canonical home page.
+    """
     if config.enable_activitypub and username == config.activitypub_username:
-        return redirect("/", code=302)
+        view_mode = request.args.get("view", config.view_mode)
+        if view_mode not in ("cards", "list", "full"):
+            view_mode = config.view_mode
+
+        return app.get_pages_response(
+            sorter=PagesSortByTimeGroupedByFolder,
+            with_content=(view_mode == "full"),
+            skip_header=True,
+            skip_html_head=True,
+            template_name="index.html",
+            view_mode=view_mode,
+            followers_count=_get_followers_count(),
+            meta_redirect_to="/",
+        )
     return Response("Not found", status=404, mimetype="text/plain")
 
 

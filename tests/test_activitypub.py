@@ -246,18 +246,26 @@ class ActivityPubEnabledTest(unittest.TestCase):
         self.assertEqual(data["preferredUsername"], "blog")
 
     @skip_if_no_pubby
-    def test_actor_redirects_to_profile_for_html_clients(self):
-        """When a browser requests /ap/actor, redirect to the profile page."""
+    def test_actor_serves_home_page_with_meta_redirect_for_html_clients(self):
+        """
+        When a browser requests /ap/actor, serve the home page with a meta
+        refresh redirect. This allows Mastodon to find rel="me" links for
+        profile verification while still redirecting human users.
+        """
         client = self.app.test_client()
-        # No Accept header or HTML Accept header should redirect
+        # No Accept header should serve home page with meta refresh
         resp = client.get("/ap/actor")
-        self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp.headers["Location"], "https://example.com/@blog")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.get_data(as_text=True)
+        self.assertIn('<meta http-equiv="refresh" content="0; url=/" />', html)
+        # Should contain rel="me" links for verification
+        self.assertIn('rel="me"', html)
 
-        # Explicitly requesting HTML should also redirect
+        # Explicitly requesting HTML should also serve home page with meta refresh
         resp = client.get("/ap/actor", headers={"Accept": "text/html"})
-        self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp.headers["Location"], "https://example.com/@blog")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.get_data(as_text=True)
+        self.assertIn('<meta http-equiv="refresh" content="0; url=/" />', html)
 
     @skip_if_no_pubby
     def test_actor_profile_fields_are_configurable(self):
