@@ -257,20 +257,27 @@ class ActivityPubPublishMixin:  # pylint: disable=too-few-public-methods
             logger.exception("Failed to publish Like targeting %s", like_of_url)
         return like_activity
 
-    def _publish_undo_like(self, like_id: str, actor_url: str) -> None:
+    def _publish_undo_like(
+        self, like_id: str, actor_url: str, object_url: str | None = None
+    ) -> None:
         """
         Build and publish an Undo wrapping a previously published Like.
 
         :param like_id: The ``id`` of the original Like activity.
         :param actor_url: The actor performing the undo.
+        :param object_url: The URL of the object that was liked.
+            Required by remote servers (e.g. Mastodon) to match
+            the Undo to the original Like.
         """
-        inner = {
+        inner: dict = {
             "id": like_id,
             "type": "Like",
             "actor": actor_url,
             "to": ["https://www.w3.org/ns/activitystreams#Public"],
             "cc": [self.handler.followers_url],
         }
+        if object_url:
+            inner["object"] = object_url
         undo = self.handler.outbox.build_undo_activity(inner)
         try:
             self.handler.publish_activity(undo)

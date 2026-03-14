@@ -2057,6 +2057,10 @@ class ReplyLikeActivityTest(unittest.TestCase):
         self.assertEqual(len(undo_calls), 1)
         undo_activity = undo_calls[0][0][0]
         self.assertEqual(undo_activity["object"]["type"], "Like")
+        self.assertEqual(
+            undo_activity["object"]["object"],
+            "https://remote.social/statuses/42",
+        )
 
     @skip_if_no_pubby
     def test_reply_with_both_reply_to_and_like_of(self):
@@ -2221,6 +2225,10 @@ class ArticleLikeActivityTest(unittest.TestCase):
         ]
         self.assertEqual(len(undo_calls), 1)
         self.assertEqual(undo_calls[0][0][0]["object"]["type"], "Like")
+        self.assertEqual(
+            undo_calls[0][0][0]["object"]["object"],
+            "https://remote.social/statuses/99",
+        )
 
 
 class StandaloneLikeContentNegotiationTest(unittest.TestCase):

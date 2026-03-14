@@ -690,11 +690,12 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
     # Like activity ID tracking for articles (file_urls with #like suffix)
     # -----------------------------------------------------------------
 
-    def _set_like_id(self, filepath: str, activity_id: str) -> None:
-        """Store the Like activity ID for an article file."""
+    def _set_like_id(self, filepath: str, activity_id: str, object_url: str) -> None:
+        """Store the Like activity ID and object URL for an article file."""
         file_urls = self._load_file_urls()
         key = os.path.relpath(filepath, self.pages_dir) + "#like"
         file_urls[key] = activity_id
+        file_urls[key + "-object"] = object_url
         self._save_file_urls(file_urls)
 
     def _get_like_id(self, filepath: str) -> str | None:
@@ -702,11 +703,17 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         key = os.path.relpath(filepath, self.pages_dir) + "#like"
         return self._load_file_urls().get(key)
 
+    def _get_like_object(self, filepath: str) -> str | None:
+        """Get the stored like-of object URL for an article file."""
+        key = os.path.relpath(filepath, self.pages_dir) + "#like-object"
+        return self._load_file_urls().get(key)
+
     def _remove_like_id(self, filepath: str) -> None:
-        """Remove the stored Like activity ID for an article file."""
+        """Remove the stored Like activity ID and object URL for an article file."""
         file_urls = self._load_file_urls()
         key = os.path.relpath(filepath, self.pages_dir) + "#like"
         file_urls.pop(key, None)
+        file_urls.pop(key + "-object", None)
         self._save_file_urls(file_urls)
 
     # -----------------------------------------------------------------
@@ -723,10 +730,11 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         # Undo any previously published Like for this file
         old_like_id = self._get_like_id(filepath)
         if old_like_id:
-            self._publish_undo_like(old_like_id, actor_url)
+            old_object = self._get_like_object(filepath)
+            self._publish_undo_like(old_like_id, actor_url, object_url=old_object)
 
         like_activity = self._publish_like(like_of)
-        self._set_like_id(filepath, like_activity["id"])
+        self._set_like_id(filepath, like_activity["id"], like_of)
 
     def _handle_like_delete(self, filepath: str, actor_url: str) -> None:
         """Publish an Undo Like for a deleted article file."""
@@ -734,7 +742,8 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         if not like_id:
             return
 
-        self._publish_undo_like(like_id, actor_url)
+        object_url = self._get_like_object(filepath)
+        self._publish_undo_like(like_id, actor_url, object_url=object_url)
         self._remove_like_id(filepath)
 
     # -----------------------------------------------------------------
