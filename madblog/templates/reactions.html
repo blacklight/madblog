@@ -101,6 +101,113 @@ reply-{{ node.item.full_url | hash_id }}
         <label class="reaction-expand"><input type="checkbox" class="reaction-toggle"></label>
       {% endif %}
     {% endif %}
+    {# Render mf2 metadata if present #}
+    {% if wm.metadata %}
+      {% set metadata = wm.metadata | fromjson %}
+      {% set mf2 = (metadata.get("mf2") if metadata is mapping else None) | fromjson %}
+      {% if mf2 and mf2 is mapping %}
+        {% set bookmark_of = mf2.get("bookmark_of") or [] %}
+        {% set follow_of = mf2.get("follow_of") or [] %}
+        {% set rsvp = mf2.get("rsvp") %}
+        {% set location = mf2.get("location") %}
+        {% set category = mf2.get("category") or [] %}
+        {% set syndication = mf2.get("syndication") or [] %}
+        {% set photo = mf2.get("photo") or mf2.get("photo_url") or [] %}
+        {% set video = mf2.get("video") or mf2.get("video_url") or [] %}
+        {% set audio = mf2.get("audio") or mf2.get("audio_url") or [] %}
+        <div class="reaction-mf2">
+          {% if bookmark_of %}
+            <div class="reaction-mf2-field reaction-mf2-bookmark" title="Bookmarks">
+              <span class="reaction-mf2-label">🔖</span>
+              {% for url in bookmark_of %}
+                {% set bmurl = url | safe_url %}
+                {% if bmurl %}
+                  <a href="{{ bmurl }}" rel="nofollow noopener" target="_blank">{{ utils.hostname(bmurl) or bmurl }}</a>{% if not loop.last %}, {% endif %}
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if follow_of %}
+            <div class="reaction-mf2-field reaction-mf2-follow" title="Follows">
+              <span class="reaction-mf2-label">👋</span>
+              {% for url in follow_of %}
+                {% set furl = url | safe_url %}
+                {% if furl %}
+                  <a href="{{ furl }}" rel="nofollow noopener" target="_blank">{{ utils.hostname(furl) or furl }}</a>{% if not loop.last %}, {% endif %}
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if rsvp %}
+            <div class="reaction-mf2-field reaction-mf2-rsvp" title="RSVP">
+              <span class="reaction-mf2-label">📅</span>
+              <span class="reaction-mf2-value">{{ rsvp }}</span>
+            </div>
+          {% endif %}
+          {% if location %}
+            <div class="reaction-mf2-field reaction-mf2-location" title="Location">
+              <span class="reaction-mf2-label">📍</span>
+              <span class="reaction-mf2-value">{{ location }}</span>
+            </div>
+          {% endif %}
+          {% if category %}
+            <div class="reaction-mf2-field reaction-mf2-category" title="Categories">
+              <span class="reaction-mf2-label">🏷️</span>
+              {% for c in category %}
+                <span class="reaction-mf2-value">{{ c }}</span>{% if not loop.last %}, {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if syndication %}
+            <div class="reaction-mf2-field reaction-mf2-syndication" title="Syndication">
+              <span class="reaction-mf2-label">🔗</span>
+              {% for url in syndication %}
+                {% set surl = url | safe_url %}
+                {% if surl %}
+                  <a href="{{ surl }}" rel="nofollow noopener" target="_blank">{{ utils.hostname(surl) or surl }}</a>{% if not loop.last %}, {% endif %}
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if photo %}
+            <div class="reaction-mf2-field reaction-mf2-photo" title="Photos">
+              {% for url in photo %}
+                {% set purl = url | safe_url %}
+                {% if purl %}
+                  <a href="{{ purl }}" rel="nofollow noopener" target="_blank">
+                    <img class="reaction-mf2-photo" src="{{ purl }}" alt="" loading="lazy" referrerpolicy="no-referrer" />
+                  </a>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if video %}
+            <div class="reaction-mf2-field reaction-mf2-video" title="Videos">
+              {% for url in video %}
+                {% set vurl = url | safe_url %}
+                {% if vurl %}
+                  <video class="reaction-mf2-video" controls preload="none">
+                    <source src="{{ vurl }}" />
+                  </video>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if audio %}
+            <div class="reaction-mf2-field reaction-mf2-audio" title="Audio">
+              {% for url in audio %}
+                {% set aurl = url | safe_url %}
+                {% if aurl %}
+                  <audio class="reaction-mf2-audio" controls preload="none">
+                    <source src="{{ aurl }}" />
+                  </audio>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+    {% endif %}
     <div class="reaction-footer">
       <span class="reaction-source-type" title="Webmention">🔗 Webmention</span>
       <a href="{{ wm.source }}" class="reaction-source" rel="nofollow noopener" target="_blank">View source</a>

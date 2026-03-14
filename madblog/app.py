@@ -1,8 +1,10 @@
 import contextlib
 import hashlib
+import json
 import os
 
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import List, Optional, Tuple, Type
 from email.utils import formatdate
 
@@ -105,6 +107,35 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         def hash_id_filter(value: str) -> str:
             """Generate a short hash ID from a string for use in anchor IDs."""
             return hashlib.md5(str(value).encode()).hexdigest()[:12]
+
+        @self.template_filter("fromjson")
+        def fromjson_filter(value: object) -> object:
+            """Parse a JSON string into a Python object."""
+            if value is None:
+                return None
+            if isinstance(value, (dict, list)):
+                return value
+            if isinstance(value, str):
+                try:
+                    return json.loads(value)
+                except (json.JSONDecodeError, TypeError):
+                    return None
+            return None
+
+        @self.template_filter("safe_url")
+        def safe_url_filter(url: object) -> str | None:
+            """Validate and return a safe URL (http/https only)."""
+            if not url or not isinstance(url, str):
+                return None
+            url = url.strip()
+            if not url:
+                return None
+            parsed = urlparse(url)
+            if parsed.scheme not in ("http", "https"):
+                return None
+            if not parsed.netloc:
+                return None
+            return url
 
     def _on_content_change_tags(self, _: ChangeType, filepath: str) -> None:
         """Bridge: forward content changes to the tag indexer."""
