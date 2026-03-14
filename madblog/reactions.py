@@ -160,24 +160,13 @@ def _to_datetime(dt: Any) -> Optional[datetime.datetime]:
     return None
 
 
-def build_thread_tree(
-    webmentions: list,
-    ap_interactions: list,
-    author_replies: list,
-    article_url: str,
-) -> List[ThreadNode]:
+def _create_webmention_nodes(webmentions: list, nodes: dict[str, ThreadNode]) -> None:
     """
-    Build a thread tree from reactions and author replies.
+    Populate *nodes* with :class:`ThreadNode` entries for each Webmention.
 
-    :param webmentions: List of Webmention objects
-    :param ap_interactions: List of AP Interaction objects
-    :param author_replies: List of author reply dicts (from _get_article_replies)
-    :param article_url: The full URL of the article being reacted to
-    :return: List of root ThreadNode objects, sorted by published DESC
+    :param webmentions: Raw Webmention objects.
+    :param nodes: Shared ``identity → node`` dict (mutated in place).
     """
-    nodes: dict[str, ThreadNode] = {}
-
-    # Create nodes for webmentions
     for wm in webmentions:
         identity = _get_webmention_identity(wm)
         if not identity:
@@ -195,7 +184,20 @@ def build_thread_tree(
             published=published,
         )
 
-    # Create nodes for AP interactions
+
+def _create_ap_interaction_nodes(
+    ap_interactions: list, nodes: dict[str, ThreadNode]
+) -> None:
+    """
+    Populate *nodes* with :class:`ThreadNode` entries for each AP interaction.
+
+    Each node is also registered under its fediverse URL aliases (e.g.
+    Mastodon ``/@user`` ↔ ``/users/user``) so that ``reply-to`` headers
+    using either format resolve correctly.
+
+    :param ap_interactions: Raw AP Interaction objects.
+    :param nodes: Shared ``identity → node`` dict (mutated in place).
+    """
     for interaction in ap_interactions:
         identity = _get_ap_interaction_identity(interaction)
         if not identity:
@@ -214,13 +216,24 @@ def build_thread_tree(
             published=published,
         )
 
-        # Register under URL aliases (e.g. Mastodon /@user ↔ /users/user)
-        # so that author reply-to using either format resolves correctly.
         for alias in _fediverse_url_aliases(identity):
             if alias not in nodes:
                 nodes[alias] = node
 
-    # Create nodes for author replies
+
+def _create_author_reply_nodes(
+    author_replies: list, nodes: dict[str, ThreadNode]
+) -> None:
+    """
+    Populate *nodes* with :class:`ThreadNode` entries for each author reply.
+
+    When ``activitypub_link`` differs from ``link``, the node is also
+    registered under the AP-domain URL so that AP interactions targeting
+    that URL can find their parent.
+
+    :param author_replies: Dicts returned by ``_get_article_replies``.
+    :param nodes: Shared ``identity → node`` dict (mutated in place).
+    """
     for reply in author_replies:
         identity = reply.get("full_url", "")
         if not identity:
@@ -236,16 +249,24 @@ def build_thread_tree(
             published=published,
         )
 
-        # When activitypub_link differs from link the AP target URL uses a
-        # different origin; register the node under that alias too so that
-        # AP interactions can find their parent.
         ap_alias = reply.get("ap_full_url")
         if ap_alias and ap_alias != identity:
             nodes[ap_alias] = node
 
-    # Build the tree by linking children to parents.
-    # Deduplicate: aliases point to the same ThreadNode object so we must
-    # process each node only once.
+
+def _assemble_tree(nodes: dict[str, ThreadNode], article_url: str) -> List[ThreadNode]:
+    """
+    Link child nodes to their parents and return the sorted root list.
+
+    Aliases (multiple keys pointing to the same :class:`ThreadNode`) are
+    deduplicated so each node is processed exactly once.  Roots are sorted
+    by ``published`` descending (newest first); children are sorted ascending
+    (oldest first) for natural conversation flow.
+
+    :param nodes: Fully populated ``identity → node`` dict.
+    :param article_url: The article URL — nodes replying to it become roots.
+    :return: Sorted list of root :class:`ThreadNode` objects.
+    """
     roots: List[ThreadNode] = []
     seen: set[int] = set()
 
@@ -257,25 +278,42 @@ def build_thread_tree(
 
         parent_id = node.reply_to
 
-        # If reply_to is the article URL, treat as a root
         if parent_id == article_url or not parent_id:
             roots.append(node)
         elif parent_id in nodes:
-            # Link to parent node
             nodes[parent_id].children.append(node)
         else:
-            # Parent not found (e.g. reply to a deleted reaction) - treat as root
             roots.append(node)
 
-    # Sort roots by published DESC (newest first)
     _EPOCH = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
     roots.sort(key=lambda n: n.published or _EPOCH, reverse=True)
 
-    # Sort children by published ASC (oldest first, for natural conversation flow)
     for node in nodes.values():
         node.children.sort(key=lambda n: n.published or _EPOCH)
 
     return roots
+
+
+def build_thread_tree(
+    webmentions: list,
+    ap_interactions: list,
+    author_replies: list,
+    article_url: str,
+) -> List[ThreadNode]:
+    """
+    Build a thread tree from reactions and author replies.
+
+    :param webmentions: List of Webmention objects
+    :param ap_interactions: List of AP Interaction objects
+    :param author_replies: List of author reply dicts (from _get_article_replies)
+    :param article_url: The full URL of the article being reacted to
+    :return: List of root ThreadNode objects, sorted by published DESC
+    """
+    nodes: dict[str, ThreadNode] = {}
+    _create_webmention_nodes(webmentions, nodes)
+    _create_ap_interaction_nodes(ap_interactions, nodes)
+    _create_author_reply_nodes(author_replies, nodes)
+    return _assemble_tree(nodes, article_url)
 
 
 def count_reactions(roots: List[ThreadNode]) -> dict:
