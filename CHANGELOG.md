@@ -3,6 +3,21 @@
 ## Unreleased
 
 ### Added
+- **Author replies:** Blog authors can now write replies to comments directly
+  as Markdown files in `replies/<article-slug>/`. Replies are displayed inline
+  in threaded reaction sections on article pages, with in-page navigation
+  anchors and a dedicated `/reply/<article>/<slug>` route.
+- **Author reply federation:** Author replies are federated via ActivityPub as
+  `Note` objects with proper `inReplyTo` threading, and served as AP JSON when
+  requested.
+- **Reactions on reply pages:** Reply pages (`/reply/...`) now display their
+  own threaded reactions (likes, boosts, replies from ActivityPub and
+  Webmentions).
+- **mf2 metadata rendering:** Webmentions now render microformats2 metadata
+  including bookmarks, follows, RSVP, location, categories, syndication links,
+  photos, videos, and audio attachments.
+- **Mention cache persistence:** ActivityPub mention resolution cache is now
+  persisted to disk, improving reliability across restarts.
 - **Config flags for rendering features:** Added `enable_latex` and
   `enable_mermaid` configuration options (default: `true`) to explicitly
   disable LaTeX or Mermaid rendering even when dependencies are available.
@@ -15,6 +30,25 @@
   extensions are now loaded lazily on first render, not at module import time.
   This defers memory allocation until the features are actually used and
   respects the new config flags.
+- **Deferred webmentions sync:** Webmentions `sync_on_startup` now runs after
+  server start rather than during initialization, improving startup time.
+
+### Fixed
+- **Relative URL resolution:** Markdown relative URLs are now properly resolved
+  to absolute URLs before rendering and outgoing webmention processing.
+- **ActivityPub reply threading:** Fediverse replies now correctly thread under
+  author replies across domains, with proper reply ID persistence to avoid
+  delete/recreate collisions.
+- **ActivityPub actor redirect:** `/ap/actor` now redirects HTML clients to the
+  absolute profile URL for better browser compatibility.
+- **Webmentions content normalization:** Legacy `"None"` string values in
+  webmention content fields are now properly normalized to `null`.
+- **Reply-to inference:** Author replies now correctly infer their parent from
+  article slug paths when `reply-to` metadata is missing.
+
+### Performance
+- **Cache validation:** 304 responses now validate against interaction and
+  tag index modification times, not just article content.
 
 ## 0.9.14
 
