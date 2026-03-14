@@ -111,6 +111,25 @@ a:hover {
   font-size: 1.25em;
 }
 
+.main-image-container {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.main-image-container img {
+  width: 80%;
+}
+
+/* Replies */
+.reply-backlink {
+  font-size: 0.85em;
+  margin-left: -0.5em;
+  color: var(--color-fg-tertiary);
+}
+
+/* Code blocks */
 .codehilite {
   position: relative;
   padding: 0 .5em;
@@ -135,17 +154,6 @@ a:hover {
 
 .codehilite .copy-button:hover {
   opacity: 1;
-}
-
-.main-image-container {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.main-image-container img {
-  width: 80%;
 }
 
 /* Mermaid diagrams */

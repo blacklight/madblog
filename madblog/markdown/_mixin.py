@@ -157,15 +157,26 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
     def _parse_reply_metadata(self, article_slug: str, reply_slug: str) -> dict:
         """
         Parse the metadata from a reply Markdown file under ``replies_dir``.
+
+        If ``reply-to`` is not set explicitly, it is derived from the
+        ``article_slug`` when a corresponding article file exists under
+        ``pages_dir``.
         """
         rel_path = os.path.join(article_slug, reply_slug + ".md")
-        return self._resolve_and_parse_metadata(
+        metadata = self._resolve_and_parse_metadata(
             base_dir=self.replies_dir,
             rel_path=rel_path,
             page_key=rel_path,
             uri=f"/reply/{article_slug}/{reply_slug}",
             title_fallback=reply_slug,
         )
+
+        if "reply-to" not in metadata:
+            article_file = self.pages_dir / f"{article_slug}.md"
+            if article_file.is_file():
+                metadata["reply-to"] = f"{config.link}/article/{article_slug}"
+
+        return metadata
 
     @classmethod
     def _parse_author(cls, metadata: dict) -> dict:

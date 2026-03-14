@@ -922,7 +922,7 @@ class ReplyFederationTest(unittest.TestCase):
 
     def test_on_content_change_skips_replies(self):
         """on_content_change skips files under replies_dir."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
         from madblog.activitypub._integration import ActivityPubIntegration
         from madblog.monitor import ChangeType
 
@@ -1141,3 +1141,142 @@ class CountReactionsTest(unittest.TestCase):
         self.assertEqual(counts["total"], 2)
         self.assertEqual(counts["replies"], 1)
         self.assertEqual(counts["likes"], 1)
+
+
+class ReplyToFallbackTest(unittest.TestCase):
+    """Tests for reply-to fallback when metadata is missing."""
+
+    def setUp(self):
+        from madblog.app import app
+        from madblog.config import config
+
+        self.app = app
+        self.config = config
+
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+
+        root = Path(self._tmpdir.name)
+        markdown_dir = root / "markdown"
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create an article
+        (markdown_dir / "existing-article.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (title: Existing Article)",
+                    "[//]: # (published: 2025-07-01)",
+                    "",
+                    "# Existing Article",
+                    "Article body.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        # Create replies directory with replies under different subfolders
+        replies_dir = root / "replies"
+
+        # Reply under a subfolder matching an existing article (no reply-to)
+        (replies_dir / "existing-article").mkdir(parents=True, exist_ok=True)
+        (replies_dir / "existing-article" / "no-reply-to.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (published: 2025-07-02)",
+                    "",
+                    "# Reply Without Explicit Target",
+                    "This reply has no reply-to metadata.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        # Reply under a subfolder NOT matching any existing article
+        (replies_dir / "nonexistent-article").mkdir(parents=True, exist_ok=True)
+        (replies_dir / "nonexistent-article" / "orphan-reply.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (published: 2025-07-03)",
+                    "",
+                    "# Orphan Reply",
+                    "This reply is under a folder with no matching article.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        self._orig_content_dir = config.content_dir
+        self._orig_link = config.link
+        self._orig_title = config.title
+
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+        config.title = "Test Blog"
+
+        self.app.pages_dir = markdown_dir
+        self.app.replies_dir = replies_dir
+
+    def tearDown(self):
+        self.config.content_dir = self._orig_content_dir
+        self.config.link = self._orig_link
+        self.config.title = self._orig_title
+
+    def test_reply_to_fallback_when_article_exists(self):
+        """reply-to is derived from article slug when article file exists."""
+        with self.app.app_context():
+            metadata = self.app._parse_reply_metadata("existing-article", "no-reply-to")
+        self.assertEqual(
+            metadata["reply-to"],
+            "https://example.com/article/existing-article",
+        )
+
+    def test_no_fallback_when_article_missing(self):
+        """reply-to is NOT set when the article file does not exist."""
+        with self.app.app_context():
+            metadata = self.app._parse_reply_metadata(
+                "nonexistent-article", "orphan-reply"
+            )
+        self.assertNotIn("reply-to", metadata)
+
+    def test_rendered_page_shows_in_reply_to_with_fallback(self):
+        """Rendered reply page shows 'In reply to' when fallback is applied."""
+        with self.app.test_client() as client:
+            resp = client.get("/reply/existing-article/no-reply-to")
+            self.assertEqual(resp.status_code, 200)
+            html = resp.get_data(as_text=True)
+            self.assertIn("In reply to", html)
+            self.assertIn("https://example.com/article/existing-article", html)
+
+    def test_rendered_page_no_in_reply_to_when_no_fallback(self):
+        """Rendered reply page does NOT show 'In reply to' when no fallback."""
+        with self.app.test_client() as client:
+            resp = client.get("/reply/nonexistent-article/orphan-reply")
+            self.assertEqual(resp.status_code, 200)
+            html = resp.get_data(as_text=True)
+            self.assertNotIn("In reply to", html)
+
+    def test_explicit_reply_to_not_overridden(self):
+        """Explicit reply-to metadata is not overridden by fallback."""
+        # Create a reply with explicit reply-to
+        replies_dir = self.app.replies_dir
+        (replies_dir / "existing-article" / "explicit-target.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (reply-to: https://mastodon.social/@user/123)",
+                    "[//]: # (published: 2025-07-04)",
+                    "",
+                    "# Explicit Target",
+                    "This reply has an explicit reply-to.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        with self.app.app_context():
+            metadata = self.app._parse_reply_metadata(
+                "existing-article", "explicit-target"
+            )
+        self.assertEqual(
+            metadata["reply-to"],
+            "https://mastodon.social/@user/123",
+        )
