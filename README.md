@@ -830,6 +830,11 @@ small badge appears indicating the author liked it.
 #### Limitations
 
 - Only one `like-of` URL per file is currently supported.
+- If you are replying to a Fediverse post, remember to **explicitly mention the
+  targets of your reply** or they will not get notified. Fediverse
+  implementations like Mastodon and Pleroma/Akkoma usually pre-fill them for
+  you from the UI when you reply to a post. But if you control your replies
+  through text files you'll need to do it manually.
 
 ## Images
 
