@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
+
+### Added
+- **Author reactions (likes):** Blog authors can now "like" posts on the
+  Fediverse by adding `like-of: <URL>` metadata to articles or reply files.
+  Likes are published as ActivityPub `Like` activities and automatically
+  undone when the file is deleted or the metadata removed. A footer on the
+  source page shows the liked URL, and target pages display a badge when
+  liked by another of your posts.
 
 ### Fixed
 - **Guestbook thread leaking:** Fediverse replies to author replies (targeting

@@ -52,6 +52,11 @@
   - [How threading works](#how-threading-works)
   - [Federation](#federation)
   - [Routes](#routes)
+  - [Author Reactions](#author-reactions)
+    - [Liking a post](#liking-a-post)
+    - [Standalone likes vs. combined posts](#standalone-likes-vs-combined-posts)
+    - [Rendering](#rendering)
+    - [Limitations](#limitations)
 - [Images](#images)
 - [LaTeX support](#latex-support)
 - [Mermaid diagrams](#mermaid-diagrams)
@@ -694,6 +699,7 @@ Supported metadata keys:
 | Key | Required | Description |
 |-----|----------|-------------|
 | `reply-to` | No | URL of the reaction being replied to (Webmention source, AP `object_id`, or another reply's permalink). If omitted, derived automatically from the directory structure as a reply to the parent article. |
+| `like-of` | No | URL of a post you are liking. Publishes a `Like` activity to the Fediverse and renders a like indicator. See [Author Reactions](#author-reactions). |
 | `published` | No | Publication date. Inferred from file creation time if absent. |
 | `title` | No | Optional title for the reply. |
 | `author` | No | Overrides the global `author` setting. |
@@ -780,6 +786,50 @@ body when Webmentions are enabled.
 |--------|------|-------------|
 | `GET` | `/reply/<article-slug>/<reply-slug>` | Rendered reply page |
 | `GET` | `/reply/<article-slug>/<reply-slug>.md` | Raw Markdown source |
+
+### Author Reactions
+
+Madblog supports **author reactions** — a way to publicly "like" posts on the
+Fediverse or elsewhere. Likes are expressed via the `like-of` metadata header
+in articles or reply files.
+
+#### Liking a post
+
+Create a Markdown file (either under `replies/` or as a regular article) with
+the `like-of` metadata pointing to the URL you want to like:
+
+```markdown
+[//]: # (like-of: https://mastodon.social/@alice/123)
+[//]: # (published: 2025-01-15)
+
+# Liked
+```
+
+When ActivityPub is enabled, saving the file publishes a `Like` activity to the
+Fediverse. Deleting or removing the `like-of` line publishes an `Undo Like`.
+
+#### Standalone likes vs. combined posts
+
+- **Standalone like**: A file with `like-of` but no `reply-to` and no body
+  content (just a heading) is treated as a pure like. It publishes only a
+  `Like` activity (no `Note`), and ActivityPub content negotiation returns the
+  `Like` activity JSON directly.
+
+- **Like + reply**: A file with both `like-of` and `reply-to` (or body content)
+  publishes **both** a `Like` activity and a `Note` object. This lets you like
+  a post and leave a comment at the same time.
+
+#### Rendering
+
+On the **source page** (the article/reply containing `like-of`), a footer shows
+the liked URL with a star icon.
+
+On the **target page** (an article that was liked by another of your posts), a
+small badge appears indicating the author liked it.
+
+#### Limitations
+
+- Only one `like-of` URL per file is currently supported.
 
 ## Images
 
