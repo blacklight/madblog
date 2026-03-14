@@ -24,11 +24,41 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
     """
 
     replies_dir: str | None
+    _get_recently_deleted_urls: Callable[..., set]
+    _load_file_urls: Callable[..., dict]
+    _mark_as_deleted: Callable[..., None]
+    _save_file_urls: Callable[..., None]
     _sync_directory: Callable[..., None]
+
+    # -----------------------------------------------------------------
+    # Reply file ↔ URL mapping (persistent across edits)
+    # -----------------------------------------------------------------
+
+    def _set_reply_file_url(self, filepath: str, url: str) -> None:
+        """Set the URL for a specific reply file path."""
+        file_urls = self._load_file_urls()
+        key = "reply/" + os.path.relpath(filepath, self.replies_dir)
+        file_urls[key] = url
+        self._save_file_urls(file_urls)
+
+    def _get_reply_file_url(self, filepath: str) -> str | None:
+        """Get the URL for a specific reply file path."""
+        key = "reply/" + os.path.relpath(filepath, self.replies_dir)
+        return self._load_file_urls().get(key)
+
+    def _remove_reply_file_url(self, filepath: str) -> None:
+        """Remove the URL mapping for a deleted reply file."""
+        file_urls = self._load_file_urls()
+        key = "reply/" + os.path.relpath(filepath, self.replies_dir)
+        file_urls.pop(key, None)
+        self._save_file_urls(file_urls)
 
     def reply_file_to_url(self, filepath: str) -> str:
         """
         Convert a reply file path to its public URL.
+
+        If this URL was recently deleted, appends ``?v=<timestamp>`` to avoid
+        collisions with AP implementations that cache deleted object IDs.
 
         :param filepath: Path like ``replies/<article-slug>/<reply-slug>.md``
         :return: URL like ``https://example.com/reply/<article-slug>/<reply-slug>``
@@ -36,8 +66,22 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         if not self.replies_dir:
             raise ValueError("replies_dir not configured")
 
+        stored = self._get_reply_file_url(filepath)
+        if stored:
+            return stored
+
         rel = os.path.relpath(filepath, self.replies_dir).rsplit(".", 1)[0]
-        return f"{self.base_url}/reply/{rel}"
+        base_url = f"{self.base_url}/reply/{rel}"
+
+        if base_url in self._get_recently_deleted_urls():
+            ts = int(datetime.now(timezone.utc).timestamp())
+            collision_url = f"{base_url}?v={ts}"
+            self._set_reply_file_url(filepath, collision_url)
+            logger.info("Collision-avoiding URL for reply: %s", collision_url)
+            return collision_url
+
+        self._set_reply_file_url(filepath, base_url)
+        return base_url
 
     def _article_slug_from_reply_path(self, filepath: str) -> str | None:
         """
@@ -186,9 +230,15 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
             label="reply",
         )
 
-    def _handle_reply_delete(self, url: str, actor_url: str) -> None:
+    def _handle_reply_delete(self, filepath: str, url: str, actor_url: str) -> None:
         """Publish a Delete activity for a reply."""
-        self._publish_delete(url, actor_url, "Note")
+        base_rel = os.path.relpath(filepath, self.replies_dir).rsplit(".", 1)[0]
+
+        def _cleanup():
+            self._mark_as_deleted(f"{self.base_url}/reply/{base_rel}")
+            self._remove_reply_file_url(filepath)
+
+        self._publish_delete(url, actor_url, "Note", extra_cleanup=_cleanup)
 
     def on_reply_change(self, change_type: ChangeType, filepath: str) -> None:
         """
@@ -203,7 +253,7 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         actor_url = f"{self.base_url}{self.handler.actor_path}"
 
         if change_type.value == "deleted":
-            self._handle_reply_delete(url, actor_url)
+            self._handle_reply_delete(filepath, url, actor_url)
         else:
             self._spawn_guarded_publish(
                 url,

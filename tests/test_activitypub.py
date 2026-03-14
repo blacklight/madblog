@@ -11,9 +11,11 @@ from unittest.mock import MagicMock, patch
 
 
 def _join_ap_publish_threads(timeout: float = 1) -> None:
-    """Wait for any background ``ap-publish-*`` threads to finish."""
+    """Wait for any background ``ap-publish-*`` or ``ap-reply-*`` threads to finish."""
     for t in threading.enumerate():
-        if t.name.startswith("ap-publish-") and t.is_alive():
+        if (
+            t.name.startswith("ap-publish-") or t.name.startswith("ap-reply-")
+        ) and t.is_alive():
             t.join(timeout=timeout)
 
 
@@ -698,6 +700,7 @@ class ActivityPubContentChangeTest(unittest.TestCase):
         from pubby.crypto import generate_rsa_keypair
         from pubby.storage.adapters.file import FileActivityPubStorage
         from madblog.activitypub import ActivityPubIntegration
+        from madblog.config import config
 
         tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(tmpdir.cleanup)
@@ -707,61 +710,71 @@ class ActivityPubContentChangeTest(unittest.TestCase):
         pages_dir.mkdir()
         ap_dir = root / "ap"
 
-        priv, _ = generate_rsa_keypair()
-        storage = FileActivityPubStorage(data_dir=str(ap_dir))
-        handler = ActivityPubHandler(
-            storage=storage,
-            actor_config={
-                "base_url": "https://ap.example.com",
-                "username": "blog",
-            },
-            private_key=priv,
-        )
+        # Isolate state to temp directory
+        orig_state_dir = config.state_dir
+        config.state_dir = str(root / "state")
+        Path(config.state_dir).mkdir()
 
-        # Split-domain setup: AP on ap.example.com, blog on blog.example.com
-        integration = ActivityPubIntegration(
-            handler=handler,
-            pages_dir=str(pages_dir),
-            base_url="https://ap.example.com",
-            content_base_url="https://blog.example.com",
-        )
+        try:
+            priv, _ = generate_rsa_keypair()
+            storage = FileActivityPubStorage(data_dir=str(ap_dir))
+            handler = ActivityPubHandler(
+                storage=storage,
+                actor_config={
+                    "base_url": "https://ap.example.com",
+                    "username": "blog",
+                },
+                private_key=priv,
+            )
 
-        handler.publish_object = MagicMock()
+            # Split-domain setup: AP on ap.example.com, blog on blog.example.com
+            integration = ActivityPubIntegration(
+                handler=handler,
+                pages_dir=str(pages_dir),
+                base_url="https://ap.example.com",
+                content_base_url="https://blog.example.com",
+            )
 
-        # Step 1: Create the article
-        test_file = pages_dir / "test.md"
-        test_file.write_text("# Test Article\n\nContent here.")
-        integration.on_content_change(self.ChangeType.ADDED, str(test_file))
-        _join_ap_publish_threads()
+            handler.publish_object = MagicMock()
 
-        # Verify Create was sent with base URL
-        self.assertEqual(handler.publish_object.call_count, 1)
-        first_obj = handler.publish_object.call_args[0][0]
-        self.assertEqual(first_obj.id, "https://ap.example.com/article/test")
+            # Step 1: Create the article
+            test_file = pages_dir / "test.md"
+            test_file.write_text("# Test Article\n\nContent here.")
+            integration.on_content_change(self.ChangeType.ADDED, str(test_file))
+            _join_ap_publish_threads()
 
-        handler.publish_object.reset_mock()
+            # Verify Create was sent with base URL
+            self.assertEqual(handler.publish_object.call_count, 1)
+            first_obj = handler.publish_object.call_args[0][0]
+            self.assertEqual(first_obj.id, "https://ap.example.com/article/test")
 
-        # Step 2: Delete the article
-        integration.on_content_change(self.ChangeType.DELETED, str(test_file))
+            handler.publish_object.reset_mock()
 
-        # Verify Delete was sent
-        self.assertEqual(handler.publish_object.call_count, 1)
-        self.assertEqual(handler.publish_object.call_args[1]["activity_type"], "Delete")
+            # Step 2: Delete the article
+            integration.on_content_change(self.ChangeType.DELETED, str(test_file))
 
-        handler.publish_object.reset_mock()
+            # Verify Delete was sent
+            self.assertEqual(handler.publish_object.call_count, 1)
+            self.assertEqual(
+                handler.publish_object.call_args[1]["activity_type"], "Delete"
+            )
 
-        # Step 3: Re-create the article with the same slug
-        test_file.write_text("# Test Article\n\nNew content.")
-        integration.on_content_change(self.ChangeType.ADDED, str(test_file))
-        _join_ap_publish_threads()
+            handler.publish_object.reset_mock()
 
-        # Verify Create was sent with collision-avoiding URL (has ?v= suffix)
-        self.assertEqual(handler.publish_object.call_count, 1)
-        recreated_obj = handler.publish_object.call_args[0][0]
-        self.assertIn("?v=", recreated_obj.id)
-        self.assertTrue(
-            recreated_obj.id.startswith("https://ap.example.com/article/test?v=")
-        )
+            # Step 3: Re-create the article with the same slug
+            test_file.write_text("# Test Article\n\nNew content.")
+            integration.on_content_change(self.ChangeType.ADDED, str(test_file))
+            _join_ap_publish_threads()
+
+            # Verify Create was sent with collision-avoiding URL (has ?v= suffix)
+            self.assertEqual(handler.publish_object.call_count, 1)
+            recreated_obj = handler.publish_object.call_args[0][0]
+            self.assertIn("?v=", recreated_obj.id)
+            self.assertTrue(
+                recreated_obj.id.startswith("https://ap.example.com/article/test?v=")
+            )
+        finally:
+            config.state_dir = orig_state_dir
 
     @skip_if_no_pubby
     def test_inline_markdown_images_become_attachments(self):
@@ -1378,7 +1391,7 @@ class ActivityPubPublishTest(unittest.TestCase):
         url = integration.file_to_url(str(test_file))
         marked_during_publish = []
 
-        def _check_marked(*args, **kwargs):
+        def _check_marked(*_, **__):
             marked_during_publish.append(integration._is_published(url))
 
         handler.publish_object = MagicMock(side_effect=_check_marked)
@@ -1505,8 +1518,6 @@ class ActivityPubPublishTest(unittest.TestCase):
     @skip_if_no_pubby
     def test_mention_cache_persists_to_disk(self):
         """Mention cache is saved to disk and survives a restart."""
-        from madblog.activitypub import ActivityPubIntegration
-
         integration, handler, _, pages_dir = self._make_integration()
         handler.publish_object = MagicMock()
 
@@ -1551,7 +1562,7 @@ class ActivityPubPublishTest(unittest.TestCase):
 
         barrier = threading.Event()
         handler.publish_object = MagicMock(
-            side_effect=lambda *a, **k: barrier.wait(timeout=5)
+            side_effect=lambda *_, **__: barrier.wait(timeout=5)
         )
 
         integration.on_content_change(self.ChangeType.ADDED, str(test_file))
@@ -1581,7 +1592,7 @@ class ActivityPubPublishTest(unittest.TestCase):
         concurrent_count = {"current": 0, "peak": 0}
         count_lock = threading.Lock()
 
-        def _track_concurrency(*args, **kwargs):
+        def _track_concurrency(*_, **__):
             with count_lock:
                 concurrent_count["current"] += 1
                 concurrent_count["peak"] = max(
@@ -1657,7 +1668,7 @@ class ReplyMentionTest(unittest.TestCase):
                     "pubby.resolve_actor_url",
                     return_value="https://remote.example/users/bob",
                 ):
-                    obj, activity_type = integration.build_reply_object(
+                    obj, _ = integration.build_reply_object(
                         str(reply_file), url, actor_url, allow_network=True
                     )
 
@@ -1732,6 +1743,119 @@ class ReplyMentionTest(unittest.TestCase):
 
             finally:
                 config.state_dir = orig_state_dir
+
+
+class ReplyCollisionAvoidanceTest(unittest.TestCase):
+    """Test collision avoidance for reply delete/recreate scenarios."""
+
+    ChangeType = None
+
+    @classmethod
+    def setUpClass(cls):
+        from madblog.monitor import ChangeType
+
+        cls.ChangeType = ChangeType
+
+    @skip_if_no_pubby
+    def test_delete_then_recreate_reply_uses_collision_avoiding_url(self):
+        """
+        When a reply is deleted and then re-created with the same slug,
+        the AP object ID should get a version suffix to avoid Mastodon
+        ignoring the Create (since Mastodon tombstones deleted object IDs).
+        """
+        from pubby import ActivityPubHandler
+        from pubby.crypto import generate_rsa_keypair
+        from pubby.storage.adapters.file import FileActivityPubStorage
+        from madblog.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+
+        root = Path(tmpdir.name)
+        pages_dir = root / "pages"
+        pages_dir.mkdir()
+        replies_dir = root / "replies"
+        replies_dir.mkdir()
+        (replies_dir / "test-article").mkdir()
+        ap_dir = root / "ap"
+
+        orig_state_dir = config.state_dir
+        config.state_dir = str(root / "state")
+        Path(config.state_dir).mkdir()
+
+        try:
+            priv, _ = generate_rsa_keypair()
+            storage = FileActivityPubStorage(data_dir=str(ap_dir))
+            handler = ActivityPubHandler(
+                storage=storage,
+                actor_config={
+                    "base_url": "https://ap.example.com",
+                    "username": "blog",
+                },
+                private_key=priv,
+            )
+
+            integration = ActivityPubIntegration(
+                handler=handler,
+                pages_dir=str(pages_dir),
+                base_url="https://ap.example.com",
+                content_base_url="https://blog.example.com",
+                replies_dir=str(replies_dir),
+            )
+
+            handler.publish_object = MagicMock()
+
+            # Step 1: Create the reply
+            reply_file = replies_dir / "test-article" / "my-reply.md"
+            reply_file.write_text(
+                "[//]: # (reply-to: https://example.com/article/test-article)\n\n"
+                "This is my reply."
+            )
+
+            assert self.ChangeType  # for mypy
+            integration.on_reply_change(self.ChangeType.ADDED, str(reply_file))
+            _join_ap_publish_threads()
+
+            # Verify Create was sent with base URL
+            self.assertEqual(handler.publish_object.call_count, 1)
+            first_obj = handler.publish_object.call_args[0][0]
+            self.assertEqual(
+                first_obj.id, "https://ap.example.com/reply/test-article/my-reply"
+            )
+
+            handler.publish_object.reset_mock()
+
+            # Step 2: Delete the reply
+            integration.on_reply_change(self.ChangeType.DELETED, str(reply_file))
+
+            # Verify Delete was sent
+            self.assertEqual(handler.publish_object.call_count, 1)
+            self.assertEqual(
+                handler.publish_object.call_args[1]["activity_type"], "Delete"
+            )
+
+            handler.publish_object.reset_mock()
+
+            # Step 3: Re-create the reply with the same slug
+            reply_file.write_text(
+                "[//]: # (reply-to: https://example.com/article/test-article)\n\n"
+                "This is my NEW reply content."
+            )
+            integration.on_reply_change(self.ChangeType.ADDED, str(reply_file))
+            _join_ap_publish_threads()
+
+            # Verify Create was sent with collision-avoiding URL (has ?v= suffix)
+            self.assertEqual(handler.publish_object.call_count, 1)
+            recreated_obj = handler.publish_object.call_args[0][0]
+            self.assertIn("?v=", recreated_obj.id)
+            self.assertTrue(
+                recreated_obj.id.startswith(
+                    "https://ap.example.com/reply/test-article/my-reply?v="
+                )
+            )
+        finally:
+            config.state_dir = orig_state_dir
 
 
 if __name__ == "__main__":
