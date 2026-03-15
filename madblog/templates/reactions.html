@@ -360,9 +360,49 @@ reply-{{ node.item.full_url | hash_id }}
 {% endmacro %}
 
 {# Main reactions section #}
-{% if reactions_tree %}
+{% if reactions_tree or config.enable_webmentions or config.enable_activitypub %}
 <section class="reactions-section">
   <h2 class="reactions-heading">Reactions</h2>
+  {% if config.enable_webmentions or config.enable_activitypub %}
+  <details class="reactions-howto">
+    <summary>How to interact with this page</summary>
+    <div class="reactions-howto-content">
+      <div class="reactions-howto-content-inner">
+        {% if config.enable_webmentions %}
+        <h4>Webmentions</h4>
+        <p>
+          To interact via <a href="https://indieweb.org/Webmention" target="_blank" rel="noopener">Webmentions</a>,
+          send an activity that references <a href="{{ url }}">this URL</a> from a platform that supports Webmentions,
+          such as <a href="https://joinlemmy.org/" target="_blank" rel="noopener">Lemmy</a>,
+          <a href="https://wordpress.org/plugins/webmention/" target="_blank" rel="noopener">WordPress with Webmention plugins</a>,
+          or any <a href="https://indieweb.org/Webmention#Publishing_Software" target="_blank" rel="noopener">IndieWeb-compatible site</a>.
+        </p>
+        {% endif %}
+        {% if config.enable_activitypub %}
+        <h4>ActivityPub</h4>
+        <ul class="reactions-howto-ap">
+          <li>
+            Follow <a href="{{ config.activitypub_profile_url }}">{{ activitypub_handle or ('@' ~ config.activitypub_username) }}</a>
+            on your ActivityPub platform (e.g. Mastodon, Misskey, Pleroma, Lemmy).
+          </li>
+          {% if config.enable_guestbook %}
+          <li>
+            Mention <a href="{{ config.activitypub_profile_url }}">{{ activitypub_handle or ('@' ~ config.activitypub_username) }}</a>
+            in a post to feature on the <a href="{{ config.link.rstrip('/') }}/guestbook">Guestbook</a>.
+          </li>
+          {% endif %}
+          <li>
+            Search for <a href="{{ url }}">this URL</a> on your instance to find and interact with the post.
+          </li>
+          <li>
+            Like, boost, quote, or reply to the post to feature your activity here.
+          </li>
+        </ul>
+        {% endif %}
+      </div>
+    </div>
+  </details>
+  {% endif %}
   {{ render_counts(reactions_counts, 'reactions-summary', 'div') }}
   <div class="reactions-list">
     {% for node in reactions_tree %}
