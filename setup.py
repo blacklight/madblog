@@ -42,7 +42,7 @@ setup(
         "feedparser",
         "flask",
         "markdown",
-        "pubby",
+        "pubby>=0.2.16",
         "pygments",
         "pyyaml",
         "requests",

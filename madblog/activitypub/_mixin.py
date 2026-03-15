@@ -217,6 +217,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             local_base_urls=local_base_urls,
             software_name="madblog",
             software_version=__version__,
+            async_delivery=True,
         )
 
         self._install_activitypub_moderation()
