@@ -65,7 +65,7 @@ body {
 }
 
 a, a:visited {
-  color: var(--color-link-fg);
+  color: var(--color-link-fg) !important;
   border-bottom: 1px dashed var(--color-border);
   text-decoration: none;
 }
