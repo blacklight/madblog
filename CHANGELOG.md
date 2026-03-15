@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.2
+
+### Added
+- **Reactions UI:** Show the *Reactions* section even when there are no
+  reactions yet, as long as **Webmentions** or **ActivityPub** is enabled.
+- **Reactions UI:** Added an expandable **“How to interact with this page”**
+  panel with guidance for Webmentions and ActivityPub, plus new
+  styling/animations.
+
+### Changed
+- **ActivityPub:** Enabled **async delivery** for outbound ActivityPub
+  messages.
+- **Dependencies:** Bumped **pubby** requirement to **>= 0.2.16**
+
 ## 1.1.1
 
 ### Added
