@@ -154,6 +154,50 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
             page_key=page,
         )
 
+    def _parse_folder_metadata(self, folder_path: str) -> dict:
+        """
+        Parse metadata from index.md in the given folder (relative to pages_dir).
+
+        Returns a dict with:
+        - Standard metadata keys (title, description, image, etc.)
+        - ``has_content``: True if index.md has non-whitespace body content
+        - ``md_file``: Absolute path to index.md (if it exists)
+
+        Returns empty dict if no index.md exists.
+        """
+        index_file = self.pages_dir / folder_path / "index.md"
+        if not index_file.is_file():
+            return {}
+
+        md_file = os.path.realpath(str(index_file))
+        if not md_file.startswith(str(self.pages_dir)):
+            return {}
+
+        metadata: dict = {"md_file": md_file}
+
+        with open(md_file, "r") as f:
+            metadata.update(
+                self._parse_metadata_from_markdown(f, f"{folder_path}/index.md")
+            )
+
+        if not metadata.get("title"):
+            with open(md_file, "r") as f:
+                metadata["title"], _ = self._infer_title_and_url_from_markdown(f)
+
+        with open(md_file, "r") as f:
+            content = self._parse_markdown_content(f)
+            # Filter out metadata comment lines to detect actual body content
+            content_lines = [
+                line
+                for line in content.split("\n")
+                if line.strip()
+                and not re.match(r"^\[//\]: # \(", line)
+                and not re.match(r"^---\s*$", line)
+            ]
+            metadata["has_content"] = bool(content_lines)
+
+        return metadata
+
     def _parse_reply_metadata(self, article_slug: str, reply_slug: str) -> dict:
         """
         Parse the metadata from a reply Markdown file under ``replies_dir``.

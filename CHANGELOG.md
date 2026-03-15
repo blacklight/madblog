@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Folder support:** Organize Markdown files in nested folders within
+  `pages_dir`. Folders provide hierarchical navigation with:
+  - Folder index pages at `/~folder/` with breadcrumbs and parent links
+  - Per-folder RSS/Atom feeds at `/~folder/feed.rss` and `/~folder/feed.atom`
+  - Folder metadata via `index.md` (title, description, image)
+  - Custom landing pages when `index.md` has body content
+  - Home page shows only root-level articles with folder cards
+  - Hidden folders (`.` or `_` prefix) and empty folders are excluded
+
+### Changed
+
+- **Refactoring:** Extracted shared cache helpers (`compute_pages_mtime`,
+  `set_cache_headers`, `make_304_response`) into `madblog/cache/_helpers.py`.
+- **Refactoring:** Consolidated `get_page`/`get_reply` shared flow into
+  `_make_content_response`.
+- **Refactoring:** Split `_get_pages_from_files` into focused recursive and
+  non-recursive helpers.
+
 ## 1.1.2
 
 ### Added

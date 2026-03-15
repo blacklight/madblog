@@ -213,6 +213,39 @@ Feed routes use `feedgen.FeedGenerator` to produce RSS 2.0 and Atom 1.0 feeds:
 - `madblog/tags/_parsers.py`
   - Shared tag normalization and hashtag extraction utilities.
 
+## Folders subsystem
+
+Folders provide hierarchical navigation within `pages_dir`. The implementation
+lives primarily in `madblog/app.py` with routes in `madblog/routes.py`.
+
+### URL scheme
+
+- `/~<folder>/` — folder index page
+- `/~<folder>/feed.rss`, `/~<folder>/feed.atom` — per-folder feeds
+- Articles remain at `/article/<folder>/<article>`
+
+### Key methods in `BlogApp`
+
+- `_get_folders_in_dir(folder)` — returns visible subfolders with metadata
+- `_is_folder_empty(folder)` — checks if folder has no visible content
+- `_is_hidden_folder(name)` — checks for `.` or `_` prefix
+- `_build_breadcrumbs(folder)` — generates navigation breadcrumbs
+- `_get_parent_folder(folder)` — returns parent folder info
+- `get_folder_index(folder)` — renders folder listing or custom `index.md`
+
+### Folder metadata
+
+- `MarkdownMixin._parse_folder_metadata(folder_path)` parses `index.md` in a
+  folder to extract title, description, image, and detect if it has body content.
+- If `index.md` has content, it is rendered as a custom landing page.
+- If `index.md` has only metadata, it provides folder card information.
+
+### Visibility rules
+
+- Folders starting with `.` or `_` are hidden
+- Empty folders (no articles or visible subfolders) are not shown
+- The `replies/` directory is always excluded
+
 ## Webmentions subsystem
 
 Webmentions are provided by the external `webmentions` package, with a Madblog
