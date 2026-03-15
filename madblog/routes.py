@@ -69,11 +69,33 @@ def home_route():
         view_mode = config.view_mode
 
     return app.get_pages_response(
+        folder="",
+        recursive=False,
         sorter=PagesSortByTimeGroupedByFolder,
         with_content=(view_mode == "full"),
         skip_header=True,
         skip_html_head=True,
         template_name="index.html",
+        view_mode=view_mode,
+        followers_count=_get_followers_count(),
+    )
+
+
+@app.route("/~<path:folder>/", methods=["GET"])
+@app.route("/~<path:folder>", methods=["GET"])
+def folder_index_route(folder: str):
+    """
+    Render a folder index page.
+
+    If the folder contains an index.md with content, it is rendered as a page.
+    Otherwise, a listing of subfolders and articles is shown.
+    """
+    view_mode = request.args.get("view", config.view_mode)
+    if view_mode not in ("cards", "list", "full"):
+        view_mode = config.view_mode
+
+    return app.get_folder_index(
+        folder,
         view_mode=view_mode,
         followers_count=_get_followers_count(),
     )
@@ -445,6 +467,137 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
 @app.route("/feed.<type>", methods=["GET"])
 def feed_route(type: str):
     return _get_feed(request, type)
+
+
+def _get_folder_feed(request: Request, folder: str, feed_type: Optional[str] = None):
+    """Generate an RSS/Atom feed for a specific folder (non-recursive)."""
+    from flask import abort
+
+    if not feed_type:
+        feed_type = request.args.get("type", "rss")
+
+    feed_type = feed_type.lower().strip()
+    if feed_type not in {"rss", "atom"}:
+        return Response("Invalid feed type", status=400, mimetype="text/plain")
+
+    folder = folder.strip("/")
+    folder_dir = app.pages_dir / folder
+    if not folder_dir.is_dir():
+        abort(404)
+
+    limit = request.args.get("limit") or config.max_entries_per_feed
+    if limit:
+        limit = int(limit)
+
+    short_description = "short" in request.args or config.short_feed
+
+    pages = app.get_pages(
+        folder=folder,
+        recursive=False,
+        with_content=not short_description,
+        skip_header=True,
+        skip_html_head=True,
+        include_external_feeds=False,
+    )
+
+    pages = pages[:limit]
+
+    most_recent_mtime = 0.0
+    for _, page_data in pages:
+        if "file_mtime" in page_data:
+            most_recent_mtime = max(most_recent_mtime, page_data["file_mtime"])
+
+    last_modified = (
+        email.utils.formatdate(most_recent_mtime, usegmt=True)
+        if most_recent_mtime > 0
+        else None
+    )
+    etag = generate_etag(most_recent_mtime) if most_recent_mtime > 0 else None
+
+    if last_modified and most_recent_mtime > 0:
+        if check_cache_validity(most_recent_mtime, etag):
+            return make_304_response(last_modified, etag, {})
+
+    folder_meta = app._parse_folder_metadata(folder)
+    folder_title = folder_meta.get("title") or folder
+
+    fg = FeedGenerator()
+    folder_url = f"{config.link}/~{folder}/"
+    fg.id(folder_url)
+    fg.title(f"{config.title} - {folder_title}")
+    fg.link(href=folder_url, rel="alternate")
+    fg.description(folder_meta.get("description") or f"Articles in {folder_title}")
+    fg.language(config.language)
+
+    fg.author(
+        **_parse_author_info(author=config.author, author_url=config.author_url),
+    )
+
+    self_url = _get_absolute_url(f"/~{folder}/feed.{feed_type}")
+    fg.link(href=self_url, rel="self")
+
+    if pages:
+        updated = _to_feed_datetime(pages[0][1].get("published"))
+        if updated:
+            fg.updated(updated)
+
+    for _, page in pages:
+        uri = page.get("uri", "")
+        entry_url = _get_absolute_url(uri)
+
+        fe = fg.add_entry()
+        if entry_url:
+            fe.id(entry_url)
+            fe.link(href=entry_url, rel="alternate")
+
+        fe.title(_to_feed_text(page.get("title", "[No Title]")))
+
+        published = _to_feed_datetime(page.get("published"))
+        if published:
+            fe.published(published)
+            fe.updated(published)
+
+        if page.get("description"):
+            fe.summary(_to_feed_text(page.get("description", "")))
+
+        if not short_description:
+            fe.content(_to_feed_text(page.get("content", "")), type="html")
+
+        fe.author(
+            **_parse_author_info(
+                author=page.get("author"), author_url=page.get("author_url")
+            ),
+        )
+
+        image_url = _get_absolute_url(page.get("image", ""))
+        if image_url:
+            mime_type, _ = mimetypes.guess_type(image_url)
+            if mime_type:
+                fe.enclosure(image_url, 0, mime_type)
+
+    response = (
+        Response(fg.atom_str(pretty=True), mimetype="application/atom+xml")
+        if feed_type == "atom"
+        else Response(fg.rss_str(pretty=True), mimetype="application/rss+xml")
+    )
+
+    if last_modified:
+        response.headers["Last-Modified"] = last_modified
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+
+    if etag:
+        response.headers["ETag"] = etag
+
+    if config.language:
+        response.headers["Language"] = config.language
+
+    return response
+
+
+@app.route("/~<path:folder>/feed.<type>", methods=["GET"])
+def folder_feed_route(folder: str, type: str):
+    """Generate an RSS/Atom feed for a specific folder."""
+    return _get_folder_feed(request, folder, type)
 
 
 @app.route("/rss", methods=["GET"])

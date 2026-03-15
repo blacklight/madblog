@@ -19,7 +19,14 @@ from flask import (
 )
 
 from .activitypub import ActivityPubMixin
-from .cache import CachedPage, check_cache_validity, generate_etag, get_max_mtime
+from .cache import (
+    CachedPage,
+    check_cache_validity,
+    compute_pages_mtime,
+    generate_etag,
+    make_304_response,
+    set_cache_headers,
+)
 from .config import config
 from .feeds import FeedsMixin
 from .guestbook import GuestbookMixin
@@ -258,6 +265,78 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         if as_markdown:
             response.mimetype = "text/markdown"
 
+    def _build_cached_page_for_article(
+        self, md_file: str, metadata: dict
+    ) -> CachedPage:
+        """
+        Build a CachedPage for an article, including interaction directories.
+        """
+        article_slug = self._article_slug_from_metadata(metadata)
+        ap_interactions_dir = None
+        if hasattr(self, "activitypub_storage"):
+            ap_interactions_dir = str(
+                config.resolved_state_dir / "activitypub" / "state" / "interactions"
+            )
+
+        return CachedPage(
+            md_file,
+            metadata=metadata,
+            article_slug=article_slug,
+            mentions_dir=(
+                str(self.mentions_dir) if hasattr(self, "mentions_dir") else None
+            ),
+            ap_interactions_dir=ap_interactions_dir,
+            replies_dir=str(self.replies_dir),
+        )
+
+    def _render_markdown_output(self, md_file: str, title: str) -> str:
+        """Render raw markdown output with title."""
+        with open(md_file, "r") as f:
+            content = self._parse_markdown_content(f)
+        return f"# {title}\n\n{content}"
+
+    def _make_content_response(
+        self,
+        *,
+        md_file: str,
+        metadata: dict,
+        cached_page: CachedPage,
+        title: str,
+        as_markdown: bool,
+        render_html_fn,
+        get_ap_response_fn,
+    ) -> Response:
+        """
+        Shared flow for rendering page/reply content responses.
+
+        Handles cache validation, ActivityPub negotiation, and rendering.
+        """
+        if cached_page.is_client_cache_valid():
+            return cached_page.make_304_response()
+
+        if self._client_prefers_activitypub():
+            ap_response = get_ap_response_fn(
+                last_modified=cached_page.last_modified,
+                etag=cached_page.etag,
+            )
+            if ap_response:
+                return ap_response
+
+        response = make_response(
+            self._render_markdown_output(md_file, title)
+            if as_markdown
+            else render_html_fn()
+        )
+
+        self._set_page_response_headers(
+            response,
+            last_modified=cached_page.last_modified,
+            etag=cached_page.etag,
+            metadata=metadata,
+            as_markdown=as_markdown,
+        )
+        return response
+
     def get_page(
         self,
         page: str,
@@ -283,52 +362,12 @@ class BlogApp(  # pylint: disable=too-many-ancestors
 
         metadata = self._parse_page_metadata(page)
         md_file = metadata.pop("md_file")
-
-        # Compute article slug for interaction mtime checks
-        article_slug = self._article_slug_from_metadata(metadata)
-
-        # Get AP interactions directory if available
-        ap_interactions_dir = None
-        if hasattr(self, "activitypub_storage"):
-            ap_interactions_dir = str(
-                config.resolved_state_dir / "activitypub" / "state" / "interactions"
-            )
-
-        # Return 304 if client cache is valid (considering both article and interactions)
-        cached_page = CachedPage(
-            md_file,
-            metadata=metadata,
-            article_slug=article_slug,
-            mentions_dir=(
-                str(self.mentions_dir) if hasattr(self, "mentions_dir") else None
-            ),
-            ap_interactions_dir=ap_interactions_dir,
-            replies_dir=str(self.replies_dir),
-        )
-
-        if cached_page.is_client_cache_valid():
-            return cached_page.make_304_response()
-
-        # Return ActivityPub response if client prefers it
-        if self._client_prefers_activitypub():
-            ap_response = self._get_activitypub_page_response(
-                md_file=md_file,
-                metadata=metadata,
-                last_modified=cached_page.last_modified,
-                etag=cached_page.etag,
-            )
-            if ap_response:
-                return ap_response
-
-        # Render content
+        cached_page = self._build_cached_page_for_article(md_file, metadata)
         title = title or metadata.get("title") or config.title
-        if as_markdown:
-            with open(md_file, "r") as f:
-                content = self._parse_markdown_content(f)
-            output = f"# {title}\n\n{content}"
-        else:
+
+        def render_html():
             reactions_tree = self._get_page_interactions(md_file, metadata)
-            output = self._render_page_html(
+            return self._render_page_html(
                 md_file=md_file,
                 metadata=metadata,
                 title=title,
@@ -337,16 +376,23 @@ class BlogApp(  # pylint: disable=too-many-ancestors
                 reactions_tree=reactions_tree,
             )
 
-        response = make_response(output)
-        self._set_page_response_headers(
-            response,
-            last_modified=cached_page.last_modified,
-            etag=cached_page.etag,
-            metadata=metadata,
-            as_markdown=as_markdown,
-        )
+        def get_ap_response(*, last_modified, etag):
+            return self._get_activitypub_page_response(
+                md_file=md_file,
+                metadata=metadata,
+                last_modified=last_modified,
+                etag=etag,
+            )
 
-        return response
+        return self._make_content_response(
+            md_file=md_file,
+            metadata=metadata,
+            cached_page=cached_page,
+            title=title,
+            as_markdown=as_markdown,
+            render_html_fn=render_html,
+            get_ap_response_fn=get_ap_response,
+        )
 
     def get_reply(
         self,
@@ -364,35 +410,14 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         """
         metadata = self._parse_reply_metadata(article_slug, reply_slug)
         md_file = metadata.pop("md_file")
-
-        # Return 304 if client cache is valid
         cached_page = CachedPage(md_file, metadata=metadata)
-        if cached_page.is_client_cache_valid():
-            return cached_page.make_304_response()
-
-        # Return ActivityPub response if client prefers it
-        if self._client_prefers_activitypub():
-            ap_response = self._get_activitypub_reply_response(
-                md_file=md_file,
-                metadata=metadata,
-                last_modified=cached_page.last_modified,
-                etag=cached_page.etag,
-                article_slug=article_slug,
-                reply_slug=reply_slug,
-            )
-            if ap_response:
-                return ap_response
-
         title = metadata.get("title") or reply_slug
-        if as_markdown:
-            with open(md_file, "r") as f:
-                content = self._parse_markdown_content(f)
-            output = f"# {title}\n\n{content}"
-        else:
+
+        def render_html():
             reactions_tree = self._get_reply_interactions(
                 md_file, metadata, article_slug, reply_slug
             )
-            output = self._render_reply_html(
+            return self._render_reply_html(
                 md_file=md_file,
                 metadata=metadata,
                 title=title,
@@ -400,16 +425,25 @@ class BlogApp(  # pylint: disable=too-many-ancestors
                 reactions_tree=reactions_tree,
             )
 
-        response = make_response(output)
-        self._set_page_response_headers(
-            response,
-            last_modified=cached_page.last_modified,
-            etag=cached_page.etag,
-            metadata=metadata,
-            as_markdown=as_markdown,
-        )
+        def get_ap_response(*, last_modified, etag):
+            return self._get_activitypub_reply_response(
+                md_file=md_file,
+                metadata=metadata,
+                last_modified=last_modified,
+                etag=etag,
+                article_slug=article_slug,
+                reply_slug=reply_slug,
+            )
 
-        return response
+        return self._make_content_response(
+            md_file=md_file,
+            metadata=metadata,
+            cached_page=cached_page,
+            title=title,
+            as_markdown=as_markdown,
+            render_html_fn=render_html,
+            get_ap_response_fn=get_ap_response,
+        )
 
     def _get_page_content(self, page: str, **kwargs) -> str:
         """Return the HTML content of a page as a string (not a Response)."""
@@ -418,69 +452,291 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             return result.get_data(as_text=True)
         return str(result) if result else ""
 
-    def _get_pages_from_files(
+    def _is_hidden_folder(self, name: str) -> bool:
+        """Check if a folder name indicates it should be hidden."""
+        return name.startswith(".") or name.startswith("_")
+
+    def _get_folders_in_dir(self, folder: str = "") -> List[dict]:
+        """
+        Return visible subfolders in the given folder path.
+
+        - Excludes hidden folders (starting with . or _)
+        - Excludes empty folders (no articles, no visible subfolders)
+        - Parses index.md for folder metadata if present
+        """
+        target_dir = self.pages_dir / folder if folder else self.pages_dir
+        target_dir_resolved = Path(os.path.realpath(str(target_dir)))
+
+        if not target_dir_resolved.is_dir():
+            return []
+
+        if not str(target_dir_resolved).startswith(str(self.pages_dir)):
+            return []
+
+        folders = []
+        replies_dir = str(self.replies_dir)
+
+        for entry in sorted(target_dir_resolved.iterdir()):
+            if not entry.is_dir():
+                continue
+
+            name = entry.name
+            if self._is_hidden_folder(name):
+                continue
+
+            if str(entry) == replies_dir:
+                continue
+
+            rel_path = os.path.join(folder, name) if folder else name
+            if self._is_folder_empty(rel_path):
+                continue
+
+            folder_meta = self._parse_folder_metadata(rel_path)
+            folders.append(
+                {
+                    "name": name,
+                    "path": rel_path,
+                    "uri": f"/~{rel_path}/",
+                    "title": folder_meta.get("title") or name,
+                    "description": folder_meta.get("description"),
+                    "image": folder_meta.get("image"),
+                    "has_custom_index": folder_meta.get("has_content", False),
+                }
+            )
+
+        return folders
+
+    def _is_folder_empty(self, folder: str) -> bool:
+        """
+        Check if a folder has no visible articles and no visible subfolders.
+        """
+        target_dir = self.pages_dir / folder
+        if not target_dir.is_dir():
+            return True
+
+        replies_dir = str(self.replies_dir)
+
+        for entry in target_dir.iterdir():
+            if entry.is_file() and entry.suffix == ".md" and entry.name != "index.md":
+                return False
+
+            if entry.is_dir():
+                if self._is_hidden_folder(entry.name):
+                    continue
+                if str(entry) == replies_dir:
+                    continue
+                if not self._is_folder_empty(os.path.join(folder, entry.name)):
+                    return False
+
+        return True
+
+    def _build_page_entry(
         self,
         *,
-        with_content: bool = False,
-        skip_header: bool = False,
-        skip_html_head: bool = False,
-    ):
-        pages_dir = str(self.pages_dir).rstrip("/")
+        rel_path: str,
+        rel_folder: str,
+        full_path: str,
+        with_content: bool,
+        skip_header: bool,
+        skip_html_head: bool,
+    ) -> dict:
+        """Build a page entry dict for a single Markdown file."""
+        return {
+            "path": rel_path,
+            "folder": rel_folder,
+            "content": (
+                self._get_page_content(
+                    full_path,
+                    skip_header=skip_header,
+                    skip_html_head=skip_html_head,
+                )
+                if with_content
+                else ""
+            ),
+            **self._parse_page_metadata(rel_path),
+        }
+
+    def _get_pages_recursive(
+        self,
+        start_dir: str,
+        pages_dir_str: str,
+        *,
+        with_content: bool,
+        skip_header: bool,
+        skip_html_head: bool,
+    ) -> list:
+        """Get pages recursively using os.walk."""
         replies_dir = str(self.replies_dir)
         pages = []
 
-        for root, dirs, files in os.walk(pages_dir, followlinks=True):
-            # Exclude the replies directory from the home page listing
+        for root, dirs, files in os.walk(start_dir, followlinks=True):
             dirs[:] = [d for d in dirs if os.path.join(root, d) != replies_dir]
 
             for f in files:
                 if not f.endswith(".md"):
                     continue
 
+                rel_path = os.path.join(root[len(pages_dir_str) + 1 :], f)
+                rel_folder = root[len(pages_dir_str) + 1 :]
+
                 pages.append(
-                    {
-                        "path": os.path.join(root[len(pages_dir) + 1 :], f),
-                        "folder": root[len(pages_dir) + 1 :],
-                        "content": (
-                            self._get_page_content(
-                                os.path.join(root, f),
-                                skip_header=skip_header,
-                                skip_html_head=skip_html_head,
-                            )
-                            if with_content
-                            else ""
-                        ),
-                        **self._parse_page_metadata(
-                            os.path.join(root[len(pages_dir) + 1 :], f)
-                        ),
-                    }
+                    self._build_page_entry(
+                        rel_path=rel_path,
+                        rel_folder=rel_folder,
+                        full_path=os.path.join(root, f),
+                        with_content=with_content,
+                        skip_header=skip_header,
+                        skip_html_head=skip_html_head,
+                    )
                 )
 
         return pages
 
-    def get_pages(
+    def _get_pages_non_recursive(
+        self,
+        start_dir: str,
+        folder: str,
+        *,
+        with_content: bool,
+        skip_header: bool,
+        skip_html_head: bool,
+    ) -> list:
+        """Get pages from direct children only (non-recursive)."""
+        try:
+            entries = os.listdir(start_dir)
+        except OSError:
+            return []
+
+        pages = []
+        for f in entries:
+            full_path = os.path.join(start_dir, f)
+            if not os.path.isfile(full_path):
+                continue
+            if not f.endswith(".md"):
+                continue
+            if f == "index.md":
+                continue
+
+            rel_path = os.path.join(folder, f) if folder else f
+            pages.append(
+                self._build_page_entry(
+                    rel_path=rel_path,
+                    rel_folder=folder,
+                    full_path=full_path,
+                    with_content=with_content,
+                    skip_header=skip_header,
+                    skip_html_head=skip_html_head,
+                )
+            )
+
+        return pages
+
+    def _get_pages_from_files(
         self,
         *,
+        folder: str = "",
+        recursive: bool = True,
         with_content: bool = False,
         skip_header: bool = False,
         skip_html_head: bool = False,
-        sorter: Type[PagesSorter] = PagesSortByTime,
-        reverse: bool = True,
-    ) -> List[Tuple[int, dict]]:
-        local_pages = self._get_pages_from_files(
+    ):
+        """
+        Get pages from Markdown files.
+
+        :param folder: Restrict to this folder (relative to pages_dir)
+        :param recursive: If False, only list direct children of folder
+        :param with_content: Include rendered HTML content
+        :param skip_header: Skip header in rendered content
+        :param skip_html_head: Skip HTML head in rendered content
+        """
+        pages_dir_str = str(self.pages_dir).rstrip("/")
+
+        if folder:
+            start_dir = os.path.join(pages_dir_str, folder)
+            start_dir_resolved = os.path.realpath(start_dir)
+            if not start_dir_resolved.startswith(pages_dir_str):
+                return []
+            if not os.path.isdir(start_dir_resolved):
+                return []
+        else:
+            start_dir = pages_dir_str
+
+        if recursive:
+            return self._get_pages_recursive(
+                start_dir,
+                pages_dir_str,
+                with_content=with_content,
+                skip_header=skip_header,
+                skip_html_head=skip_html_head,
+            )
+
+        return self._get_pages_non_recursive(
+            start_dir,
+            folder,
             with_content=with_content,
             skip_header=skip_header,
             skip_html_head=skip_html_head,
         )
 
-        remote_pages = self._get_pages_from_feeds(with_content=with_content)
+    def get_pages(
+        self,
+        *,
+        folder: str = "",
+        recursive: bool = True,
+        with_content: bool = False,
+        skip_header: bool = False,
+        skip_html_head: bool = False,
+        sorter: Type[PagesSorter] = PagesSortByTime,
+        reverse: bool = True,
+        include_external_feeds: bool = True,
+    ) -> List[Tuple[int, dict]]:
+        local_pages = self._get_pages_from_files(
+            folder=folder,
+            recursive=recursive,
+            with_content=with_content,
+            skip_header=skip_header,
+            skip_html_head=skip_html_head,
+        )
+
+        remote_pages = []
+        if include_external_feeds and not folder:
+            remote_pages = self._get_pages_from_feeds(with_content=with_content)
+
         pages = local_pages + remote_pages
         pages.sort(key=sorter(pages), reverse=reverse)
         return list(enumerate(pages))
 
+    def _build_folder_context(self, folder: str, recursive: bool) -> dict:
+        """
+        Build template context for folder navigation.
+
+        Returns dict with folders, breadcrumbs, parent_folder, and folder metadata.
+        """
+        if recursive:
+            return {
+                "folders": [],
+                "breadcrumbs": [],
+                "parent_folder": None,
+                "current_folder": folder,
+                "folder_title": None,
+                "folder_description": None,
+            }
+
+        folder_metadata = self._parse_folder_metadata(folder) if folder else {}
+        return {
+            "folders": self._get_folders_in_dir(folder),
+            "breadcrumbs": self._build_breadcrumbs(folder) if folder else [],
+            "parent_folder": self._get_parent_folder(folder) if folder else None,
+            "current_folder": folder,
+            "folder_title": folder_metadata.get("title"),
+            "folder_description": folder_metadata.get("description"),
+        }
+
     def get_pages_response(
         self,
         *,
+        folder: str = "",
+        recursive: bool = True,
         with_content: bool = False,
         skip_header: bool = False,
         skip_html_head: bool = False,
@@ -494,6 +750,8 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         """
         Get a Response for the pages list with proper cache headers.
 
+        :param folder: Restrict to this folder (relative to pages_dir)
+        :param recursive: If False, only list direct children of folder
         :param with_content: Include full content for each page
         :param skip_header: Skip header in rendered content
         :param skip_html_head: Skip HTML head in rendered content
@@ -506,50 +764,33 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             where the page content must be served (for rel="me" verification)
             but human users should be redirected to the canonical home page.
         """
-        # Get the pages data first (this includes file_mtime for each local page)
         pages = self.get_pages(
+            folder=folder,
+            recursive=recursive,
             with_content=with_content,
             skip_header=skip_header,
             skip_html_head=skip_html_head,
             sorter=sorter,
             reverse=reverse,
+            include_external_feeds=(not folder),
         )
 
-        # Compute the most recent modification time from pages data and
-        # the pages directory itself (to detect added/removed articles)
-        most_recent_mtime = get_max_mtime(self.pages_dir)
-
-        for _, page_data in pages:
-            # Only consider local files (those with file_mtime), not external feeds
-            if "file_mtime" in page_data:
-                most_recent_mtime = max(most_recent_mtime, page_data["file_mtime"])
-
-        # Format the most recent modification time for HTTP headers
+        most_recent_mtime = compute_pages_mtime(pages, self.pages_dir)
         last_modified = (
             formatdate(most_recent_mtime, usegmt=True)
             if most_recent_mtime > 0
             else None
         )
-
-        # Generate ETag based on most recent modification time
         etag = generate_etag(most_recent_mtime) if most_recent_mtime > 0 else None
 
-        # Check if the client has a cached version that's still valid
         if (
             most_recent_mtime > 0
             and etag
             and check_cache_validity(most_recent_mtime, etag)
         ):
-            response = make_response("", 304)
-            if last_modified:
-                response.headers["Last-Modified"] = last_modified
-            response.headers["ETag"] = etag
-            response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+            return make_304_response(last_modified, etag)
 
-            if config.language:
-                response.headers["Language"] = config.language
-
-            return response
+        folder_ctx = self._build_folder_context(folder, recursive)
 
         with contextlib.ExitStack() as stack:
             if not has_app_context():
@@ -560,12 +801,10 @@ class BlogApp(  # pylint: disable=too-many-ancestors
                 pages=pages,
                 config=config,
                 view_mode=view_mode,
+                **folder_ctx,
                 **extra_context,
             )
 
-        # Inject meta refresh for profile URLs (/@username, /ap/actor) so that
-        # the page content is served for rel="me" verification while human
-        # users are redirected to the canonical home page.
         if meta_redirect_to:
             meta_refresh = (
                 f'<meta http-equiv="refresh" content="0; url={meta_redirect_to}" />'
@@ -573,20 +812,100 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             html = html.replace("</head>", f"{meta_refresh}</head>", 1)
 
         response = make_response(html)
-
-        # Create response with cache headers
-        if last_modified:
-            response.headers["Last-Modified"] = last_modified
-            response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
-
-        if etag:
-            response.headers["ETag"] = etag
-
-        # Set Language header from global config for home page
-        if config.language:
-            response.headers["Language"] = config.language
-
+        set_cache_headers(response, last_modified, etag)
         return response
+
+    def _build_breadcrumbs(self, folder: str) -> List[dict]:
+        """
+        Build breadcrumb navigation for a folder path.
+
+        Returns list of dicts with 'name', 'uri', and 'title' keys.
+        """
+        if not folder:
+            return []
+
+        parts = folder.split(os.sep)
+        breadcrumbs = [{"name": "Home", "uri": "/", "title": config.title or "Home"}]
+
+        accumulated = ""
+        for part in parts:
+            accumulated = os.path.join(accumulated, part) if accumulated else part
+            folder_meta = self._parse_folder_metadata(accumulated)
+            breadcrumbs.append(
+                {
+                    "name": part,
+                    "uri": f"/~{accumulated}/",
+                    "title": folder_meta.get("title") or part,
+                }
+            )
+
+        return breadcrumbs
+
+    def _get_parent_folder(self, folder: str) -> Optional[dict]:
+        """
+        Get parent folder info for navigation.
+
+        Returns dict with 'name' and 'uri', or None if at root.
+        """
+        if not folder:
+            return None
+
+        parent = os.path.dirname(folder)
+        if not parent:
+            return {"name": "Home", "uri": "/", "title": config.title or "Home"}
+
+        parent_meta = self._parse_folder_metadata(parent)
+        return {
+            "name": os.path.basename(parent),
+            "uri": f"/~{parent}/",
+            "title": parent_meta.get("title") or os.path.basename(parent),
+        }
+
+    def get_folder_index(
+        self,
+        folder: str,
+        *,
+        view_mode: str = "cards",
+        followers_count: int = 0,
+    ) -> Response:
+        """
+        Render folder index page or custom index.md content.
+
+        If the folder has an index.md with content, it is rendered as a page.
+        Otherwise, a listing of subfolders and articles is rendered.
+        """
+        from flask import abort
+
+        folder = folder.strip("/")
+
+        folder_dir = self.pages_dir / folder
+        folder_dir_resolved = Path(os.path.realpath(str(folder_dir)))
+
+        if not folder_dir_resolved.is_dir():
+            abort(404)
+
+        if not str(folder_dir_resolved).startswith(str(self.pages_dir)):
+            abort(404)
+
+        folder_meta = self._parse_folder_metadata(folder)
+
+        if folder_meta.get("has_content"):
+            return self.get_page(
+                f"{folder}/index",
+                skip_header=False,
+                skip_html_head=False,
+            )
+
+        return self.get_pages_response(
+            folder=folder,
+            recursive=False,
+            with_content=(view_mode == "full"),
+            skip_header=True,
+            skip_html_head=True,
+            template_name="index.html",
+            view_mode=view_mode,
+            followers_count=followers_count,
+        )
 
 
 app = BlogApp(__name__)

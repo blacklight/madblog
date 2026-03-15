@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="{{ config.language | default('en') }}">
 {% set is_home_page = '/'.join((url or config.link or '').rstrip('/').split('/')[3:]).split('?')[0].split('#')[0] == '' %}
+{% set is_folder_page = (url or '').rstrip('/').split('/')[-1].startswith('~') if url else False %}
+{% set is_index_page = is_home_page or is_folder_page or (type == 'index') %}
 {% set is_guestbook_page = (url or '').rstrip('/').endswith('/guestbook') %}
 <head>
     <meta charset="UTF-8">
@@ -113,7 +115,7 @@
         </div>
 
         <div class="right">
-            {% if is_home_page %}
+            {% if is_index_page %}
               <div class="view-mode-bar">
                 <select class="view-mode-select" onchange="window.location.search='?view='+this.value">
                   <option value="cards" {{ 'selected' if view_mode == 'cards' }}><span>&#10697;&nbsp; </span><span>Cards</span></option>

@@ -176,21 +176,67 @@ def check_cache_validity(file_mtime: float, etag: str) -> bool:
 
 
 def make_304_response(
-    last_modified: str,
-    etag: str,
-    metadata: dict,
+    last_modified: str | None,
+    etag: str | None,
+    metadata: dict | None = None,
 ) -> Response:
     """
     Create a 304 Not Modified response with appropriate headers.
+
+    :param last_modified: Last-Modified header value (optional)
+    :param etag: ETag header value (optional)
+    :param metadata: Optional dict with article-specific metadata (e.g., language)
     """
     response = make_response("", 304)
-    response.headers["Last-Modified"] = last_modified
-    response.headers["ETag"] = etag
-    article_language = metadata.get("language")
+    if last_modified:
+        response.headers["Last-Modified"] = last_modified
+    if etag:
+        response.headers["ETag"] = etag
+    response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
 
+    article_language = (metadata or {}).get("language")
     if article_language:
         response.headers["Language"] = article_language
     elif config.language:
         response.headers["Language"] = config.language
 
     return response
+
+
+def set_cache_headers(
+    response: Response,
+    last_modified: str | None,
+    etag: str | None,
+) -> None:
+    """
+    Set cache and language headers on a response.
+
+    :param response: Flask Response object to modify
+    :param last_modified: Last-Modified header value (optional)
+    :param etag: ETag header value (optional)
+    """
+    if last_modified:
+        response.headers["Last-Modified"] = last_modified
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+    if etag:
+        response.headers["ETag"] = etag
+    if config.language:
+        response.headers["Language"] = config.language
+
+
+def compute_pages_mtime(pages: list, pages_dir) -> float:
+    """
+    Compute the most recent modification time from pages and pages_dir.
+
+    Considers both local file mtimes and the directory itself
+    (to detect added/removed articles).
+
+    :param pages: List of (index, page_data) tuples from get_pages()
+    :param pages_dir: Path to the pages directory
+    :return: Most recent modification timestamp
+    """
+    most_recent_mtime = get_max_mtime(pages_dir)
+    for _, page_data in pages:
+        if "file_mtime" in page_data:
+            most_recent_mtime = max(most_recent_mtime, page_data["file_mtime"])
+    return most_recent_mtime

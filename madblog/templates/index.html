@@ -1,6 +1,9 @@
 {% set _view_mode = view_mode or config.view_mode or 'cards' %}
 {% set view_styles = ['/css/home.css', '/css/blog.css', '/css/code.css'] if _view_mode == 'full' else ['/css/home.css'] %}
-{% with view_mode=_view_mode, title=title or config.title or 'Blog', url=config.link, description=config.description, type='index', image=None, skip_header=not config.header, styles=view_styles %}
+{% set _page_title = folder_title or title or config.title or 'Blog' %}
+{% set _page_description = folder_description or description or config.description %}
+{% set _page_url = (config.link ~ '/~' ~ current_folder ~ '/') if current_folder else config.link %}
+{% with view_mode=_view_mode, title=_page_title, url=_page_url, description=_page_description, type='index', image=None, skip_header=not config.header, styles=view_styles %}
   {% include 'common-head.html' %}
 {% endwith %}
 
@@ -8,21 +11,49 @@
 
 <main>
   <div class="index view-{{ view_mode }}">
-    {% set state = {} %}
-    {% for i, page in pages %}
-      {% if 'cur_folder' not in state or page.get('folder') != state.get('cur_folder') %}
-        <div class="folder">
-          {% set folder = page.get('folder') %}
-          {% if folder %}
-            <div id="{{ folder.replace('/', '-') }}" class="folder-title">
-              <a href="#{{ folder.replace('/', '-') }}">
-                {{ folder }}
-              </a>
+
+    {% if breadcrumbs %}
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+      {% for crumb in breadcrumbs %}
+        {% if not loop.last %}
+          <a href="{{ crumb.uri }}">{{ crumb.title }}</a>
+          <span class="separator">›</span>
+        {% else %}
+          <span class="current">{{ crumb.title }}</span>
+        {% endif %}
+      {% endfor %}
+    </nav>
+    {% endif %}
+
+    {% if folders %}
+    <details class="folders-section" open>
+      <summary class="folders-toggle">
+        <span class="folders-toggle-icon">📁</span>
+        <span class="folders-toggle-text">Folders</span>
+        <span class="folders-toggle-count">({{ folders|length }})</span>
+      </summary>
+      <div class="folders-grid">
+        {% for folder in folders %}
+          <a class="folder-card" href="{{ folder.uri }}">
+            <div class="folder-icon">📁</div>
+            <div class="folder-info">
+              <div class="folder-title">{{ folder.title }}</div>
+              {% if folder.description %}
+              <div class="folder-description">{{ folder.description }}</div>
+              {% endif %}
             </div>
-          {% endif %}
-        <div class="articles">
-      {% endif %}
-      {% if state.update({'cur_folder': page.get('folder')}) %}{% endif %}
+          </a>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+
+    {% if pages %}
+    <div class="articles-section">
+      <div class="articles">
+    {% endif %}
+
+    {% for i, page in pages %}
 
       {% if view_mode == 'list' %}
 
@@ -138,11 +169,13 @@
 
       {% endif %}
 
-      {% if i == pages|length - 1 or pages[i+1][1].get('folder') != page.get('folder') %}
-        </div>
-      </div>
-      {% endif %}
     {% endfor %}
+
+    {% if pages %}
+      </div>
+    </div>
+    {% endif %}
+
   </div>
 
 </main>

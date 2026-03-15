@@ -45,6 +45,10 @@
   - [Tags](#tags)
   - [Raw Markdown](#raw-markdown)
   - [Folders](#folders)
+    - [URL scheme](#url-scheme)
+    - [Navigation](#navigation)
+    - [Folder metadata with `index.md`](#folder-metadata-with-indexmd)
+    - [Hidden and empty folders](#hidden-and-empty-folders)
 - [Author Replies](#author-replies)
   - [Directory layout](#directory-layout)
   - [Reply metadata](#reply-metadata)
@@ -656,8 +660,63 @@ https://myblog.example.com/article/my-post.md
 
 ### Folders
 
-You can organize Markdown files in folders. If multiple folders are present, pages on the home will be grouped by
-folders.
+You can organize Markdown files in folders within `pages_dir`. Folders provide
+hierarchical navigation for your content.
+
+#### URL scheme
+
+- **Folder index**: `/~folder/` or `/~folder/subfolder/`
+- **Per-folder feeds**: `/~folder/feed.rss`, `/~folder/feed.atom`
+- **Articles**: `/article/folder/article-name`
+
+#### Navigation
+
+- The **home page** shows only root-level articles and folder links
+- Each **folder index** shows its direct articles and subfolders
+- **Breadcrumb navigation** appears on folder pages
+- A **parent link** allows navigating back up the hierarchy
+
+#### Folder metadata with `index.md`
+
+Place an `index.md` file in a folder to customize it:
+
+- **With content**: The file is rendered as the folder's landing page, replacing
+  the default listing. Example:
+
+```markdown
+[//]: # (title: About Me)
+[//]: # (description: Short bio)
+[//]: # (image: /img/docs-banner.png)
+
+# About Me
+
+I am a blogger and a Web developer.
+
+My links:
+
+- ...
+```
+
+If you place this file under `<pages_dir>/about/index.md`, it will be rendered as
+and article at `/~about/`.
+
+- **Metadata only**: Provides title, description, and image for folder cards, but
+  it keeps the default listing.
+
+```markdown
+[//]: # (title: Documentation)
+[//]: # (description: Guides and references)
+[//]: # (image: /img/docs-banner.png)
+
+# Welcome to Documentation
+
+This content will be shown instead of the folder listing.
+```
+
+#### Hidden and empty folders
+
+- Folders starting with `.` or `_` are hidden (e.g., `.drafts`, `_archive`)
+- Empty folders (no articles or visible subfolders) are not displayed
 
 ## Author Replies
 
