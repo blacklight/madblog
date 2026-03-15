@@ -195,7 +195,6 @@ img.latex.block {
 
 img.latex.inline {
   display: inline-block;
-  height: 1.5em;
   vertical-align: text-bottom;
   margin: 0 .25em;
 }
