@@ -68,6 +68,10 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
 
         Each dict contains: slug, title, reply_to, published, content_html,
         permalink, author, author_url, author_photo.
+
+        Standalone likes (files with ``like-of`` but no ``reply-to`` and no
+        content) are excluded — they are handled separately by the
+        :class:`AuthorReactionsIndex`.
         """
         from madblog.markdown import render_html
 
@@ -86,6 +90,13 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
             md_file = metadata.pop("md_file")
             with open(md_file, "r") as f:
                 content = self._parse_markdown_content(f)
+
+            # Skip standalone likes (like-of present, no reply-to, no content)
+            like_of = metadata.get("like-of")
+            has_reply_to = "reply-to" in metadata
+            has_content = bool(content.strip())
+            if like_of and not has_reply_to and not has_content:
+                continue
 
             author_info = self._parse_author(metadata)
             permalink = f"/reply/{article_slug}/{reply_slug}"

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.4
+
+### Fixed
+- Replies: exclude standalone “like” posts (entries with `like-of` but no
+  `reply-to` and no content) when building the replies list, so author likes
+  aren’t misclassified as replies.
+
 ## 1.1.3
 
 ### Added
