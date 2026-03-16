@@ -1,3 +1,4 @@
+import fcntl
 import json
 import os
 import re
@@ -275,15 +276,34 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         self.content_monitor.register(self._ap_integration.on_content_change)
 
         def _ap_startup_tasks():
-            self._ap_integration.sync_on_startup()
-            self._ap_integration.sync_replies_on_startup()
-
-            # Push the current actor profile to all followers so remote
-            # instances pick up attachment/field changes (e.g. verified links).
+            # Use a file lock to prevent multiple workers from syncing simultaneously
+            lock_file = self._ap_integration.workdir / ".startup_sync.lock"
             try:
-                self.activitypub_handler.publish_actor_update()
+                with open(lock_file, "w") as f:
+                    try:
+                        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except BlockingIOError:
+                        logger.debug(
+                            "Another worker is running startup sync, skipping"
+                        )
+                        return
+
+                    try:
+                        self._ap_integration.sync_on_startup()
+                        self._ap_integration.sync_replies_on_startup()
+
+                        # Push the current actor profile to all followers so remote
+                        # instances pick up attachment/field changes.
+                        try:
+                            self.activitypub_handler.publish_actor_update()
+                        except Exception:
+                            logger.warning(
+                                "Failed to publish actor profile update", exc_info=True
+                            )
+                    finally:
+                        fcntl.flock(f, fcntl.LOCK_UN)
             except Exception:
-                logger.warning("Failed to publish actor profile update", exc_info=True)
+                logger.warning("Startup sync failed", exc_info=True)
 
         self._ap_startup_thread = threading.Thread(
             target=_ap_startup_tasks, daemon=True
