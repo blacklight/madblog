@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.5
+
+### Added
+- **Reactions**: Add per-interaction “liked by the author” mapping so author
+  likes targeting remote Fediverse URLs are indexed and shown on the specific
+  interaction (including fediverse URL aliases).
+- **Replies:** Fix handling of standalone `like-of` files under
+  `replies/<slug>` so they’re treated as likes (and excluded from replies) even
+  when `reply-to` is auto-derived. This allows author likes to replies on
+  articles to be rendered as likes on the liked post itself rather than generic
+  author replies on the root level.
+
+### Fixed
+- **Feeds:** Fixed Python ≤ 3.10 compatibility in feed models (annotations +
+  avoid forward-reference/walrus usage).
+
 ## 1.1.4
 
 ### Fixed
