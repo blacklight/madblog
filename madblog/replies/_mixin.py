@@ -21,6 +21,7 @@ from madblog.markdown import resolve_relative_urls
 from madblog.templates import TemplateUtils
 from madblog.reactions import (
     build_thread_tree,
+    collect_author_likes_map,
     collect_interaction_counts,
     count_reactions,
 )
@@ -540,6 +541,13 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
             reactions_index.get_reactions(reply_url) if reactions_index else []
         )
 
+        # Per-interaction author likes (e.g. author liked a fediverse reply)
+        author_likes_map: dict = {}
+        if reactions_index:
+            author_likes_map = collect_author_likes_map(
+                reactions_tree, reactions_index.get_reactions
+            )
+
         # Compute per-interaction reaction counts using O(1) indexed lookups
         interaction_counts: dict = {}
         ap_handler = getattr(self, "activitypub_handler", None)
@@ -575,6 +583,7 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
                 reply_to=reply_to,
                 like_of=metadata.get("like-of"),
                 author_likes=author_likes,
+                author_likes_map=author_likes_map,
                 article_slug=article_slug,
                 reactions_tree=reactions_tree,
                 reactions_counts=reactions_counts,

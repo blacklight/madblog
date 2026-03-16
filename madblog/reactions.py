@@ -455,10 +455,10 @@ def collect_interaction_counts(
             return ap_url + url[len(blog_url) :]
         return url
 
-    def count_author_reply_children(node: ThreadNode) -> int:
+    def count_author_reply_children(n: ThreadNode) -> int:
         """Count author reply children in the subtree."""
         count = 0
-        for child in node.children:
+        for child in n.children:
             if child.reaction_type == ReactionType.AUTHOR_REPLY:
                 count += 1
             count += count_author_reply_children(child)
@@ -526,11 +526,50 @@ def collect_interaction_counts(
     return result
 
 
+def collect_author_likes_map(
+    roots: List[ThreadNode],
+    get_reactions_fn,
+) -> dict[str, list[dict]]:
+    """
+    Build a map of interaction identity → author-like entries.
+
+    Walks the thread tree and, for each AP interaction node, queries
+    the author reactions index by ``object_id``.  This allows
+    standalone author likes (``like-of`` targeting a remote fediverse
+    URL) to be displayed on the specific interaction they target.
+
+    :param roots: Root nodes returned by :func:`build_thread_tree`.
+    :param get_reactions_fn: Callable that takes a target URL string
+        and returns a list of author reaction dicts.
+    :return: Dict mapping interaction identity URL → list of reaction
+        dicts.
+    """
+    result: dict[str, list[dict]] = {}
+    stack = list(roots)
+
+    while stack:
+        node = stack.pop()
+        stack.extend(node.children)
+
+        if node.reaction_type != ReactionType.AP_INTERACTION:
+            continue
+
+        obj_id = getattr(node.item, "object_id", None)
+        if not obj_id:
+            continue
+
+        reactions = get_reactions_fn(obj_id)
+        if reactions:
+            result[obj_id] = reactions
+
+    return result
+
+
 # ------------------------------------------------------------------
 # Author-reactions index (JSON-persisted)
 # ------------------------------------------------------------------
 
-_METADATA_RE = re.compile(r"^\[//\]: # \(([^:]+):\s*(.*)\)\s*$")
+_METADATA_RE = re.compile(r"^\[//]: # \(([^:]+):\s*(.*)\)\s*$")
 
 
 class AuthorReactionsIndex:
@@ -642,9 +681,9 @@ class AuthorReactionsIndex:
         return os.path.relpath(filepath, self._replies_dir)
 
     def _index_file_metadata(self, filepath: str) -> None:
-        """Parse a single file and add any local ``like-of`` to the index."""
+        """Parse a single file and add its ``like-of`` to the index."""
         like_of = self._extract_like_of(filepath)
-        if not like_of or not self._is_local_url(like_of):
+        if not like_of:
             return
 
         source_file = self._source_file_for_file(filepath)
@@ -654,12 +693,13 @@ class AuthorReactionsIndex:
             "source_file": source_file,
         }
 
-        entries = self._index.setdefault(like_of, [])
-        # Avoid duplicates (same source file)
-        for existing in entries:
-            if existing.get("source_file") == source_file:
-                return
-        entries.append(entry)
+        # Index under the canonical URL and all fediverse aliases
+        urls = [like_of] + _fediverse_url_aliases(like_of)
+        for url in urls:
+            entries = self._index.setdefault(url, [])
+            # Avoid duplicates (same source file)
+            if not any(e.get("source_file") == source_file for e in entries):
+                entries.append(entry)
 
     def _remove_entries_for_file(self, filepath: str) -> None:
         """Remove all index entries whose source is *filepath*."""

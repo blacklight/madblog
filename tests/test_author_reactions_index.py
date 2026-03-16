@@ -91,21 +91,40 @@ class AuthorReactionsIndexTest(unittest.TestCase):
         self.assertEqual(len(reactions), 1)
         self.assertEqual(reactions[0]["source_url"], "/reply/my-post/liked-it")
 
-    def test_external_url_not_indexed(self):
-        """A like-of pointing at an external URL is NOT in the index."""
+    def test_external_url_indexed(self):
+        """A like-of pointing at an external URL IS indexed."""
         self._write_reply(
             "my-post", "external-like", "https://remote.social/statuses/42"
         )
 
         self.index.load()
 
-        self.assertEqual(
-            self.index.get_reactions("https://remote.social/statuses/42"), []
+        reactions = self.index.get_reactions("https://remote.social/statuses/42")
+        self.assertEqual(len(reactions), 1)
+        self.assertEqual(reactions[0]["type"], "like")
+        self.assertEqual(reactions[0]["source_url"], "/reply/my-post/external-like")
+
+    def test_fediverse_alias_indexed(self):
+        """A like-of is also indexed under fediverse URL aliases."""
+        self._write_reply(
+            "my-post",
+            "like-mastodon",
+            "https://mastodon.social/@alice/statuses/12345",
         )
-        # No entries at all
-        self.assertEqual(
-            self.index.get_reactions("https://example.com/article/my-post"), []
+
+        self.index.load()
+
+        # Lookup via the original pretty URL
+        reactions = self.index.get_reactions(
+            "https://mastodon.social/@alice/statuses/12345"
         )
+        self.assertEqual(len(reactions), 1)
+
+        # Also available via the canonical /users/ alias
+        reactions = self.index.get_reactions(
+            "https://mastodon.social/users/alice/statuses/12345"
+        )
+        self.assertEqual(len(reactions), 1)
 
     def test_on_reply_change_add(self):
         """on_reply_change with ADDED indexes the new file."""
@@ -227,6 +246,73 @@ class AuthorReactionsIndexTest(unittest.TestCase):
         self.assertEqual(
             self.index.get_reactions("https://example.com/article/my-post"), []
         )
+
+
+class CollectAuthorLikesMapTest(unittest.TestCase):
+    """Tests for collect_author_likes_map."""
+
+    def test_empty_tree(self):
+        """Empty tree returns empty map."""
+        from madblog.reactions import collect_author_likes_map
+
+        result = collect_author_likes_map([], lambda _: [])
+        self.assertEqual(result, {})
+
+    def test_ap_interaction_with_author_like(self):
+        """AP interaction liked by the author appears in the map."""
+        from unittest.mock import MagicMock
+        from madblog.reactions import (
+            ReactionType,
+            ThreadNode,
+            collect_author_likes_map,
+        )
+
+        interaction = MagicMock()
+        interaction.object_id = "https://mastodon.social/users/alice/statuses/100"
+        interaction.interaction_type = MagicMock(value="reply")
+
+        node = ThreadNode(
+            item=interaction,
+            reaction_type=ReactionType.AP_INTERACTION,
+            identity=interaction.object_id,
+        )
+
+        like_entry = {"type": "like", "source_url": "/reply/art/like-alice"}
+
+        def mock_get_reactions(url):
+            if url == "https://mastodon.social/users/alice/statuses/100":
+                return [like_entry]
+            return []
+
+        result = collect_author_likes_map([node], mock_get_reactions)
+        self.assertIn("https://mastodon.social/users/alice/statuses/100", result)
+        self.assertEqual(
+            result["https://mastodon.social/users/alice/statuses/100"],
+            [like_entry],
+        )
+
+    def test_non_ap_nodes_ignored(self):
+        """Author reply and webmention nodes are not queried."""
+        from madblog.reactions import (
+            ReactionType,
+            ThreadNode,
+            collect_author_likes_map,
+        )
+
+        reply_node = ThreadNode(
+            item={"full_url": "https://example.com/reply/a/r1"},
+            reaction_type=ReactionType.AUTHOR_REPLY,
+            identity="https://example.com/reply/a/r1",
+        )
+
+        calls = []
+
+        def mock_get_reactions(url):
+            calls.append(url)
+            return []
+
+        collect_author_likes_map([reply_node], mock_get_reactions)
+        self.assertEqual(calls, [])
 
 
 class AuthorReactionsTemplateTest(unittest.TestCase):

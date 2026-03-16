@@ -294,6 +294,16 @@ reply-{{ node.item.full_url | hash_id }}
         <label class="reaction-expand"><input type="checkbox" class="reaction-toggle"></label>
       {% endif %}
     {% endif %}
+    {% set ap_author_likes = author_likes_map.get(interaction.object_id, []) if author_likes_map is defined and author_likes_map else [] %}
+    {% if ap_author_likes %}
+    <div class="author-liked-by" title="Liked by the author">
+      {% if config.author_photo %}
+        <img class="author-liked-avatar" src="{{ config.author_photo }}"
+             alt="" loading="lazy">
+      {% endif %}
+      ⭐
+    </div>
+    {% endif %}
     <div class="reaction-counts">
       {{ render_counts(counts, 'interaction-counts') }}
     </div>

@@ -13,7 +13,11 @@ from markdown import Extension
 from madblog.config import config
 from madblog.tags import parse_metadata_tags
 from madblog.templates import TemplateUtils
-from madblog.reactions import collect_interaction_counts, count_reactions
+from madblog.reactions import (
+    collect_author_likes_map,
+    collect_interaction_counts,
+    count_reactions,
+)
 
 from ._render import render_html, resolve_relative_urls
 
@@ -27,7 +31,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
 
     _title_header_regex = re.compile(r"^#\s*((\[(.*)])|(.*))")
     _author_regex = re.compile(r"^(.+?)\s+<([^>]+)>$")
-    _url_regex = re.compile(r"^(https?:\/\/)?[\w\.\-]+\.[a-z]{2,6}\/?")
+    _url_regex = re.compile(r"^(https?://)?[\w.\-]+\.[a-z]{2,6}/?")
     _email_regex = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
     _md_extensions: Sequence[str | Extension]
     pages_dir: Path
@@ -44,7 +48,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
             if not line.strip() or re.match(r"(^---\s*$)|(^#\s+.*)", line):
                 continue
 
-            m = re.match(r"^\[//\]: # \(([^:]+):\s*(.*)\)\s*$", line)
+            m = re.match(r"^\[//]: # \(([^:]+):\s*(.*)\)\s*$", line)
             if not m:
                 continue
 
@@ -67,11 +71,11 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
             if (
                 not line.strip()
                 or re.match(r"^---\s*$", line)
-                or re.match(r"^\[//\]: # \(", line)
+                or re.match(r"^\[//]: # \(", line)
             ):
                 continue
 
-            if not (m := re.match(r"^#\s+(\[?([^]]+)\]?(\((.*)\))?)\s*$", line)):
+            if not (m := re.match(r"^#\s+(\[?([^]]+)]?(\((.*)\))?)\s*$", line)):
                 break
 
             title = (m.group(2) or "").strip()
@@ -191,7 +195,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 line
                 for line in content.split("\n")
                 if line.strip()
-                and not re.match(r"^\[//\]: # \(", line)
+                and not re.match(r"^\[//]: # \(", line)
                 and not re.match(r"^---\s*$", line)
             ]
             metadata["has_content"] = bool(content_lines)
@@ -224,7 +228,6 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
 
     @classmethod
     def _parse_author(cls, metadata: dict) -> dict:
-        author = None
         author_url = None
         author_photo = None
 
@@ -286,6 +289,13 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
             reactions_index.get_reactions(page_url) if reactions_index else []
         )
 
+        # Per-interaction author likes (e.g. author liked a fediverse reply)
+        author_likes_map: dict = {}
+        if reactions_index:
+            author_likes_map = collect_author_likes_map(
+                reactions_tree, reactions_index.get_reactions
+            )
+
         # Compute per-interaction reaction counts using O(1) indexed lookups
         interaction_counts: dict = {}
         ap_handler = getattr(self, "activitypub_handler", None)
@@ -322,6 +332,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 skip_html_head=skip_html_head,
                 like_of=metadata.get("like-of"),
                 author_likes=author_likes,
+                author_likes_map=author_likes_map,
                 reactions_tree=reactions_tree,
                 reactions_counts=reactions_counts,
                 interaction_counts=interaction_counts,
