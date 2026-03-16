@@ -25,7 +25,7 @@
     </div>
 
     {% if reactions_tree %}
-      {% with utils=utils %}
+      {% with utils=utils, is_guestbook=true %}
         {% include 'reactions.html' %}
       {% endwith %}
     {% else %}

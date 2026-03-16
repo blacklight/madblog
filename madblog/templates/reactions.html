@@ -382,7 +382,7 @@ reply-{{ node.item.full_url | hash_id }}
         <h4>Webmentions</h4>
         <p>
           To interact via <a href="https://indieweb.org/Webmention" target="_blank" rel="noopener">Webmentions</a>,
-          send an activity that references <a href="{{ url }}">this URL</a> from a platform that supports Webmentions,
+          send an activity that references <a href="{{ config.link if is_guestbook else url }}">this URL</a> from a platform that supports Webmentions,
           such as <a href="https://joinlemmy.org/" target="_blank" rel="noopener">Lemmy</a>,
           <a href="https://wordpress.org/plugins/webmention/" target="_blank" rel="noopener">WordPress with Webmention plugins</a>,
           or any <a href="https://indieweb.org/Webmention#Publishing_Software" target="_blank" rel="noopener">IndieWeb-compatible site</a>.
@@ -401,12 +401,14 @@ reply-{{ node.item.full_url | hash_id }}
             in a post to feature on the <a href="{{ config.link.rstrip('/') }}/guestbook">Guestbook</a>.
           </li>
           {% endif %}
+          {% if not is_guestbook %}
           <li>
             Search for <a href="{{ url }}">this URL</a> on your instance to find and interact with the post.
           </li>
           <li>
             Like, boost, quote, or reply to the post to feature your activity here.
           </li>
+          {% endif %}
         </ul>
         {% endif %}
       </div>
