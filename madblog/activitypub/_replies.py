@@ -61,17 +61,24 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         collisions with AP implementations that cache deleted object IDs.
 
         :param filepath: Path like ``replies/<article-slug>/<reply-slug>.md``
+            or ``replies/<reply-slug>.md`` for top-level unlisted posts.
         :return: URL like ``https://example.com/reply/<article-slug>/<reply-slug>``
+            or ``https://example.com/reply/<reply-slug>`` for top-level posts.
         """
         if not self.replies_dir:
             raise ValueError("replies_dir not configured")
 
-        stored = self._get_reply_file_url(filepath)
-        if stored:
-            return stored
-
         rel = os.path.relpath(filepath, self.replies_dir).rsplit(".", 1)[0]
         base_url = f"{self.base_url}/reply/{rel}"
+
+        stored = self._get_reply_file_url(filepath)
+        if stored:
+            # Detect stale URLs with "None" from before top-level support
+            if "/None/" in stored or stored.endswith("/None"):
+                logger.info("Clearing stale URL mapping with None: %s", stored)
+                self._remove_reply_file_url(filepath)
+            else:
+                return stored
 
         if base_url in self._get_recently_deleted_urls():
             ts = int(datetime.now(timezone.utc).timestamp())
@@ -152,6 +159,10 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         - Sets in_reply_to from metadata
         - Does not set name (Notes shouldn't have names)
         - CCs the original author if replying to an AP interaction
+
+        For unlisted posts (no in_reply_to):
+        - If a title/heading exists, prepend a bold link at the top
+        - If no title, append a bare URL link at the bottom
         """
         public_url = public_url or url
         metadata = self._parse_reply_metadata(filepath)
@@ -172,6 +183,24 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         )
         html = render_html(cleaned)
         html, attachments = self._extract_media_attachments(html, cleaned)
+
+        # For unlisted posts (no reply-to), add URL link
+        if not reply_to:
+            title = metadata.get("title", "")
+            # Check if title is just the slug fallback (no real heading)
+            has_real_title = (
+                title and title != os.path.basename(filepath).rsplit(".", 1)[0]
+            )
+            if has_real_title:
+                # Prepend bold title link at top
+                title_link = (
+                    f'<p><strong><a href="{public_url}">{title}</a></strong></p>'
+                )
+                html = title_link + html
+            else:
+                # Prepend bare URL at top (ensures link preview card)
+                url_link = f'<p><a href="{public_url}">{public_url}</a></p>'
+                html = url_link + html
 
         # Resolve @user@domain mentions
         mentions = self._resolve_mentions(cleaned, allow_network=allow_network)

@@ -46,7 +46,7 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
     _get_webmentions: Callable[[dict], list]
     _parse_author: Callable[[dict], dict]
     _parse_markdown_content: Callable[[IO], str]
-    _parse_reply_metadata: Callable[[str, str], dict]
+    _parse_reply_metadata: Callable[[str | None, str], dict]
 
     @property
     @abstractmethod
@@ -129,9 +129,7 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
         return replies
 
     @staticmethod
-    def _annotate_replies_with_ap_urls(
-        replies: list, ap_base_url: str
-    ) -> set[str]:
+    def _annotate_replies_with_ap_urls(replies: list, ap_base_url: str) -> set[str]:
         """
         Annotate author replies with their ActivityPub URLs and return the set
         of all AP URLs (for use as extra target URLs when fetching interactions).
@@ -418,7 +416,7 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
                 url_set.add(act_id)
 
     def _get_reply_interactions(
-        self, md_file: str, metadata: dict, article_slug: str, reply_slug: str
+        self, md_file: str, metadata: dict, article_slug: str | None, reply_slug: str
     ) -> list:
         """
         Retrieve reactions (Webmentions, AP interactions, nested author replies)
@@ -440,7 +438,10 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
             valid_parent_urls.add(ap_base_url + reply_uri)
 
         # Get candidate replies (all except current)
-        all_author_replies = self._get_article_replies(article_slug)
+        # For top-level unlisted posts (article_slug=None), there are no sibling replies
+        all_author_replies = (
+            self._get_article_replies(article_slug) if article_slug else []
+        )
         candidate_replies = {
             r.get("slug"): r for r in all_author_replies if r.get("slug") != reply_slug
         }
@@ -520,7 +521,7 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
         md_file: str,
         metadata: dict,
         title: str,
-        article_slug: str,
+        article_slug: str | None,
         reactions_tree: list,
     ) -> str:
         """

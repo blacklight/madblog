@@ -396,7 +396,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
 
     def get_reply(
         self,
-        article_slug: str,
+        article_slug: str | None,
         reply_slug: str,
         *,
         as_markdown: bool = False,
@@ -404,7 +404,8 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         """
         Get the HTML (or raw Markdown) for an author reply.
 
-        :param article_slug: The slug of the parent article (or ``_guestbook``).
+        :param article_slug: The slug of the parent article (or ``_guestbook``),
+            or ``None`` for top-level unlisted posts.
         :param reply_slug: The slug of the reply itself.
         :param as_markdown: Return raw Markdown instead of rendered HTML.
         """

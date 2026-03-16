@@ -1447,6 +1447,100 @@ class ReplyFederationTest(unittest.TestCase):
             # Explicit reply-to should be used, not derived
             self.assertEqual(obj.in_reply_to, "https://mastodon.social/@user/12345")
 
+    def test_unlisted_post_with_title_prepends_bold_link(self):
+        """Unlisted posts (no reply-to) with a title prepend a bold link at top."""
+        from unittest.mock import MagicMock, patch
+        from madblog.activitypub._integration import ActivityPubIntegration
+
+        handler = MagicMock()
+        handler.followers_url = "https://example.com/followers"
+        handler.storage.get_interactions.return_value = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            replies_dir = Path(tmpdir) / "replies"
+            replies_dir.mkdir(parents=True)
+
+            # Top-level unlisted post with title
+            reply_file = replies_dir / "my-unlisted.md"
+            reply_file.write_text(
+                "[//]: # (title: My Unlisted Post)\n\n"
+                "# My Unlisted Post\n"
+                "Content of the unlisted post.\n"
+            )
+
+            integration = ActivityPubIntegration(
+                handler=handler,
+                pages_dir=str(Path(tmpdir) / "markdown"),
+                base_url="https://example.com",
+                replies_dir=str(replies_dir),
+            )
+
+            with patch.object(
+                integration,
+                "_clean_content",
+                return_value="Content of the unlisted post.",
+            ):
+                obj, _ = integration.build_reply_object(
+                    str(reply_file),
+                    "https://example.com/reply/my-unlisted",
+                    "https://example.com/actor",
+                    public_url="https://example.com/reply/my-unlisted",
+                )
+
+            # No in_reply_to for unlisted posts
+            self.assertIsNone(obj.in_reply_to)
+            # Content should start with bold title link
+            self.assertTrue(
+                obj.content.startswith(
+                    '<p><strong><a href="https://example.com/reply/my-unlisted">'
+                    "My Unlisted Post</a></strong></p>"
+                )
+            )
+
+    def test_unlisted_post_without_title_appends_bare_url(self):
+        """Unlisted posts (no reply-to) without a title append bare URL at bottom."""
+        from unittest.mock import MagicMock, patch
+        from madblog.activitypub._integration import ActivityPubIntegration
+
+        handler = MagicMock()
+        handler.followers_url = "https://example.com/followers"
+        handler.storage.get_interactions.return_value = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            replies_dir = Path(tmpdir) / "replies"
+            replies_dir.mkdir(parents=True)
+
+            # Top-level unlisted post without title (slug becomes fallback title)
+            reply_file = replies_dir / "my-unlisted.md"
+            reply_file.write_text("Just some content without a heading.\n")
+
+            integration = ActivityPubIntegration(
+                handler=handler,
+                pages_dir=str(Path(tmpdir) / "markdown"),
+                base_url="https://example.com",
+                replies_dir=str(replies_dir),
+            )
+
+            with patch.object(
+                integration, "_clean_content", return_value="Just some content."
+            ):
+                obj, _ = integration.build_reply_object(
+                    str(reply_file),
+                    "https://example.com/reply/my-unlisted",
+                    "https://example.com/actor",
+                    public_url="https://example.com/reply/my-unlisted",
+                )
+
+            # No in_reply_to for unlisted posts
+            self.assertIsNone(obj.in_reply_to)
+            # Content should start with bare URL link (ensures link preview card)
+            self.assertTrue(
+                obj.content.startswith(
+                    '<p><a href="https://example.com/reply/my-unlisted">'
+                    "https://example.com/reply/my-unlisted</a></p>"
+                )
+            )
+
 
 class CountReactionsTest(unittest.TestCase):
     """Tests for the count_reactions helper."""
@@ -1948,3 +2042,109 @@ class CollectInteractionCountsTest(unittest.TestCase):
             result["https://mastodon.social/statuses/123"]["author_replies"], 1
         )
         self.assertEqual(result["https://mastodon.social/statuses/123"]["total"], 1)
+
+
+class TopLevelUnlistedPostTest(unittest.TestCase):
+    """Test top-level unlisted posts (files directly in replies/)."""
+
+    def setUp(self):
+        from madblog.app import app
+        from madblog.config import config
+
+        self.app = app
+        self.config = config
+
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+
+        root = Path(self._tmpdir.name)
+        markdown_dir = root / "markdown"
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+
+        replies_dir = root / "replies"
+        replies_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create a top-level unlisted post with heading
+        (replies_dir / "unlisted-with-title.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (published: 2025-07-01)",
+                    "",
+                    "# My Unlisted Post",
+                    "This is an unlisted post with a heading.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        # Create a top-level unlisted post without heading
+        (replies_dir / "unlisted-no-title.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (published: 2025-07-02)",
+                    "",
+                    "Just some content without a heading.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        self._orig_content_dir = config.content_dir
+        self._orig_link = config.link
+        self._orig_title = config.title
+
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+        config.title = "Test Blog"
+
+        self.app.pages_dir = markdown_dir
+        self.app.replies_dir = replies_dir
+
+    def tearDown(self):
+        self.config.content_dir = self._orig_content_dir
+        self.config.link = self._orig_link
+        self.config.title = self._orig_title
+
+    def test_toplevel_unlisted_route_renders(self):
+        """Requesting /reply/<slug> returns 200 for top-level unlisted posts."""
+        with self.app.test_client() as client:
+            resp = client.get("/reply/unlisted-with-title")
+            self.assertEqual(resp.status_code, 200)
+            html = resp.get_data(as_text=True)
+            self.assertIn("My Unlisted Post", html)
+            self.assertIn("This is an unlisted post with a heading.", html)
+
+    def test_toplevel_unlisted_raw_markdown(self):
+        """Requesting /reply/<slug>.md returns raw Markdown."""
+        with self.app.test_client() as client:
+            resp = client.get("/reply/unlisted-with-title.md")
+            self.assertEqual(resp.status_code, 200)
+            text = resp.get_data(as_text=True)
+            self.assertIn("This is an unlisted post with a heading.", text)
+            self.assertEqual(resp.mimetype, "text/markdown")
+
+    def test_toplevel_unlisted_404_nonexistent(self):
+        """Requesting a non-existent top-level unlisted post returns 404."""
+        with self.app.test_client() as client:
+            resp = client.get("/reply/nonexistent")
+            self.assertEqual(resp.status_code, 404)
+
+    def test_toplevel_unlisted_uri_scheme(self):
+        """The URI uses /reply/<slug> scheme for top-level posts."""
+        with self.app.app_context():
+            metadata = self.app._parse_reply_metadata(None, "unlisted-with-title")
+        self.assertEqual(metadata["uri"], "/reply/unlisted-with-title")
+
+    def test_toplevel_unlisted_no_reply_to(self):
+        """Top-level unlisted posts have no reply-to."""
+        with self.app.app_context():
+            metadata = self.app._parse_reply_metadata(None, "unlisted-with-title")
+        self.assertNotIn("reply-to", metadata)
+
+    def test_toplevel_unlisted_title_parsed(self):
+        """The title is parsed from heading for top-level posts."""
+        with self.app.app_context():
+            metadata = self.app._parse_reply_metadata(None, "unlisted-with-title")
+        self.assertEqual(metadata["title"], "My Unlisted Post")

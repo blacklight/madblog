@@ -409,7 +409,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         metadata: dict,
         last_modified: str,
         etag: str,
-        article_slug: str,
+        article_slug: str | None,
         reply_slug: str,
     ) -> Response | None:
         """

@@ -141,7 +141,7 @@ def get_guestbook_mtime(
     return get_max_mtime(*paths_to_check)
 
 
-def check_cache_validity(file_mtime: float, etag: str) -> bool:
+def check_cache_validity(file_mtime: float, etag: str | None) -> bool:
     """
     Check if the client's cached version is still valid.
 
