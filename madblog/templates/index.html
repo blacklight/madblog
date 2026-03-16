@@ -22,6 +22,14 @@
           <span class="current">{{ crumb.title }}</span>
         {% endif %}
       {% endfor %}
+
+      {% if feed_url %}
+      <div class="feed-header">
+        <a href="{{ feed_url }}" class="feed-link" target="_blank" rel="noopener">
+          {% include "icons/rss.html" %}
+        </a>
+      </div>
+      {% endif %}
     </nav>
     {% endif %}
 
@@ -40,6 +48,32 @@
               <div class="folder-title">{{ folder.title }}</div>
               {% if folder.description %}
               <div class="folder-description">{{ folder.description }}</div>
+              {% endif %}
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+
+    {% if external_feeds %}
+    <details class="folders-section feeds-section" open>
+      <summary class="folders-toggle">
+        <span class="folders-toggle-icon">{% include "icons/rss.html" %}</span>
+        <span class="folders-toggle-text">Feeds</span>
+        <span class="folders-toggle-count">({{ external_feeds|length }})</span>
+      </summary>
+      <div class="folders-grid">
+        {% for feed in external_feeds %}
+          <a class="folder-card folder-external" href="{{ feed.uri }}">
+            <div class="folder-icon">{% if feed.image %}<img src="{{ feed.image }}" alt="" class="folder-logo">{% else %}{% include "icons/rss.html" %}{% endif %}</div>
+            <div class="folder-info">
+              <div class="folder-title">{{ feed.title }}</div>
+              {% if feed.description %}
+              <div class="folder-description">{{ feed.description }}</div>
+              {% endif %}
+              {% if feed.entry_count %}
+              <div class="folder-count">{{ feed.entry_count }} articles</div>
               {% endif %}
             </div>
           </a>

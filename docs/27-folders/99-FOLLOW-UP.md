@@ -3,13 +3,13 @@
 Items identified during implementation that are out of scope for the initial
 release but should be considered for future work.
 
-## `external_feeds_as_folders` config option
+## ~~`external_feeds_as_folders` config option~~ ✅ Implemented
 
-Allow external RSS/Atom feeds (from `external_feeds` config) to be rendered as
-virtual folder entries on the home page rather than mixed with local articles.
+~~Allow external RSS/Atom feeds (from `external_feeds` config) to be rendered as
+virtual folder entries on the home page rather than mixed with local articles.~~
 
-**Rationale**: Some users may prefer to visually separate syndicated content
-from local content while still keeping it accessible from the home page.
+**Status**: Implemented. Enable via `external_feeds_as_folders: true` in config
+or `MADBLOG_EXTERNAL_FEEDS_AS_FOLDERS=1` env var.
 
 ## Folder-level ActivityPub
 

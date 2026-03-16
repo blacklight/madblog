@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.3
 
 ### Added
 
@@ -12,6 +12,9 @@
   - Custom landing pages when `index.md` has body content
   - Home page shows only root-level articles with folder cards
   - Hidden folders (`.` or `_` prefix) and empty folders are excluded
+- **External feeds as folders:** New `external_feeds_as_folders` config option
+  to display external RSS/Atom feeds as virtual folder entries on the home page
+  instead of mixing them with local articles.
 
 ### Changed
 

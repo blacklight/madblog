@@ -49,6 +49,7 @@
     - [Navigation](#navigation)
     - [Folder metadata with `index.md`](#folder-metadata-with-indexmd)
     - [Hidden and empty folders](#hidden-and-empty-folders)
+    - [External feeds as folders](#external-feeds-as-folders)
 - [Author Replies](#author-replies)
   - [Directory layout](#directory-layout)
   - [Reply metadata](#reply-metadata)
@@ -717,6 +718,22 @@ This content will be shown instead of the folder listing.
 
 - Folders starting with `.` or `_` are hidden (e.g., `.drafts`, `_archive`)
 - Empty folders (no articles or visible subfolders) are not displayed
+
+#### External feeds as folders
+
+When `external_feeds_as_folders` is enabled, external RSS/Atom feeds (configured
+via `external_feeds`) are displayed as virtual folder entries on the home page
+instead of being mixed with local articles. Each feed appears as a folder card
+linking directly to the external site.
+
+```yaml
+external_feeds_as_folders: true
+external_feeds:
+  - https://example.com/feed.rss
+  - https://another-blog.com/feed.atom
+```
+
+Or via environment variable: `MADBLOG_EXTERNAL_FEEDS_AS_FOLDERS=1`
 
 ## Author Replies
 

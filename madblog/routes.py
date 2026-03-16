@@ -101,6 +101,26 @@ def folder_index_route(folder: str):
     )
 
 
+@app.route("/+<path:feed_url>/", methods=["GET"])
+@app.route("/+<path:feed_url>", methods=["GET"])
+def external_feed_index_route(feed_url: str):
+    """
+    Render an external feed as an index page.
+
+    Shows all entries from the specified external feed URL.
+    """
+    logger.debug("External feed route called with feed_url=%s", feed_url)
+    view_mode = request.args.get("view", config.view_mode)
+    if view_mode not in ("cards", "list", "full"):
+        view_mode = config.view_mode
+
+    return app.get_external_feed_index(
+        feed_url,
+        view_mode=view_mode,
+        followers_count=_get_followers_count(),
+    )
+
+
 @app.route("/@<username>", methods=["GET"])
 def profile_route(username: str):
     """

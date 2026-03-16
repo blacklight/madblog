@@ -48,6 +48,7 @@ class Config:
     smtp_sender: str | None = None
     view_mode: str = "cards"  # "cards", "list", or "full"
     external_feeds: List[str] = field(default_factory=list)
+    external_feeds_as_folders: bool = False
     feeds_cache_expiry_secs: int = 300
 
     # ActivityPub
@@ -220,6 +221,8 @@ def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statem
         config.view_mode = cfg["view_mode"]
     if cfg.get("external_feeds"):
         config.external_feeds = cfg["external_feeds"]
+    if cfg.get("external_feeds_as_folders") is not None:
+        config.external_feeds_as_folders = bool(cfg["external_feeds_as_folders"])
     if cfg.get("feeds_cache_expiry_secs"):
         config.feeds_cache_expiry_secs = int(cfg["feeds_cache_expiry_secs"])
     config.categories = cfg.get("categories", [])
@@ -380,6 +383,10 @@ def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-state
         config.external_feeds = re.split(
             r"[,\s]+", os.environ["MADBLOG_EXTERNAL_FEEDS"].strip()
         )
+    if os.getenv("MADBLOG_EXTERNAL_FEEDS_AS_FOLDERS"):
+        config.external_feeds_as_folders = os.environ[
+            "MADBLOG_EXTERNAL_FEEDS_AS_FOLDERS"
+        ].lower() in ("1", "true", "yes")
     if os.getenv("MADBLOG_FEEDS_CACHE_EXPIRY_SECS"):
         config.feeds_cache_expiry_secs = int(
             os.environ["MADBLOG_FEEDS_CACHE_EXPIRY_SECS"]

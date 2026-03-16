@@ -4,7 +4,7 @@ import json
 import os
 
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from typing import List, Optional, Tuple, Type
 from email.utils import formatdate
 
@@ -699,7 +699,11 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         )
 
         remote_pages = []
-        if include_external_feeds and not folder:
+        if (
+            include_external_feeds
+            and not folder
+            and not config.external_feeds_as_folders
+        ):
             remote_pages = self._get_pages_from_feeds(with_content=with_content)
 
         pages = local_pages + remote_pages
@@ -715,6 +719,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         if recursive:
             return {
                 "folders": [],
+                "external_feeds": [],
                 "breadcrumbs": [],
                 "parent_folder": None,
                 "current_folder": folder,
@@ -723,8 +728,16 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             }
 
         folder_metadata = self._parse_folder_metadata(folder) if folder else {}
+        folders = self._get_folders_in_dir(folder)
+
+        # Get external feeds as separate section at root level
+        external_feeds = []
+        if not folder and config.external_feeds_as_folders:
+            external_feeds = self._get_external_feed_folders()
+
         return {
-            "folders": self._get_folders_in_dir(folder),
+            "folders": folders,
+            "external_feeds": external_feeds,
             "breadcrumbs": self._build_breadcrumbs(folder) if folder else [],
             "parent_folder": self._get_parent_folder(folder) if folder else None,
             "current_folder": folder,
@@ -745,6 +758,8 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         template_name: str = "index.html",
         view_mode: str = "cards",
         meta_redirect_to: str | None = None,
+        include_external_feeds: bool = True,
+        override_pages: list | None = None,
         **extra_context,
     ) -> Response:
         """
@@ -763,17 +778,22 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             to this URL. This is used for profile URLs (/@username, /ap/actor)
             where the page content must be served (for rel="me" verification)
             but human users should be redirected to the canonical home page.
+        :param include_external_feeds: Include external feeds in page list
+        :param override_pages: If set, use these pages instead of fetching
         """
-        pages = self.get_pages(
-            folder=folder,
-            recursive=recursive,
-            with_content=with_content,
-            skip_header=skip_header,
-            skip_html_head=skip_html_head,
-            sorter=sorter,
-            reverse=reverse,
-            include_external_feeds=(not folder),
-        )
+        if override_pages is not None:
+            pages = override_pages
+        else:
+            pages = self.get_pages(
+                folder=folder,
+                recursive=recursive,
+                with_content=with_content,
+                skip_header=skip_header,
+                skip_html_head=skip_html_head,
+                sorter=sorter,
+                reverse=reverse,
+                include_external_feeds=include_external_feeds and (not folder),
+            )
 
         most_recent_mtime = compute_pages_mtime(pages, self.pages_dir)
         last_modified = (
@@ -791,6 +811,8 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             return make_304_response(last_modified, etag)
 
         folder_ctx = self._build_folder_context(folder, recursive)
+        # Merge contexts, with extra_context taking precedence
+        template_ctx = {**folder_ctx, **extra_context}
 
         with contextlib.ExitStack() as stack:
             if not has_app_context():
@@ -801,8 +823,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
                 pages=pages,
                 config=config,
                 view_mode=view_mode,
-                **folder_ctx,
-                **extra_context,
+                **template_ctx,
             )
 
         if meta_redirect_to:
@@ -905,6 +926,60 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             template_name="index.html",
             view_mode=view_mode,
             followers_count=followers_count,
+        )
+
+    def get_external_feed_index(
+        self,
+        feed_url: str,
+        *,
+        view_mode: str = "cards",
+        followers_count: int = 0,
+    ) -> Response:
+        """
+        Render an external feed as an index page.
+
+        Shows all entries from the specified external feed URL.
+        """
+        from flask import abort
+
+        feed_meta = self._get_feed_metadata(feed_url)
+        if not feed_meta:
+            abort(404)
+
+        # Use canonical feed URL from metadata
+        canonical_url = feed_meta.get("feed_url", feed_url)
+
+        pages = self._get_pages_from_single_feed(
+            feed_url, with_content=(view_mode == "full")
+        )
+        pages.sort(key=lambda p: p.get("published") or "", reverse=True)
+        pages = list(enumerate(pages))
+
+        return self.get_pages_response(
+            folder="",
+            recursive=True,
+            include_external_feeds=False,
+            with_content=(view_mode == "full"),
+            skip_header=True,
+            skip_html_head=True,
+            template_name="index.html",
+            view_mode=view_mode,
+            followers_count=followers_count,
+            # Override pages with feed-specific pages
+            override_pages=pages,
+            # Pass feed metadata for the template
+            feed_title=feed_meta.get("title"),
+            feed_description=feed_meta.get("description"),
+            feed_url=canonical_url,
+            feed_image=feed_meta.get("image"),
+            breadcrumbs=[
+                {"name": "Home", "uri": "/", "title": config.title or "Home"},
+                {
+                    "name": feed_meta.get("title"),
+                    "uri": f"/+{quote(canonical_url, safe='')}/",
+                },
+            ],
+            parent_folder={"name": "Home", "uri": "/", "title": config.title or "Home"},
         )
 
 
