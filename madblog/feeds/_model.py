@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -183,9 +185,9 @@ class FeedEntry:
             enclosure=next(
                 iter(
                     [
-                        href
+                        link.get("href")
                         for link in data.get("links", [])
-                        if link.get("rel") == "enclosure" and (href := link.get("href"))
+                        if link.get("rel") == "enclosure" and link.get("href")
                     ]
                 ),
                 None,
