@@ -1065,6 +1065,80 @@ class ArticleRepliesCollectionTest(unittest.TestCase):
         self.assertEqual(replies, [])
 
 
+class StandaloneLikeWithDerivedReplyToTest(unittest.TestCase):
+    """Regression: standalone likes must be excluded even when reply-to is auto-derived."""
+
+    def setUp(self):
+        from madblog.app import app
+        from madblog.config import config
+
+        self.app = app
+        self.config = config
+
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+
+        root = Path(self._tmpdir.name)
+        markdown_dir = root / "markdown"
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create the article so that _parse_reply_metadata auto-derives reply-to
+        (markdown_dir / "my-article.md").write_text(
+            "[//]: # (title: My Article)\n\n# My Article\nContent.",
+            encoding="utf-8",
+        )
+
+        replies_dir = root / "replies" / "my-article"
+        replies_dir.mkdir(parents=True, exist_ok=True)
+
+        # Standalone like with NO explicit reply-to and NO body content.
+        # _parse_reply_metadata will auto-derive reply-to from the article.
+        (replies_dir / "like-someuser.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (like-of: https://remote.social/statuses/12345)",
+                    "[//]: # (published: 2025-07-10)",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        # A real reply (should still be included)
+        (replies_dir / "real-reply.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (reply-to: https://example.com/article/my-article)",
+                    "[//]: # (published: 2025-07-11)",
+                    "",
+                    "# A Real Reply",
+                    "Some actual content.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        self._orig_content_dir = config.content_dir
+        self._orig_link = config.link
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+        self.app.pages_dir = markdown_dir
+        self.app.replies_dir = root / "replies"
+
+    def tearDown(self):
+        self.config.content_dir = self._orig_content_dir
+        self.config.link = self._orig_link
+
+    def test_standalone_like_excluded_despite_derived_reply_to(self):
+        """A like-of file with no content is excluded even when reply-to is auto-derived."""
+        with self.app.app_context():
+            replies = self.app._get_article_replies("my-article")
+
+        slugs = [r["slug"] for r in replies]
+        self.assertNotIn("like-someuser", slugs)
+        self.assertIn("real-reply", slugs)
+        self.assertEqual(len(replies), 1)
+
+
 class InlineReactionsRenderingTest(unittest.TestCase):
     """Tests for inline reactions rendering on article pages."""
 
@@ -1377,7 +1451,8 @@ class ReplyFederationTest(unittest.TestCase):
 class CountReactionsTest(unittest.TestCase):
     """Tests for the count_reactions helper."""
 
-    def _make_node(self, reaction_type, type_val=None):
+    @staticmethod
+    def _make_node(reaction_type, type_val=None):
         from madblog.reactions import ThreadNode, ReactionType
 
         if reaction_type == "author_reply":

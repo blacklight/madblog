@@ -9,6 +9,7 @@ Provides methods to:
 
 import contextlib
 import datetime
+import re
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import IO, Callable
@@ -91,11 +92,17 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
             with open(md_file, "r") as f:
                 content = self._parse_markdown_content(f)
 
-            # Skip standalone likes (like-of present, no reply-to, no content)
+            # Skip standalone likes (like-of present, no body content).
+            # Note: reply-to may be auto-derived by _parse_reply_metadata,
+            # so we only check like-of + no body content.
+            # Metadata comment lines are excluded when detecting real content.
             like_of = metadata.get("like-of")
-            has_reply_to = "reply-to" in metadata
-            has_content = bool(content.strip())
-            if like_of and not has_reply_to and not has_content:
+            body_lines = [
+                line
+                for line in content.split("\n")
+                if line.strip() and not re.match(r"^\[//]: # \(", line)
+            ]
+            if like_of and not body_lines:
                 continue
 
             author_info = self._parse_author(metadata)
@@ -120,8 +127,9 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
         replies.sort(key=lambda r: r.get("published") or datetime.date.min)
         return replies
 
+    @staticmethod
     def _annotate_replies_with_ap_urls(
-        self, replies: list, ap_base_url: str
+        replies: list, ap_base_url: str
     ) -> set[str]:
         """
         Annotate author replies with their ActivityPub URLs and return the set
@@ -315,8 +323,8 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
             article_url=article_url,
         )
 
+    @staticmethod
     def _find_descendant_replies(
-        self,
         candidate_replies: dict[str, dict],
         valid_parent_urls: set[str],
         ap_base_url: str | None,
