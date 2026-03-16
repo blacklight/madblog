@@ -111,6 +111,8 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         If ``reply-to`` is not set explicitly, it is derived from the
         directory structure: ``replies/<article-slug>/…`` maps to the
         AP object URL ``{base_url}/article/<article-slug>``.
+
+        Top-level files (unlisted posts) intentionally have no reply-to.
         """
         metadata = self._parse_metadata(filepath)
         if "reply-to" not in metadata:
@@ -121,8 +123,7 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
                     "Derived reply-to %s from directory structure",
                     metadata["reply-to"],
                 )
-            else:
-                logger.warning("Reply %s has no reply-to and no article slug", filepath)
+            # Top-level files (unlisted posts) are valid without reply-to
         return metadata
 
     def _resolve_reply_target_actor(self, reply_to_url: str) -> str | None:

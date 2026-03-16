@@ -446,14 +446,22 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             )
 
         base_url = (config.link or request.host_url.rstrip("/")).rstrip("/")
+
+        # Handle unlisted posts (article_slug=None)
+        public_url = (
+            f"{base_url}/reply/{reply_slug}"
+            if article_slug is None
+            else f"{base_url}/reply/{article_slug}/{reply_slug}"
+        )
+
         return self._get_activitypub_object_response(
             ap_url=self._ap_integration.reply_file_to_url(md_file),
-            public_url=f"{base_url}/reply/{article_slug}/{reply_slug}",
-            build_fn=lambda ap_url, public_url: self._ap_integration.build_reply_object(
+            public_url=public_url,
+            build_fn=lambda ap_url, canonical_url: self._ap_integration.build_reply_object(
                 md_file,
                 ap_url,
                 self.activitypub_handler.actor_id,
-                public_url=public_url,
+                public_url=canonical_url,
             ),
             metadata=metadata,
             last_modified=last_modified,
