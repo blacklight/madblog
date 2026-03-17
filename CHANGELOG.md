@@ -7,6 +7,10 @@
 - `/unlisted` timeline page for short-form "Fediverse-only" posts found in
   `replies/` root that contain content but no `reply-to`/` like-of` metadata.
 
+### Fixed
+- ActivityPub profile field verification: preserve the full URL (including
+  scheme) in `rel="me"` link text (Mastodon verification compatibility).
+
 ## 1.1.6
 
 ### Added
