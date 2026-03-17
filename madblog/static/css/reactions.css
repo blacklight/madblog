@@ -440,12 +440,7 @@
 }
 
 .reaction-media-grid[data-count="3"] {
-  grid-template-columns: 2fr 1fr;
-  grid-template-rows: 1fr 1fr;
-}
-
-.reaction-media-grid[data-count="3"] .reaction-media-item:first-child {
-  grid-row: 1 / 3;
+  grid-template-columns: 1fr 1fr 1fr;
 }
 
 .reaction-media-grid[data-count="4"],
@@ -573,10 +568,6 @@
   .reaction-media-grid[data-count="4"],
   .reaction-media-grid:not([data-count="1"]) {
     grid-template-columns: 1fr;
-  }
-
-  .reaction-media-grid[data-count="3"] .reaction-media-item:first-child {
-    grid-row: auto;
   }
 
   .reaction-media-item,
