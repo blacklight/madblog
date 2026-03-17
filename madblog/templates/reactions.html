@@ -500,8 +500,10 @@ reply-{{ node.item.full_url | hash_id }}
 {# Main reactions section #}
 {% if reactions_tree or config.enable_webmentions or config.enable_activitypub %}
 <section class="reactions-section">
+  {% if not is_unlisted %}
   <h2 class="reactions-heading">Reactions</h2>
-  {% if config.enable_webmentions or config.enable_activitypub %}
+  {% endif %}
+  {% if (config.enable_webmentions or config.enable_activitypub) and not is_unlisted %}
   <details class="reactions-howto">
     <summary>How to interact with this page</summary>
     <div class="reactions-howto-content">
