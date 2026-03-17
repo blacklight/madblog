@@ -1,0 +1,42 @@
+{% with title="Unlisted Posts", url=config.link + "/unlisted", description="Unlisted posts - fediverse-only content", type='page', image=None, skip_header=not config.header, styles=['/css/blog.css', '/css/reactions.css'] %}
+  {% include 'common-head.html' %}
+{% endwith %}
+
+<main>
+  <article class="container">
+    <div class="title">
+      <h1>&#128172; Unlisted Posts</h1>
+    </div>
+
+    <div class="description">
+      <p>
+        Short-form posts published to the Fediverse but not listed on the main blog.
+        {% if config.enable_activitypub and config.activitypub_profile_url %}
+        Follow <a href="{{ config.activitypub_profile_url }}">{{ activitypub_handle or '@' + config.activitypub_username }}</a> on the Fediverse to see these in your timeline.
+        {% endif %}
+      </p>
+    </div>
+
+    {% if reactions_tree %}
+      {% with utils=utils, is_unlisted=true %}
+        {% include 'reactions.html' %}
+      {% endwith %}
+    {% else %}
+      <div class="unlisted-empty">
+        <p>No unlisted posts yet.</p>
+      </div>
+    {% endif %}
+  </article>
+</main>
+
+<style>
+.unlisted-empty {
+  text-align: center;
+  padding: 2em;
+  color: var(--color-fg-secondary);
+  font-style: italic;
+}
+</style>
+
+{% include 'footer.html' %}
+{% include 'common-tail.html' %}

@@ -1123,4 +1123,75 @@ def followers_route():
     return response
 
 
+@app.route("/unlisted", methods=["GET"])
+def unlisted_route():
+    """
+    Render a timeline of unlisted posts.
+
+    Unlisted posts are files in the replies/ root directory that have content
+    but no reply-to or like-of metadata. They are published to the Fediverse
+    but not listed on the main blog index.
+    """
+    from flask import make_response, render_template
+
+    unlisted_posts = app.get_unlisted_posts()
+
+    if not unlisted_posts:
+        return Response("No unlisted posts", status=404, mimetype="text/plain")
+
+    # Compute mtime from replies directory
+    mtime = get_dir_mtime(app.replies_dir)
+
+    # Check cache validity
+    last_modified = None
+    etag = None
+    if mtime > 0:
+        last_modified = email.utils.formatdate(mtime, usegmt=True)
+        etag = generate_etag(mtime)
+        if check_cache_validity(mtime, etag):
+            return make_304_response(last_modified, etag, {})
+
+    # Build thread tree from unlisted posts (no webmentions/AP interactions,
+    # just the posts themselves as author replies)
+    from .reactions import ReactionType, ThreadNode
+
+    reactions_tree = []
+    for post in unlisted_posts:
+        node = ThreadNode(
+            item=post,
+            reaction_type=ReactionType.AUTHOR_REPLY,
+            identity=post.get("full_url", ""),
+            reply_to=None,
+            published=post.get("published"),
+            children=[],
+        )
+        reactions_tree.append(node)
+
+    reactions_counts = count_reactions(reactions_tree)
+
+    response = make_response(
+        render_template(
+            "unlisted.html",
+            config=config,
+            reactions_tree=reactions_tree,
+            reactions_counts=reactions_counts,
+            utils=TemplateUtils(),
+            followers_count=_get_followers_count(),
+        )
+    )
+
+    # Set cache headers
+    if mtime > 0:
+        response.headers["Last-Modified"] = last_modified
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+    else:
+        response.headers["Cache-Control"] = "no-store"
+
+    if config.language:
+        response.headers["Language"] = config.language
+
+    return response
+
+
 # vim:sw=4:ts=4:et:

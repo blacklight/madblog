@@ -17,7 +17,7 @@ from typing import IO, Callable
 from flask import Flask, has_app_context, render_template
 
 from madblog.config import config
-from madblog.markdown import resolve_relative_urls
+from madblog.markdown import render_html, resolve_relative_urls
 from madblog.templates import TemplateUtils
 from madblog.reactions import (
     build_thread_tree,
@@ -127,6 +127,68 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
         # Sort by published date ascending (oldest first)
         replies.sort(key=lambda r: r.get("published") or datetime.date.min)
         return replies
+
+    def get_unlisted_posts(self) -> list:
+        """
+        Scan replies/ root for unlisted posts (not reactions, not replies).
+
+        Returns a list of parsed post dicts for files at the root of replies_dir
+        that have content but no ``reply-to`` or ``like-of`` metadata.
+
+        Each dict contains: slug, title, published, content_html, permalink,
+        full_url, author, author_url, author_photo.
+        """
+        if not self.replies_dir.is_dir():
+            return []
+
+        posts = []
+        for md_path in self.replies_dir.glob("*.md"):
+            reply_slug = md_path.stem
+            try:
+                metadata = self._parse_reply_metadata(None, reply_slug)
+            except Exception:
+                continue
+
+            md_file = metadata.pop("md_file")
+            with open(md_file, "r") as f:
+                content = self._parse_markdown_content(f)
+
+            # Skip if it has reply-to or like-of (reactions/replies)
+            if metadata.get("reply-to") or metadata.get("like-of"):
+                continue
+
+            # Skip if no content
+            body_lines = [
+                line
+                for line in content.split("\n")
+                if line.strip() and not re.match(r"^\[//]: # \(", line)
+            ]
+            if not body_lines:
+                continue
+
+            author_info = self._parse_author(metadata)
+            permalink = f"/reply/{reply_slug}"
+
+            posts.append(
+                {
+                    "slug": reply_slug,
+                    "title": metadata.get("title", reply_slug),
+                    "published": metadata.get("published"),
+                    "content_html": render_html(
+                        resolve_relative_urls(content, config.link, permalink, "/reply")
+                    ),
+                    "permalink": permalink,
+                    "full_url": config.link + permalink,
+                    "uri": permalink,
+                    "description": metadata.get("description"),
+                    "image": metadata.get("image"),
+                    **author_info,
+                }
+            )
+
+        # Sort by published date descending (newest first)
+        posts.sort(key=lambda p: p.get("published") or datetime.date.min, reverse=True)
+        return posts
 
     @staticmethod
     def _annotate_replies_with_ap_urls(replies: list, ap_base_url: str) -> set[str]:

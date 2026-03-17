@@ -142,6 +142,9 @@
                     {% if config.enable_guestbook %}
                     <a href="/guestbook">&#128221; Guestbook</a>
                     {% endif %}
+                    {% if unlisted_count %}
+                    <a href="/unlisted">&#128172; Unlisted <span class="nav-count">({{ unlisted_count }})</span></a>
+                    {% endif %}
                     <a href="/tags">&#127991; Tags</a>
                     <a href="/feed.atom" target="_blank">{% include 'icons/rss.html' %} Atom Feed</a>
                     <a href="/feed.rss" target="_blank">{% include 'icons/rss.html' %} RSS Feed</a>

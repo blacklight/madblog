@@ -95,6 +95,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
 
         self._register_template_filters()
         self._register_ap_context_processors()
+        self._register_replies_context_processors()
         self._init_webmentions()
         self._init_activitypub()
         self.tag_index = TagIndex(
@@ -149,6 +150,16 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             if not parsed.netloc:
                 return None
             return url
+
+    def _register_replies_context_processors(self):
+        """Register context processors for replies-related template variables."""
+
+        @self.context_processor
+        def inject_unlisted_count():
+            try:
+                return {"unlisted_count": len(self.get_unlisted_posts())}
+            except Exception:
+                return {"unlisted_count": 0}
 
     def _on_content_change_tags(self, _: ChangeType, filepath: str) -> None:
         """Bridge: forward content changes to the tag indexer."""
