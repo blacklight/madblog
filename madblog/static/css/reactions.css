@@ -417,3 +417,162 @@
   border-radius: 999px;
   object-fit: cover;
 }
+
+/* Media attachments grid */
+.reaction-media {
+  margin-top: 0.75em;
+}
+
+.reaction-media-grid {
+  display: grid;
+  gap: 0.25em;
+  border-radius: 0.5em;
+  overflow: hidden;
+}
+
+/* Grid layouts based on attachment count */
+.reaction-media-grid[data-count="1"] {
+  grid-template-columns: 1fr;
+}
+
+.reaction-media-grid[data-count="2"] {
+  grid-template-columns: 1fr 1fr;
+}
+
+.reaction-media-grid[data-count="3"] {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.reaction-media-grid[data-count="4"],
+.reaction-media-grid:not([data-count="1"]):not([data-count="2"]):not([data-count="3"]) {
+  grid-template-columns: 1fr 1fr;
+}
+
+/* Media items */
+.reaction-media-item {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  background: var(--color-bg-tertiary, var(--color-border));
+  border: none;
+}
+
+.reaction-media-item img,
+.reaction-media-item video {
+  width: 100%;
+  height: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  display: block;
+}
+
+/* Single image/video: preserve aspect ratio without cropping, align left */
+.reaction-media-grid[data-count="1"] {
+  justify-items: start;
+}
+
+.reaction-media-grid[data-count="1"] .reaction-media-item,
+.reaction-media-grid[data-count="1"] .reaction-media-item img,
+.reaction-media-grid[data-count="1"] .reaction-media-item video {
+  width: auto;
+  max-width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+  background: transparent;
+}
+
+/* Lazy-loading placeholder */
+.reaction-media-item img {
+  background: linear-gradient(
+    135deg,
+    var(--color-bg-tertiary, var(--color-border)) 0%,
+    var(--color-bg-secondary) 50%,
+    var(--color-bg-tertiary, var(--color-border)) 100%
+  );
+  background-size: 200% 200%;
+  animation: media-placeholder-shimmer 1.5s ease-in-out infinite;
+}
+
+.reaction-media-item img[complete],
+.reaction-media-item img:not([loading]) {
+  animation: none;
+  background: none;
+}
+
+@keyframes media-placeholder-shimmer {
+  0% { background-position: 200% 200%; }
+  100% { background-position: 0% 0%; }
+}
+
+/* Audio player styling */
+.reaction-media-item.reaction-media-audio {
+  max-height: none;
+  background: var(--color-bg-tertiary, var(--color-border));
+  border-radius: 0.5em;
+  padding: 0.5em;
+}
+
+.reaction-media-item.reaction-media-audio audio {
+  width: 100%;
+  height: 2.5em;
+}
+
+/* Collapsible media overflow (for 5+ attachments) */
+.reaction-media-overflow {
+  display: none;
+  margin-top: 0.25em;
+}
+
+.reaction-media-overflow .reaction-media-grid {
+  border-radius: 0 0 0.5em 0.5em;
+}
+
+.reaction:has(.reaction-media-toggle:checked) .reaction-media-overflow {
+  display: block;
+}
+
+.reaction-media-toggle {
+  display: none;
+}
+
+.reaction-media-expand {
+  display: block;
+  cursor: pointer;
+  text-align: center;
+  font-size: 0.75em;
+  color: var(--color-fg-tertiary);
+  padding: 0.35em 0;
+  margin-top: 0.25em;
+  user-select: none;
+  background: var(--color-bg-tertiary, var(--color-border));
+  border-radius: 0.25em;
+}
+
+.reaction-media-expand:hover {
+  color: var(--color-fg-secondary);
+}
+
+.reaction-media-expand::after {
+  content: attr(data-more-text);
+}
+
+.reaction:has(.reaction-media-toggle:checked) .reaction-media-expand::after {
+  content: 'show fewer \25B4';
+}
+
+/* Responsive: single column on narrow screens */
+@media (max-width: 480px) {
+  .reaction-media-grid[data-count="2"],
+  .reaction-media-grid[data-count="3"],
+  .reaction-media-grid[data-count="4"],
+  .reaction-media-grid:not([data-count="1"]) {
+    grid-template-columns: 1fr;
+  }
+
+  .reaction-media-item,
+  .reaction-media-item img,
+  .reaction-media-item video {
+    max-height: 200px;
+  }
+}

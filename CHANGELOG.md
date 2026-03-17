@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Reactions:** Media attachments (images, videos, audio) from ActivityPub
+  interactions and Webmentions are now rendered in a responsive grid layout
+  below the reaction content. Supports up to 4 visible attachments with a
+  collapsible overflow for additional media. Uses lazy-loading with placeholder
+  animations and applies security attributes (`referrerpolicy="no-referrer"`,
+  `rel="nofollow noopener noreferrer"`) on external media URLs.
+
 ## 1.1.5
 
 ### Added
