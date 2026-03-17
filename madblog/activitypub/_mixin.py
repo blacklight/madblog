@@ -156,7 +156,11 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                 {
                     "type": "PropertyValue",
                     "name": config.activitypub_profile_field_name,
-                    "value": config.link,
+                    "value": (
+                        f'<a href="{config.link}" rel="me">'
+                        + re.sub(r"^(https?://)(.*)/*$", r"\2", config.link)
+                        + "</a>"
+                    ),
                 }
             )
 
@@ -279,7 +283,9 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                     try:
                         fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     except BlockingIOError:
-                        logger.debug("Another worker is running startup sync, skipping")
+                        logger.debug(
+                            "Another worker is running startup sync, skipping"
+                        )
                         return
 
                     try:
