@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.7
+
+### Added
+
+- `/unlisted` timeline page for short-form "Fediverse-only" posts found in
+  `replies/` root that contain content but no `reply-to`/` like-of` metadata.
+
 ## 1.1.6
 
 ### Added
