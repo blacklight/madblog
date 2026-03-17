@@ -472,6 +472,21 @@
   display: block;
 }
 
+/* Single image/video: preserve aspect ratio without cropping, align left */
+.reaction-media-grid[data-count="1"] {
+  justify-items: start;
+}
+
+.reaction-media-grid[data-count="1"] .reaction-media-item,
+.reaction-media-grid[data-count="1"] .reaction-media-item img,
+.reaction-media-grid[data-count="1"] .reaction-media-item video {
+  width: auto;
+  max-width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+  background: transparent;
+}
+
 /* Lazy-loading placeholder */
 .reaction-media-item img {
   background: linear-gradient(
