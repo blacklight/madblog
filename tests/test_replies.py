@@ -2148,3 +2148,211 @@ class TopLevelUnlistedPostTest(unittest.TestCase):
         with self.app.app_context():
             metadata = self.app._parse_reply_metadata(None, "unlisted-with-title")
         self.assertEqual(metadata["title"], "My Unlisted Post")
+
+
+class MediaAttachmentRenderingTest(unittest.TestCase):
+    """Tests for media attachment rendering in reactions."""
+
+    def setUp(self):
+        from madblog.app import app
+
+        self.app = app
+
+    def test_ap_image_attachment_rendered(self):
+        """AP interaction with image attachment renders media grid."""
+        from flask import render_template_string
+
+        template = """
+        {%- from 'reactions.html' import render_media_attachments -%}
+        {{ render_media_attachments(metadata) }}
+        """
+        metadata = {
+            "raw_object": {
+                "attachment": [
+                    {
+                        "type": "Document",
+                        "mediaType": "image/jpeg",
+                        "url": "https://example.com/image.jpg",
+                        "name": "Test image",
+                    }
+                ]
+            }
+        }
+
+        with self.app.app_context():
+            html = render_template_string(template, metadata=metadata)
+
+        self.assertIn("reaction-media-grid", html)
+        self.assertIn("reaction-media-item", html)
+        self.assertIn("https://example.com/image.jpg", html)
+        self.assertIn('alt="Test image"', html)
+        self.assertIn('loading="lazy"', html)
+        self.assertIn('referrerpolicy="no-referrer"', html)
+
+    def test_ap_video_attachment_rendered(self):
+        """AP interaction with video attachment renders video element."""
+        from flask import render_template_string
+
+        template = """
+        {%- from 'reactions.html' import render_media_attachments -%}
+        {{ render_media_attachments(metadata) }}
+        """
+        metadata = {
+            "raw_object": {
+                "attachment": [
+                    {
+                        "type": "Video",
+                        "mediaType": "video/mp4",
+                        "url": "https://example.com/video.mp4",
+                    }
+                ]
+            }
+        }
+
+        with self.app.app_context():
+            html = render_template_string(template, metadata=metadata)
+
+        self.assertIn("<video", html)
+        self.assertIn("https://example.com/video.mp4", html)
+        self.assertIn('type="video/mp4"', html)
+
+    def test_ap_audio_attachment_rendered(self):
+        """AP interaction with audio attachment renders audio element."""
+        from flask import render_template_string
+
+        template = """
+        {%- from 'reactions.html' import render_media_attachments -%}
+        {{ render_media_attachments(metadata) }}
+        """
+        metadata = {
+            "raw_object": {
+                "attachment": [
+                    {
+                        "type": "Audio",
+                        "mediaType": "audio/mpeg",
+                        "url": "https://example.com/audio.mp3",
+                    }
+                ]
+            }
+        }
+
+        with self.app.app_context():
+            html = render_template_string(template, metadata=metadata)
+
+        self.assertIn("<audio", html)
+        self.assertIn("https://example.com/audio.mp3", html)
+
+    def test_wm_mf2_photo_rendered(self):
+        """Webmention with mf2 photo renders media grid."""
+        from flask import render_template_string
+
+        template = """
+        {%- from 'reactions.html' import render_media_attachments -%}
+        {{ render_media_attachments(metadata) }}
+        """
+        metadata = {
+            "mf2": {
+                "photo": [
+                    "https://example.com/photo1.jpg",
+                    "https://example.com/photo2.jpg",
+                ]
+            }
+        }
+
+        with self.app.app_context():
+            html = render_template_string(template, metadata=metadata)
+
+        self.assertIn("reaction-media-grid", html)
+        self.assertIn("https://example.com/photo1.jpg", html)
+        self.assertIn("https://example.com/photo2.jpg", html)
+        self.assertIn('data-count="2"', html)
+
+    def test_overflow_attachments_collapsed(self):
+        """More than 4 attachments shows overflow toggle."""
+        from flask import render_template_string
+
+        template = """
+        {%- from 'reactions.html' import render_media_attachments -%}
+        {{ render_media_attachments(metadata) }}
+        """
+        metadata = {
+            "mf2": {
+                "photo": [
+                    "https://example.com/1.jpg",
+                    "https://example.com/2.jpg",
+                    "https://example.com/3.jpg",
+                    "https://example.com/4.jpg",
+                    "https://example.com/5.jpg",
+                    "https://example.com/6.jpg",
+                ]
+            }
+        }
+
+        with self.app.app_context():
+            html = render_template_string(template, metadata=metadata)
+
+        self.assertIn("reaction-media-overflow", html)
+        self.assertIn("reaction-media-toggle", html)
+        self.assertIn("+2 more", html)
+
+    def test_empty_metadata_no_output(self):
+        """Empty metadata produces no media grid."""
+        from flask import render_template_string
+
+        template = """
+        {%- from 'reactions.html' import render_media_attachments -%}
+        {{ render_media_attachments(metadata) }}
+        """
+
+        with self.app.app_context():
+            html = render_template_string(template, metadata={})
+
+        self.assertNotIn("reaction-media-grid", html)
+
+    def test_document_type_with_image_mediatype(self):
+        """Document type with image mediaType renders as image."""
+        from flask import render_template_string
+
+        template = """
+        {%- from 'reactions.html' import render_media_attachments -%}
+        {{ render_media_attachments(metadata) }}
+        """
+        metadata = {
+            "raw_object": {
+                "attachment": [
+                    {
+                        "type": "Document",
+                        "mediaType": "image/png",
+                        "url": "https://example.com/doc.png",
+                    }
+                ]
+            }
+        }
+
+        with self.app.app_context():
+            html = render_template_string(template, metadata=metadata)
+
+        self.assertIn("<img", html)
+        self.assertIn("https://example.com/doc.png", html)
+
+    def test_wm_mf2_photo_with_alt_text(self):
+        """Webmention mf2 photo object with alt text renders alt attribute."""
+        from flask import render_template_string
+
+        template = """
+        {%- from 'reactions.html' import render_media_attachments -%}
+        {{ render_media_attachments(metadata) }}
+        """
+        metadata = {
+            "mf2": {
+                "photo": [
+                    {"value": "https://example.com/photo.jpg", "alt": "A scenic view"}
+                ]
+            }
+        }
+
+        with self.app.app_context():
+            html = render_template_string(template, metadata=metadata)
+
+        self.assertIn("https://example.com/photo.jpg", html)
+        self.assertIn('alt="A scenic view"', html)

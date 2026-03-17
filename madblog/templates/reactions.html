@@ -44,6 +44,168 @@ reply-{{ node.item.full_url | hash_id }}
 {%- endif -%}
 {% endmacro %}
 
+{# Render media attachments grid (shared by AP and WM) #}
+{% macro render_media_attachments(metadata, max_visible=4) %}
+  {# Normalize attachments from AP or WM format #}
+  {% set attachments = [] %}
+
+  {# AP format: metadata.raw_object.attachment #}
+  {% if metadata is mapping and metadata.get('raw_object') %}
+    {% set raw_obj = metadata.get('raw_object') %}
+    {% if raw_obj is mapping and raw_obj.get('attachment') %}
+      {% for att in raw_obj.get('attachment') or [] %}
+        {% if att is mapping %}
+          {% set media_type = att.get('mediaType', '') %}
+          {% set att_type = att.get('type', '') | lower %}
+          {% set url = att.get('url', '') %}
+          {# Handle url as string or object #}
+          {% if url is mapping %}
+            {% set url = url.get('href', '') %}
+          {% endif %}
+          {# Determine type from mediaType first, then fall back to type field #}
+          {% set normalized_type = none %}
+          {% if media_type.startswith('image/') or att_type in ['image', 'document'] and media_type.startswith('image/') %}
+            {% set normalized_type = 'image' %}
+          {% elif media_type.startswith('video/') or att_type == 'video' %}
+            {% set normalized_type = 'video' %}
+          {% elif media_type.startswith('audio/') or att_type == 'audio' %}
+            {% set normalized_type = 'audio' %}
+          {% elif att_type == 'image' %}
+            {% set normalized_type = 'image' %}
+          {% elif att_type == 'document' and not media_type %}
+            {# Guess from URL extension for Document type without mediaType #}
+            {% if url.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg')) %}
+              {% set normalized_type = 'image' %}
+            {% elif url.lower().endswith(('.mp4', '.webm', '.mov', '.avi')) %}
+              {% set normalized_type = 'video' %}
+            {% elif url.lower().endswith(('.mp3', '.ogg', '.wav', '.flac', '.m4a')) %}
+              {% set normalized_type = 'audio' %}
+            {% endif %}
+          {% endif %}
+          {% if normalized_type and url %}
+            {% set _ = attachments.append({
+              'type': normalized_type,
+              'url': url,
+              'name': att.get('name', ''),
+              'media_type': media_type
+            }) %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  {% endif %}
+
+  {# WM format: metadata.mf2.photo/video/audio #}
+  {# Items can be strings (URLs) or objects with value/alt properties #}
+  {% if metadata is mapping and metadata.get('mf2') %}
+    {% set mf2 = metadata.get('mf2') %}
+    {% if mf2 is mapping %}
+      {% for item in mf2.get('photo') or [] %}
+        {% if item %}
+          {% if item is mapping %}
+            {% set url = item.get('value', '') %}
+            {% set alt = item.get('alt', '') %}
+          {% else %}
+            {% set url = item %}
+            {% set alt = '' %}
+          {% endif %}
+          {% if url %}
+            {% set _ = attachments.append({'type': 'image', 'url': url, 'name': alt, 'media_type': ''}) %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+      {% for item in mf2.get('video') or [] %}
+        {% if item %}
+          {% if item is mapping %}
+            {% set url = item.get('value', '') %}
+            {% set alt = item.get('alt', '') %}
+          {% else %}
+            {% set url = item %}
+            {% set alt = '' %}
+          {% endif %}
+          {% if url %}
+            {% set _ = attachments.append({'type': 'video', 'url': url, 'name': alt, 'media_type': ''}) %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+      {% for item in mf2.get('audio') or [] %}
+        {% if item %}
+          {% if item is mapping %}
+            {% set url = item.get('value', '') %}
+            {% set alt = item.get('alt', '') %}
+          {% else %}
+            {% set url = item %}
+            {% set alt = '' %}
+          {% endif %}
+          {% if url %}
+            {% set _ = attachments.append({'type': 'audio', 'url': url, 'name': alt, 'media_type': ''}) %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  {% endif %}
+
+  {# Render attachments if any #}
+  {% if attachments %}
+    {% set visible = attachments[:max_visible] %}
+    {% set overflow = attachments[max_visible:] %}
+    {% set visible_count = visible | length %}
+    <div class="reaction-media">
+      <div class="reaction-media-grid" data-count="{{ visible_count }}">
+        {% for att in visible %}
+          {% set safe_url = att.url | safe_url %}
+          {% if safe_url %}
+            {% if att.type == 'image' %}
+              <a href="{{ safe_url }}" class="reaction-media-item" rel="nofollow noopener noreferrer" target="_blank">
+                <img src="{{ safe_url }}" alt="{{ att.name or '' }}" loading="lazy" referrerpolicy="no-referrer" />
+              </a>
+            {% elif att.type == 'video' %}
+              <video class="reaction-media-item" controls preload="metadata" referrerpolicy="no-referrer">
+                <source src="{{ safe_url }}" {% if att.media_type %}type="{{ att.media_type }}"{% endif %} />
+              </video>
+            {% elif att.type == 'audio' %}
+              <div class="reaction-media-item reaction-media-audio">
+                <audio controls preload="metadata">
+                  <source src="{{ safe_url }}" {% if att.media_type %}type="{{ att.media_type }}"{% endif %} />
+                </audio>
+              </div>
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% if overflow %}
+        {% set toggle_id = 'media-toggle-' ~ (attachments | string | hash_id) %}
+        <input type="checkbox" class="reaction-media-toggle" id="{{ toggle_id }}">
+        <label class="reaction-media-expand" data-more-text="+{{ overflow | length }} more ▾" for="{{ toggle_id }}"></label>
+        <div class="reaction-media-overflow">
+          <div class="reaction-media-grid" data-count="{{ overflow | length }}">
+            {% for att in overflow %}
+              {% set safe_url = att.url | safe_url %}
+              {% if safe_url %}
+                {% if att.type == 'image' %}
+                  <a href="{{ safe_url }}" class="reaction-media-item" rel="nofollow noopener noreferrer" target="_blank">
+                    <img src="{{ safe_url }}" alt="{{ att.name or '' }}" loading="lazy" referrerpolicy="no-referrer" />
+                  </a>
+                {% elif att.type == 'video' %}
+                  <video class="reaction-media-item" controls preload="metadata" referrerpolicy="no-referrer">
+                    <source src="{{ safe_url }}" {% if att.media_type %}type="{{ att.media_type }}"{% endif %} />
+                  </video>
+                {% elif att.type == 'audio' %}
+                  <div class="reaction-media-item reaction-media-audio">
+                    <audio controls preload="metadata">
+                      <source src="{{ safe_url }}" {% if att.media_type %}type="{{ att.media_type }}"{% endif %} />
+                    </audio>
+                  </div>
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endmacro %}
+
 {# Render a single Webmention #}
 {% macro render_webmention(wm, identity, parent_anchor=None) %}
   {% set anchor_id = 'wm-' ~ (identity | hash_id) %}
@@ -127,9 +289,8 @@ reply-{{ node.item.full_url | hash_id }}
         {% set location = mf2.get("location") %}
         {% set category = mf2.get("category") or [] %}
         {% set syndication = mf2.get("syndication") or [] %}
-        {% set photo = mf2.get("photo") or mf2.get("photo_url") or [] %}
-        {% set video = mf2.get("video") or mf2.get("video_url") or [] %}
-        {% set audio = mf2.get("audio") or mf2.get("audio_url") or [] %}
+        {% set has_mf2_fields = bookmark_of or follow_of or rsvp or location or category or syndication %}
+        {% if has_mf2_fields %}
         <div class="reaction-mf2">
           {% if bookmark_of %}
             <div class="reaction-mf2-field reaction-mf2-bookmark" title="Bookmarks">
@@ -184,43 +345,9 @@ reply-{{ node.item.full_url | hash_id }}
               {% endfor %}
             </div>
           {% endif %}
-          {% if photo %}
-            <div class="reaction-mf2-field reaction-mf2-photo" title="Photos">
-              {% for url in photo %}
-                {% set purl = url | safe_url %}
-                {% if purl %}
-                  <a href="{{ purl }}" rel="nofollow noopener" target="_blank">
-                    <img class="reaction-mf2-photo" src="{{ purl }}" alt="" loading="lazy" referrerpolicy="no-referrer" />
-                  </a>
-                {% endif %}
-              {% endfor %}
-            </div>
-          {% endif %}
-          {% if video %}
-            <div class="reaction-mf2-field reaction-mf2-video" title="Videos">
-              {% for url in video %}
-                {% set vurl = url | safe_url %}
-                {% if vurl %}
-                  <video class="reaction-mf2-video" controls preload="none">
-                    <source src="{{ vurl }}" />
-                  </video>
-                {% endif %}
-              {% endfor %}
-            </div>
-          {% endif %}
-          {% if audio %}
-            <div class="reaction-mf2-field reaction-mf2-audio" title="Audio">
-              {% for url in audio %}
-                {% set aurl = url | safe_url %}
-                {% if aurl %}
-                  <audio class="reaction-mf2-audio" controls preload="none">
-                    <source src="{{ aurl }}" />
-                  </audio>
-                {% endif %}
-              {% endfor %}
-            </div>
-          {% endif %}
         </div>
+        {% endif %}
+        {{ render_media_attachments(metadata) }}
       {% endif %}
     {% endif %}
     <div class="reaction-counts">
@@ -294,6 +421,7 @@ reply-{{ node.item.full_url | hash_id }}
         <label class="reaction-expand"><input type="checkbox" class="reaction-toggle"></label>
       {% endif %}
     {% endif %}
+    {{ render_media_attachments(interaction.metadata) }}
     {% set ap_author_likes = author_likes_map.get(interaction.object_id, []) if author_likes_map is defined and author_likes_map else [] %}
     {% if ap_author_likes %}
     <div class="author-liked-by" title="Liked by the author">
