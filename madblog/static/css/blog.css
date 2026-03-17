@@ -37,9 +37,16 @@ article ul,
 article ol {
   /* font-family: Lora, "Palatino Linotype", "Book Antiqua", "New York", "DejaVu serif", serif; */
   font-family: Verdana, sans-serif;
-  text-align: justify;
   overflow-wrap: break-word;
   word-break: break-word;
+}
+
+@media screen and (min-width: 768px) {
+  article p,
+  article ul,
+  article ol {
+    text-align: justify;
+  }
 }
 
 article img,
