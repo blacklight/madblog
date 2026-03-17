@@ -158,7 +158,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                     "name": config.activitypub_profile_field_name,
                     "value": (
                         f'<a href="{config.link}" rel="me">'
-                        + re.sub(r"^(https?://)(.*)/*$", r"\2", config.link)
+                        + config.link
                         + "</a>"
                     ),
                 }
@@ -174,7 +174,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                             "name": str(name),
                             "value": (
                                 f'<a href="{value_str}" rel="me">'
-                                + re.sub(r"^(https?://)(.*)/*$", r"\2", value_str)
+                                + value_str
                                 + "</a>"
                             ),
                         }
