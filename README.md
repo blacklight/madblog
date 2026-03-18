@@ -73,6 +73,7 @@
   - [Using a different domain for your ActivityPub handle](#using-a-different-domain-for-your-activitypub-handle)
   - [Mentions](#mentions)
   - [Configuration options](#configuration-options)
+  - [Mastodon verification](#mastodon-verification)
   - [Mastodon-compatible API](#mastodon-compatible-api)
 - [Feed syndication](#feed-syndication)
   - [Guestbook feed](#guestbook-feed)
@@ -1250,6 +1251,28 @@ Great article by @alice@mastodon.social about federation!
 | `activitypub_quote_control` | `MADBLOG_ACTIVITYPUB_QUOTE_CONTROL` | `public` | Quote policy for ActivityPub posts. Mastodon will refuse quote-boosts unless set to `public`. |
 | `activitypub_auto_approve_quotes` | `MADBLOG_ACTIVITYPUB_AUTO_APPROVE_QUOTES` | `true` | Automatically send QuoteAuthorization when a remote actor quotes your posts. Without this, Mastodon keeps quotes in "pending" state. |
 | `activitypub_email_notifications` | `MADBLOG_ACTIVITYPUB_EMAIL_NOTIFICATIONS` | `true` | Send email notifications for ActivityPub interactions (requires SMTP configuration and `author_email`). |
+
+### Mastodon verification
+
+Madblog supports [Mastodon verification](https://joinmastodon.org/verification).
+
+The green badge will be automatically rendered for the configured `link` to your blog.
+
+If you configured additional `activitypub_profile_fields` with URLs, then in
+order to get them to show verified on Mastodon you need to add a
+[`rel="me"`](https://microformats.org/wiki/rel-me) link in their HTML that
+points to the ActivityPub actor exposed by Madblog. Example:
+
+```html
+<link rel="me" href="https://blog.example.com/ap/actor">
+```
+
+If instead you have a split-domain configuration where e.g. `link` is
+`https://blog.example.com` and `activitypub_link` is `https://example.com`:
+
+```html
+<link rel="me" href="https://example.com/ap/actor">
+```
 
 ### Mastodon-compatible API
 
