@@ -631,19 +631,25 @@ This post won't appear in the index but can be accessed directly.
 
 #### Visibility levels
 
-| Level | Blog Index | `/unlisted` Page | Reactions | ActivityPub | Direct URL |
-|-------|------------|------------------|-----------|-------------|------------|
-| `public` | ✓ | ✗ | ✓ | `to: [Public]`, `cc: [followers]` | ✓ |
-| `unlisted` | ✗ | ✓ | ✓ | `to: [followers]`, `cc: [Public]` | ✓ |
-| `followers` | ✗ | ✗ | ✗ | `to: [followers]`, `cc: []` | ✓ |
-| `direct` | ✗ | ✗ | ✗ | `to: [mentions]`, `cc: []` | ✓ |
-| `draft` | ✗ | ✗ | ✗ | Not federated | ✓ |
+| Visibility<br>Level | Blog<br>Index | `/unlisted`<br>Page | Reactions<br>List | ActivityPub<br>Targets |
+|:------|:----------:|:----------------:|:---------:|-------------|
+| `public` | ✅ | ❌ | ✅ | `to: [Public]`<br>`cc: [followers]` |
+| `unlisted` | ❌ | ✅ | ✅ | `to: [followers]`<br>`cc: [Public]` |
+| `followers` | ❌ | ❌ | ❌ | `to: [followers]`<br>`cc: []` |
+| `direct` | ❌ | ❌ | ❌ | `to: [mentions]`<br>`cc: []` |
+| `draft` | ❌ | ❌ | ❌ | Not federated | ✅ |
 
 - **public**: Appears in the blog index and RSS/Atom feeds. Federated publicly.
 - **unlisted**: Not in index/feeds, but listed on `/unlisted`. Federated to followers with Public in CC.
 - **followers**: Only visible via direct URL. Federated to followers only.
 - **direct**: Only visible via direct URL. Federated only to mentioned actors.
 - **draft**: Only visible via direct URL. Not federated at all (for previewing before publishing).
+
+> **NOTE**: _ALL_ posts and replies have a publicly accessible URL, regardless
+> of their level of visibility. Madblog does not implement authentication and
+> auth/write endpoints by design - everything is on the file system. So please
+> **be careful** about your direct posts and drafts, and try at the very least
+> to use non-easy-to-guess slugs.
 
 #### Changing visibility
 
