@@ -569,6 +569,8 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         original_inbox = self.activitypub_handler.process_inbox_activity
 
         def _filtered_process(activity_data: dict, *args, **kwargs):
+            if not isinstance(activity_data, dict):
+                return original_inbox(activity_data, *args, **kwargs)
             actor = activity_data.get("actor", "")
             if actor and not self._blocklist_cache.is_permitted(actor):
                 logger.info("Rejected ActivityPub activity from %s", actor)
