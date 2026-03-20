@@ -31,12 +31,19 @@ link: https://myblog.example.com
 # Listening port for the built-in web server (optional, default: 8000)
 # port: 8000
 
+# Enable debug mode for more verbose logging (optional, default: false)
+# debug: false
+
 # The path to the directory that contains the blog posts (optional, default:
 # ".", the current directory)
 # content_dir: .
 
 # A link to a logo image (optional)
 # logo: https://myblog.example.com/logo.png
+
+# Seconds to wait before re-processing content changes (optional, default: 10)
+# This throttles file-watcher callbacks to avoid redundant work during bulk edits.
+# throttle_seconds_on_update: 10
 
 # The language of the blog (optional, default: "en-US")
 # NOTE: The language can also be overridden on a per-article basis by
@@ -123,6 +130,10 @@ link: https://myblog.example.com
 # A value of zero disables the cache.
 # feeds_cache_expiry_secs: 300
 
+# If true, external feeds are rendered as separate folder sections on the home page
+# (optional, default: false)
+# external_feeds_as_folders: false
+
 #### (Optional) Email Settings ####
 
 # The email address of the author. Mention notifications will be delivered here
@@ -134,6 +145,8 @@ link: https://myblog.example.com
 # smtp_password: password
 # smtp_starttls: true
 # smtp_enable_starttls_auto: true
+# Override the sender address for outgoing emails (optional, defaults to author_email)
+# smtp_sender: noreply@example.com
 
 #### (Optional) ActivityPub Federation ####
 # Requires: pip install 'madblog[activitypub]'
@@ -260,3 +273,11 @@ link: https://myblog.example.com
 # allowed_actors:
 #   - trusted.example.com
 #   - "@friend@mastodon.social"
+
+#### (Optional) Post Visibility ####
+
+# Default visibility for new posts (optional, default: "public")
+# Supported values: "public", "unlisted", "followers", "private"
+# This affects how posts are federated via ActivityPub.
+# Can also be overridden per-article with `[//]: # (visibility: unlisted)`
+# default_visibility: public
