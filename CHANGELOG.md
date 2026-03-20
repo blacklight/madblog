@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Lists**: Support both 2-spaces and 4-spaces indentation in ordered and
+  unordered lists in Markdown content.
+
 ## 1.2.3
 
 ### Changed

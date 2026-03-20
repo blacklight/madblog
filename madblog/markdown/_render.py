@@ -16,6 +16,49 @@ from ._processors import (
     MarkdownTocMarkers,
 )
 
+# Pattern for fenced code block delimiters
+_FENCE_PATTERN = re.compile(r"^(`{3,}|~{3,})")
+
+# Pattern for list items: leading spaces + list marker (unordered or ordered)
+_LIST_ITEM_PATTERN = re.compile(r"^( *)([*+-]|\d+[.)]) ")
+
+
+def _normalize_list_indentation(text: str) -> str:
+    """
+    Normalize 4-space list indentation to 2-space.
+
+    Only affects lines that are clearly list items (unordered or ordered).
+    Preserves fenced code blocks and other content unchanged.
+    """
+    lines = text.split("\n")
+    result = []
+    in_fenced_block = False
+
+    for line in lines:
+        # Check for fenced code block boundaries
+        if _FENCE_PATTERN.match(line.lstrip()):
+            in_fenced_block = not in_fenced_block
+            result.append(line)
+            continue
+
+        if in_fenced_block:
+            result.append(line)
+            continue
+
+        # Check if this is a list item
+        match = _LIST_ITEM_PATTERN.match(line)
+        if match:
+            leading_spaces = match.group(1)
+            # Only normalize if indentation is a multiple of 4
+            if len(leading_spaces) > 0 and len(leading_spaces) % 4 == 0:
+                new_indent = "  " * (len(leading_spaces) // 4)
+                line = new_indent + line[len(leading_spaces) :]
+
+        result.append(line)
+
+    return "\n".join(result)
+
+
 logger = getLogger(__name__)
 
 # Cached extensions list (built lazily on first render)
@@ -76,10 +119,16 @@ def render_html(md_text: str) -> str:
     """
     Convert Markdown to HTML using Madblog's full extension pipeline.
     """
+    preprocessors = (_normalize_list_indentation,)
+
     try:
+        for preprocessor in preprocessors:
+            md_text = preprocessor(md_text)
+
         return markdown(
             md_text,
             extensions=_get_extensions(),
+            tab_length=2,
         )
     except Exception as e:
         logger.warning("Markdown → HTML failed: %s", e)
