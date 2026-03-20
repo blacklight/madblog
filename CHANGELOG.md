@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.3
+
+### Changed
+
+- Better styling for **tables** in articles and posts.
+
 ## 1.2.2
 
 ### Fixed
