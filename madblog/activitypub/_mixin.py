@@ -156,11 +156,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                 {
                     "type": "PropertyValue",
                     "name": config.activitypub_profile_field_name,
-                    "value": (
-                        f'<a href="{config.link}" rel="me">'
-                        + config.link
-                        + "</a>"
-                    ),
+                    "value": f'<a href="{config.link}" rel="me">{config.link}</a>',
                 }
             )
 
@@ -173,9 +169,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                             "type": "PropertyValue",
                             "name": str(name),
                             "value": (
-                                f'<a href="{value_str}" rel="me">'
-                                + value_str
-                                + "</a>"
+                                f'<a href="{value_str}" rel="me">' + value_str + "</a>"
                             ),
                         }
                     )
@@ -283,9 +277,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                     try:
                         fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     except BlockingIOError:
-                        logger.debug(
-                            "Another worker is running startup sync, skipping"
-                        )
+                        logger.debug("Another worker is running startup sync, skipping")
                         return
 
                     try:
@@ -651,8 +643,44 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                 storage.write_json(fpath, data)
                 logger.info("Restored previously blocked follower %s", actor_id)
 
+    @staticmethod
+    def _is_public_interaction(interaction) -> bool:
+        """
+        Check whether an AP interaction is publicly addressed.
+
+        Returns ``True`` when the stored raw object contains the
+        ActivityStreams Public collection
+        (``https://www.w3.org/ns/activitystreams#Public``) or one of its
+        common aliases in ``to`` or ``cc``.  Interactions without
+        embedded ``raw_object`` metadata are assumed public (safe
+        default for older data).
+        """
+        raw = getattr(interaction, "metadata", None) or {}
+        raw_obj = raw.get("raw_object")
+        if not isinstance(raw_obj, dict):
+            return True  # no metadata to check — assume public
+
+        public_ids = {
+            "https://www.w3.org/ns/activitystreams#Public",
+            "Public",
+            "as:Public",
+        }
+        to = raw_obj.get("to", [])
+        cc = raw_obj.get("cc", [])
+        if isinstance(to, str):
+            to = [to]
+        if isinstance(cc, str):
+            cc = [cc]
+        return bool(public_ids.intersection(to + cc))
+
     def _filter_ap_interactions(self, interactions: list) -> list:
-        """Apply blocklist/allowlist filtering to AP interactions."""
+        """
+        Apply visibility and blocklist/allowlist filtering to AP interactions.
+        """
+
+        # Drop private / non-public interactions first
+        interactions = [i for i in interactions if self._is_public_interaction(i)]
+
         mod_cache = getattr(self, "_blocklist_cache", None)
         if mod_cache:
             return [

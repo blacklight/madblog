@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Private AP interactions filtered**: ActivityPub interactions that are not
+  publicly addressed (missing `https://www.w3.org/ns/activitystreams#Public` in
+  `to`/`cc`) are now filtered out before rendering in article comments and
+  guestbook. This is a defense-in-depth measure complementing the upstream
+  pubby fix.
+
 ## 1.1.7
 
 ### Added

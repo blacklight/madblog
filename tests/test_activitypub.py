@@ -2356,5 +2356,112 @@ class StandaloneLikeContentNegotiationTest(unittest.TestCase):
         self.assertEqual(data["type"], "Note")
 
 
+class IsPublicInteractionTest(unittest.TestCase):
+    """Test _is_public_interaction filters private mentions."""
+
+    @skip_if_no_pubby
+    def test_public_interaction_returns_true(self):
+        from madblog.activitypub._mixin import ActivityPubMixin
+        from pubby._model import Interaction, InteractionType
+
+        interaction = Interaction(
+            source_actor_id="https://remote.example.com/users/alice",
+            target_resource="https://blog.example.com/post/1",
+            interaction_type=InteractionType.REPLY,
+            metadata={
+                "raw_object": {
+                    "to": ["https://www.w3.org/ns/activitystreams#Public"],
+                    "cc": ["https://remote.example.com/users/alice/followers"],
+                }
+            },
+        )
+        self.assertTrue(ActivityPubMixin._is_public_interaction(interaction))
+
+    @skip_if_no_pubby
+    def test_unlisted_interaction_returns_true(self):
+        from madblog.activitypub._mixin import ActivityPubMixin
+        from pubby._model import Interaction, InteractionType
+
+        interaction = Interaction(
+            source_actor_id="https://remote.example.com/users/alice",
+            target_resource="https://blog.example.com/post/1",
+            interaction_type=InteractionType.REPLY,
+            metadata={
+                "raw_object": {
+                    "to": ["https://remote.example.com/users/alice/followers"],
+                    "cc": ["https://www.w3.org/ns/activitystreams#Public"],
+                }
+            },
+        )
+        self.assertTrue(ActivityPubMixin._is_public_interaction(interaction))
+
+    @skip_if_no_pubby
+    def test_private_mention_returns_false(self):
+        from madblog.activitypub._mixin import ActivityPubMixin
+        from pubby._model import Interaction, InteractionType
+
+        interaction = Interaction(
+            source_actor_id="https://remote.example.com/users/alice",
+            target_resource="https://blog.example.com/ap/actor",
+            interaction_type=InteractionType.MENTION,
+            metadata={
+                "raw_object": {
+                    "to": ["https://blog.example.com/ap/actor"],
+                    "cc": [],
+                }
+            },
+        )
+        self.assertFalse(ActivityPubMixin._is_public_interaction(interaction))
+
+    @skip_if_no_pubby
+    def test_private_reply_returns_false(self):
+        from madblog.activitypub._mixin import ActivityPubMixin
+        from pubby._model import Interaction, InteractionType
+
+        interaction = Interaction(
+            source_actor_id="https://remote.example.com/users/alice",
+            target_resource="https://blog.example.com/post/1",
+            interaction_type=InteractionType.REPLY,
+            metadata={
+                "raw_object": {
+                    "to": ["https://blog.example.com/ap/actor"],
+                    "cc": [],
+                }
+            },
+        )
+        self.assertFalse(ActivityPubMixin._is_public_interaction(interaction))
+
+    @skip_if_no_pubby
+    def test_no_metadata_assumed_public(self):
+        from madblog.activitypub._mixin import ActivityPubMixin
+        from pubby._model import Interaction, InteractionType
+
+        interaction = Interaction(
+            source_actor_id="https://remote.example.com/users/alice",
+            target_resource="https://blog.example.com/post/1",
+            interaction_type=InteractionType.REPLY,
+            metadata={},
+        )
+        self.assertTrue(ActivityPubMixin._is_public_interaction(interaction))
+
+    @skip_if_no_pubby
+    def test_as_public_alias_recognized(self):
+        from madblog.activitypub._mixin import ActivityPubMixin
+        from pubby._model import Interaction, InteractionType
+
+        interaction = Interaction(
+            source_actor_id="https://remote.example.com/users/alice",
+            target_resource="https://blog.example.com/post/1",
+            interaction_type=InteractionType.REPLY,
+            metadata={
+                "raw_object": {
+                    "to": ["as:Public"],
+                    "cc": [],
+                }
+            },
+        )
+        self.assertTrue(ActivityPubMixin._is_public_interaction(interaction))
+
+
 if __name__ == "__main__":
     unittest.main()
