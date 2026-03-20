@@ -1,9 +1,14 @@
 # Changelog
 
-## Unreleased
+## 1.1.9
 
 ### Added
 
+- **Auto-mention in replies**: Author replies now automatically mention the
+  target author (e.g., `@user@domain`) in the ActivityPub payload, ensuring
+  proper notification delivery. The mention is prepended to the HTML content
+  and included in the AP `tag` and `cc` fields. Skipped if the author is
+  already mentioned in the content.
 - **Post visibility model**: Posts (articles and replies) now support visibility
   levels that control where they appear and how they are federated:
   - `public` (default): Appears in index/feeds, federated publicly
@@ -26,6 +31,9 @@
 
 ### Fixed
 
+- **Standalone likes publish state**: Standalone like files (author likes in
+  reply folders) are now correctly marked as published during reply publish,
+  preventing startup sync from reprocessing them on restart.
 - **Private AP interactions filtered**: ActivityPub interactions that are not
   publicly addressed (missing `https://www.w3.org/ns/activitystreams#Public` in
   `to`/`cc`) are now filtered out before rendering in article comments and
