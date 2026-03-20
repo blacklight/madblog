@@ -1,4 +1,5 @@
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -284,14 +285,11 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                         self._ap_integration.sync_on_startup()
                         self._ap_integration.sync_replies_on_startup()
 
-                        # Push the current actor profile to all followers so remote
-                        # instances pick up attachment/field changes.
-                        try:
-                            self.activitypub_handler.publish_actor_update()
-                        except Exception:
-                            logger.warning(
-                                "Failed to publish actor profile update", exc_info=True
-                            )
+                        # Push the current actor profile to all followers only if
+                        # profile data has changed since the last update. This
+                        # avoids re-triggering Mastodon verification on every
+                        # restart.
+                        self._maybe_publish_actor_update()
                     finally:
                         fcntl.flock(f, fcntl.LOCK_UN)
             except Exception:
@@ -644,6 +642,63 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                 data.pop("blocked", None)
                 storage.write_json(fpath, data)
                 logger.info("Restored previously blocked follower %s", actor_id)
+
+    def _get_actor_profile_fingerprint(self) -> str:
+        """
+        Compute a stable fingerprint of the actor profile data.
+
+        This includes all fields that Mastodon uses for profile verification
+        and display. Changes to any of these fields should trigger an Update
+        activity to followers.
+        """
+        handler = self.activitypub_handler
+        profile_data = {
+            "name": handler.actor_name,
+            "summary": handler.actor_summary,
+            "icon_url": handler.icon_url,
+            "manually_approves_followers": handler.manually_approves,
+            "attachment": handler.actor_attachment,
+            "url": handler.actor_url,
+        }
+        serialized = json.dumps(profile_data, sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    def _maybe_publish_actor_update(self) -> None:
+        """
+        Publish an actor Update activity only if profile data has changed.
+
+        Stores a fingerprint of the profile in the ActivityPub state directory.
+        On subsequent startups, the fingerprint is compared and an Update is
+        only sent if it differs. This prevents Mastodon from re-triggering
+        link verification on every restart.
+        """
+        fingerprint_file = (
+            self._ap_integration.workdir / "actor_profile_fingerprint.txt"
+        )
+        current_fingerprint = self._get_actor_profile_fingerprint()
+
+        # Check if fingerprint has changed
+        previous_fingerprint = None
+        if fingerprint_file.exists():
+            try:
+                previous_fingerprint = fingerprint_file.read_text(
+                    encoding="utf-8"
+                ).strip()
+            except OSError:
+                pass
+
+        if previous_fingerprint == current_fingerprint:
+            logger.debug("Actor profile unchanged, skipping Update activity")
+            return
+
+        # Profile changed (or first run) — publish update
+        try:
+            self.activitypub_handler.publish_actor_update()
+            # Store new fingerprint only after successful publish
+            fingerprint_file.write_text(current_fingerprint, encoding="utf-8")
+            logger.info("Published actor profile update (fingerprint changed)")
+        except Exception:
+            logger.warning("Failed to publish actor profile update", exc_info=True)
 
     @staticmethod
     def _is_public_interaction(interaction) -> bool:
