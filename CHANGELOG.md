@@ -7,6 +7,9 @@
 - **Lists**: Support both 2-spaces and 4-spaces indentation in ordered and
   unordered lists in Markdown content.
 
+- Fixed minor bug where Madblog still tried to federate draft messages but
+  failed.
+
 ## 1.2.3
 
 ### Changed

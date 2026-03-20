@@ -372,6 +372,9 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                 return redirect(ap_url, code=302)  # type: ignore
 
         obj, _ = build_fn(ap_url, public_url)
+        if obj is None:
+            # Draft visibility - fall through to HTML response
+            return None
         doc = obj.to_dict()
         doc["@context"] = AP_CONTEXT
 
