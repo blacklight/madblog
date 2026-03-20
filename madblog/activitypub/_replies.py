@@ -466,6 +466,10 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
                     lambda: self._handle_reply_publish(filepath, url, actor_url),
                     f"ap-reply-{os.path.basename(filepath)}",
                 )
+            elif like_of:
+                # Standalone like (no Note published) — mark mtime so startup
+                # sync won't re-process the file on every restart.
+                self._mark_as_published(url, self._get_file_mtime(filepath))
 
     def sync_replies_on_startup(self) -> None:
         """
