@@ -1,8 +1,14 @@
 # Changelog
 
-## Unreleased
+## 1.2.2
 
 ### Fixed
+
+- **Redundant profile update events on startup sync**: We don't need to send
+  profile info to federated instance on every startup sync - only if they have
+  changed since the last execution. This prevents verified profile links from
+  going temporarily unverified until the next verification cycle on the remote
+  instance is scheduled.
 
 - **Duplicate Like activities**: Fixed an issue where Like activities were
   republished on every server restart when file mtimes changed (e.g., due to
@@ -10,7 +16,14 @@
   target URL hasn't changed, preventing duplicate like notifications to remote
   users.
 
-## 1.1.9
+## 1.2.1
+
+### Fixed
+
+- **ActivityPub**: Fixed minor activity parsing issue when the deliver object
+  is a list
+
+## 1.2.0
 
 ### Added
 
