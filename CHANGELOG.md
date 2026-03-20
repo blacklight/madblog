@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Duplicate Like activities**: Fixed an issue where Like activities were
+  republished on every server restart when file mtimes changed (e.g., due to
+  deployments, git operations, or file syncs). Likes are now skipped if the
+  target URL hasn't changed, preventing duplicate like notifications to remote
+  users.
+
 ## 1.1.9
 
 ### Added
