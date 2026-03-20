@@ -3,6 +3,7 @@ import os
 
 from datetime import datetime, timezone
 from typing import Callable
+from urllib.parse import urlparse
 
 from pubby import Object
 
@@ -144,6 +145,121 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
             logger.debug("Could not resolve actor for reply-to %s", reply_to_url)
         return None
 
+    def _resolve_reply_target_mention(
+        self, reply_to_url: str
+    ) -> tuple[str, str, str] | None:
+        """
+        Resolve the FQN mention for a reply-to target.
+
+        :param reply_to_url: The URL being replied to.
+        :return: Tuple of ``(username, domain, actor_url)`` or ``None`` if
+            the target is not an AP interaction or cannot be resolved.
+        """
+        try:
+            interaction = self.handler.storage.get_interaction_by_object_id(
+                reply_to_url
+            )
+            if not interaction:
+                return None
+
+            actor_url = interaction.source_actor_id
+            if not actor_url:
+                return None
+
+            # Extract domain from actor URL
+            parsed = urlparse(actor_url)
+            domain = parsed.netloc
+            if not domain:
+                return None
+
+            # Try to get username from cached actor data
+            actor_data = self.handler.storage.get_cached_actor(actor_url)
+            if actor_data:
+                username = actor_data.get("preferredUsername", "")
+                if username:
+                    return username, domain, actor_url
+
+            # Fallback: extract username from URL path
+            # Common patterns: /users/alice, /@alice, /u/alice
+            path = parsed.path.rstrip("/")
+            if path:
+                last_segment = path.split("/")[-1]
+                # Remove @ prefix if present
+                username = last_segment.lstrip("@")
+                if username:
+                    return username, domain, actor_url
+
+        except Exception:
+            logger.debug("Could not resolve mention for reply-to %s", reply_to_url)
+        return None
+
+    def _build_reply_content(
+        self,
+        filepath: str,
+        metadata: dict,
+        public_url: str,
+        reply_to: str,
+    ) -> tuple[str, str, list[dict]]:
+        """
+        Build HTML content for a reply.
+
+        :return: Tuple of ``(html, cleaned_markdown, attachments)``.
+        """
+        cleaned = self._clean_content(filepath)
+        cleaned = resolve_relative_urls(
+            cleaned, self.content_base_url, metadata.get("uri", ""), "/reply"
+        )
+        html = render_html(cleaned)
+        html, attachments = self._extract_media_attachments(html, cleaned)
+
+        # For unlisted posts (no reply-to), add URL link
+        if not reply_to:
+            title = metadata.get("title", "")
+            has_real_title = (
+                title and title != os.path.basename(filepath).rsplit(".", 1)[0]
+            )
+            if has_real_title:
+                html = (
+                    f'<p><strong><a href="{public_url}">{title}</a></strong></p>' + html
+                )
+            else:
+                html = f'<p><a href="{public_url}">{public_url}</a></p>' + html
+
+        return html, cleaned, attachments
+
+    def _build_reply_mentions(
+        self,
+        cleaned: str,
+        reply_to: str,
+        *,
+        allow_network: bool = False,
+    ) -> tuple[str, list[dict], list[str]]:
+        """
+        Build mentions for a reply, including auto-mention of reply target.
+
+        :return: Tuple of ``(html_prefix, mention_tags, mention_cc)``.
+        """
+        mentions = self._resolve_mentions(cleaned, allow_network=allow_network)
+        mention_tags = [m.to_tag() for m in mentions]
+        mention_cc = [m.actor_url for m in mentions]
+        html_prefix = ""
+
+        if reply_to:
+            target = self._resolve_reply_target_mention(reply_to)
+            if target and target[2] not in mention_cc:
+                username, domain, actor_url = target
+                fqn = f"@{username}@{domain}"
+                html_prefix = (
+                    f'<p><span class="h-card">'
+                    f'<a href="{actor_url}" class="u-url mention">{fqn}</a>'
+                    f"</span></p>"
+                )
+                mention_tags.append({"type": "Mention", "href": actor_url, "name": fqn})
+                mention_cc.append(actor_url)
+                logger.debug("Auto-added mention %s to reply", fqn)
+
+        return html_prefix, mention_tags, mention_cc
+
     def build_reply_object(
         self,
         filepath: str,
@@ -156,16 +272,6 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         """
         Build an AP Note object for an author reply.
 
-        Similar to build_object() but:
-        - Sets type to "Note" (conversational)
-        - Sets in_reply_to from metadata
-        - Does not set name (Notes shouldn't have names)
-        - CCs the original author if replying to an AP interaction
-
-        For unlisted posts (no in_reply_to):
-        - If a title/heading exists, prepend a bold link at the top
-        - If no title, append a bare URL link at the bottom
-
         :return: Tuple of ``(Object, activity_type)`` or ``(None, None)`` if
             the post should not be federated (draft visibility).
         """
@@ -173,6 +279,7 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         metadata = self._parse_reply_metadata(filepath)
         reply_to = metadata.get("reply-to", "")
 
+        # Parse published date
         published = metadata.get("published")
         if isinstance(published, str):
             try:
@@ -180,71 +287,36 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
             except ValueError:
                 published = None
 
-        # Build content (no title header for Notes)
-        cleaned = self._clean_content(filepath)
-        # Resolve relative URLs to absolute before rendering to HTML
-        cleaned = resolve_relative_urls(
-            cleaned, self.content_base_url, metadata.get("uri", ""), "/reply"
+        # Build content and mentions
+        html, cleaned, attachments = self._build_reply_content(
+            filepath, metadata, public_url, reply_to
         )
-        html = render_html(cleaned)
-        html, attachments = self._extract_media_attachments(html, cleaned)
+        mention_prefix, mention_tags, mention_cc = self._build_reply_mentions(
+            cleaned, reply_to, allow_network=allow_network
+        )
+        html = mention_prefix + html
 
-        # For unlisted posts (no reply-to), add URL link
-        if not reply_to:
-            title = metadata.get("title", "")
-            # Check if title is just the slug fallback (no real heading)
-            has_real_title = (
-                title and title != os.path.basename(filepath).rsplit(".", 1)[0]
-            )
-            if has_real_title:
-                # Prepend bold title link at top
-                title_link = (
-                    f'<p><strong><a href="{public_url}">{title}</a></strong></p>'
-                )
-                html = title_link + html
-            else:
-                # Prepend bare URL at top (ensures link preview card)
-                url_link = f'<p><a href="{public_url}">{public_url}</a></p>'
-                html = url_link + html
-
-        # Resolve @user@domain mentions
-        mentions = self._resolve_mentions(cleaned, allow_network=allow_network)
-        mention_tags = [m.to_tag() for m in mentions]
-        mention_cc = [m.actor_url for m in mentions]
-
-        # Extract #hashtags
+        # Hashtags
         hashtags = extract_hashtags(cleaned)
         hashtag_tags = self._build_hashtag_tags(hashtags)
-
-        # Make hashtag links absolute
         html = self._make_hashtag_links_absolute(html)
 
-        # Determine if this is an unlisted reply (root reply without reply-to/like-of)
+        # Visibility and addressing
         is_unlisted_reply = not reply_to and not metadata.get("like-of")
-
-        # Resolve visibility and build addressing
         visibility = resolve_visibility(metadata, is_unlisted_reply=is_unlisted_reply)
         addressing = self._build_addressing(visibility, mention_cc)
         if addressing is None:
-            # Draft visibility - do not federate
             logger.info("Skipping federation for draft reply: %s", url)
             return None, None
 
         to_field, cc_field = addressing
-
-        # For replies, also CC the original author (if AP interaction)
-        if reply_to:
-            target_actor = self._resolve_reply_target_actor(reply_to)
-            if target_actor and target_actor not in cc_field:
-                cc_field = cc_field + [target_actor]
-
         activity_type = "Update" if self._is_published(url) else "Create"
         quote_control, quote_policy, interaction_policy = self._build_quote_policy()
 
         obj = Object(
             id=url,
-            type="Note",  # Replies are Notes, not Articles
-            name=None,  # Notes should not have a name
+            type="Note",
+            name=None,
             content=html,
             url=public_url,
             attributed_to=actor_url,

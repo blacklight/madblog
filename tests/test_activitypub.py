@@ -1822,6 +1822,190 @@ class ReplyMentionTest(unittest.TestCase):
                 config.state_dir = orig_state_dir
                 config.activitypub_quote_control = orig_quote_control
 
+    @skip_if_no_pubby
+    def test_build_reply_object_auto_mentions_reply_target(self):
+        """build_reply_object should auto-mention the author being replied to."""
+        from pubby import ActivityPubHandler
+        from pubby.storage.adapters.file import FileActivityPubStorage
+        from pubby.crypto import generate_rsa_keypair
+        from pubby import Interaction, InteractionType
+        from madblog.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+
+        root = Path(tmpdir.name)
+        pages_dir = root / "pages"
+        pages_dir.mkdir()
+        replies_dir = root / "replies"
+        replies_dir.mkdir()
+        (replies_dir / "test-article").mkdir()
+        ap_dir = root / "ap"
+
+        orig_state_dir = config.state_dir
+        config.state_dir = str(root / "state")
+        Path(config.state_dir).mkdir()
+
+        try:
+            priv, _ = generate_rsa_keypair()
+            storage = FileActivityPubStorage(data_dir=str(ap_dir))
+            handler = ActivityPubHandler(
+                storage=storage,
+                actor_config={
+                    "base_url": "https://example.com",
+                    "username": "blog",
+                },
+                private_key=priv,
+            )
+
+            integration = ActivityPubIntegration(
+                handler=handler,
+                pages_dir=str(pages_dir),
+                base_url="https://example.com",
+                replies_dir=str(replies_dir),
+            )
+
+            # Store an interaction that we'll reply to
+            remote_post_url = "https://mastodon.social/users/alice/statuses/123"
+            remote_actor_url = "https://mastodon.social/users/alice"
+            storage.store_interaction(
+                Interaction(
+                    source_actor_id=remote_actor_url,
+                    target_resource="https://example.com/article/test-article",
+                    interaction_type=InteractionType.REPLY,
+                    object_id=remote_post_url,
+                    content="Hello!",
+                )
+            )
+
+            # Cache actor data with preferredUsername
+            storage.cache_remote_actor(
+                remote_actor_url,
+                {"id": remote_actor_url, "preferredUsername": "alice"},
+            )
+
+            # Create a reply to that interaction
+            reply_file = replies_dir / "test-article" / "my-reply.md"
+            reply_file.write_text(
+                f"[//]: # (reply-to: {remote_post_url})\n\n" "Thanks for the comment!"
+            )
+
+            url = integration.reply_file_to_url(str(reply_file))
+            actor_url = "https://example.com/ap/actor"
+
+            obj, _ = integration.build_reply_object(
+                str(reply_file), url, actor_url, allow_network=False
+            )
+
+            # Content should start with the auto-mention
+            self.assertIn("@alice@mastodon.social", obj.content)
+            self.assertIn(remote_actor_url, obj.content)
+
+            # Mention tag should be present
+            mention_tags = [t for t in obj.tag if t.get("type") == "Mention"]
+            self.assertEqual(len(mention_tags), 1)
+            self.assertEqual(mention_tags[0]["href"], remote_actor_url)
+            self.assertEqual(mention_tags[0]["name"], "@alice@mastodon.social")
+
+            # Actor should be in CC
+            self.assertIn(remote_actor_url, obj.cc)
+
+        finally:
+            config.state_dir = orig_state_dir
+
+    @skip_if_no_pubby
+    def test_build_reply_object_no_duplicate_mention_if_already_in_content(self):
+        """build_reply_object should not duplicate mention if already in content."""
+        from pubby import ActivityPubHandler
+        from pubby.storage.adapters.file import FileActivityPubStorage
+        from pubby.crypto import generate_rsa_keypair
+        from pubby import Interaction, InteractionType
+        from madblog.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+
+        root = Path(tmpdir.name)
+        pages_dir = root / "pages"
+        pages_dir.mkdir()
+        replies_dir = root / "replies"
+        replies_dir.mkdir()
+        (replies_dir / "test-article").mkdir()
+        ap_dir = root / "ap"
+
+        orig_state_dir = config.state_dir
+        config.state_dir = str(root / "state")
+        Path(config.state_dir).mkdir()
+
+        try:
+            priv, _ = generate_rsa_keypair()
+            storage = FileActivityPubStorage(data_dir=str(ap_dir))
+            handler = ActivityPubHandler(
+                storage=storage,
+                actor_config={
+                    "base_url": "https://example.com",
+                    "username": "blog",
+                },
+                private_key=priv,
+            )
+
+            integration = ActivityPubIntegration(
+                handler=handler,
+                pages_dir=str(pages_dir),
+                base_url="https://example.com",
+                replies_dir=str(replies_dir),
+            )
+
+            # Store an interaction that we'll reply to
+            remote_post_url = "https://mastodon.social/users/alice/statuses/123"
+            remote_actor_url = "https://mastodon.social/users/alice"
+            storage.store_interaction(
+                Interaction(
+                    source_actor_id=remote_actor_url,
+                    target_resource="https://example.com/article/test-article",
+                    interaction_type=InteractionType.REPLY,
+                    object_id=remote_post_url,
+                    content="Hello!",
+                )
+            )
+
+            # Cache actor data with preferredUsername
+            storage.cache_remote_actor(
+                remote_actor_url,
+                {"id": remote_actor_url, "preferredUsername": "alice"},
+            )
+
+            # Create a reply that already mentions the author
+            reply_file = replies_dir / "test-article" / "my-reply.md"
+            reply_file.write_text(
+                f"[//]: # (reply-to: {remote_post_url})\n\n"
+                "@alice@mastodon.social Thanks for the comment!"
+            )
+
+            url = integration.reply_file_to_url(str(reply_file))
+            actor_url = "https://example.com/ap/actor"
+
+            with patch(
+                "pubby.resolve_actor_url",
+                return_value=remote_actor_url,
+            ):
+                obj, _ = integration.build_reply_object(
+                    str(reply_file), url, actor_url, allow_network=True
+                )
+
+            # Mention tags should have only one entry (not duplicated)
+            mention_tags = [t for t in obj.tag if t.get("type") == "Mention"]
+            actor_urls = [t["href"] for t in mention_tags]
+            self.assertEqual(actor_urls.count(remote_actor_url), 1)
+
+            # CC should also have only one entry
+            self.assertEqual(obj.cc.count(remote_actor_url), 1)
+
+        finally:
+            config.state_dir = orig_state_dir
+
 
 class ReplyCollisionAvoidanceTest(unittest.TestCase):
     """Test collision avoidance for reply delete/recreate scenarios."""
