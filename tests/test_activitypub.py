@@ -2283,6 +2283,95 @@ class ReplyLikeActivityTest(unittest.TestCase):
         obj = handler.publish_object.call_args[0][0]
         self.assertEqual(obj.type, "Note")
 
+    @skip_if_no_pubby
+    def test_reprocess_like_reply_same_target_no_republish(self):
+        """Reprocessing a like reply with unchanged target does not republish."""
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        integration, handler, _, replies_dir = self._make_integration(root)
+
+        art_dir = replies_dir / "some-article"
+        art_dir.mkdir()
+        reply_file = art_dir / "liked-it.md"
+        reply_file.write_text(
+            "[//]: # (like-of: https://remote.social/statuses/42)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "# Liked\n",
+            encoding="utf-8",
+        )
+
+        handler.publish_object = MagicMock()
+        handler.publish_activity = MagicMock()
+
+        # First publish
+        integration.on_reply_change(self.ChangeType.ADDED, str(reply_file))
+        _join_ap_publish_threads()
+
+        self.assertEqual(handler.publish_activity.call_count, 1)
+        first_like = handler.publish_activity.call_args[0][0]
+        self.assertEqual(first_like["type"], "Like")
+
+        # Reprocess with same target (simulates startup sync with mtime change)
+        handler.publish_activity.reset_mock()
+        integration.on_reply_change(self.ChangeType.EDITED, str(reply_file))
+        _join_ap_publish_threads()
+
+        # Should NOT republish - target unchanged
+        handler.publish_activity.assert_not_called()
+
+    @skip_if_no_pubby
+    def test_reprocess_like_reply_different_target_republishes(self):
+        """Reprocessing a like reply with changed target republishes with Undo."""
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        integration, handler, _, replies_dir = self._make_integration(root)
+
+        art_dir = replies_dir / "some-article"
+        art_dir.mkdir()
+        reply_file = art_dir / "liked-it.md"
+        reply_file.write_text(
+            "[//]: # (like-of: https://remote.social/statuses/42)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "# Liked\n",
+            encoding="utf-8",
+        )
+
+        handler.publish_object = MagicMock()
+        handler.publish_activity = MagicMock()
+
+        # First publish
+        integration.on_reply_change(self.ChangeType.ADDED, str(reply_file))
+        _join_ap_publish_threads()
+
+        self.assertEqual(handler.publish_activity.call_count, 1)
+
+        # Change target
+        reply_file.write_text(
+            "[//]: # (like-of: https://remote.social/statuses/99)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "# Liked\n",
+            encoding="utf-8",
+        )
+
+        handler.publish_activity.reset_mock()
+        integration.on_reply_change(self.ChangeType.EDITED, str(reply_file))
+        _join_ap_publish_threads()
+
+        # Should publish Undo for old Like + new Like
+        calls = handler.publish_activity.call_args_list
+        self.assertEqual(len(calls), 2)
+
+        undo_call = next(c for c in calls if c[0][0].get("type") == "Undo")
+        like_call = next(c for c in calls if c[0][0].get("type") == "Like")
+
+        self.assertEqual(
+            undo_call[0][0]["object"]["object"],
+            "https://remote.social/statuses/42",
+        )
+        self.assertEqual(like_call[0][0]["object"], "https://remote.social/statuses/99")
+
 
 class ArticleLikeActivityTest(unittest.TestCase):
     """Tests for Like activity publishing from article files."""
@@ -2412,6 +2501,105 @@ class ArticleLikeActivityTest(unittest.TestCase):
         self.assertEqual(
             undo_calls[0][0][0]["object"]["object"],
             "https://remote.social/statuses/99",
+        )
+
+    @skip_if_no_pubby
+    def test_reprocess_article_like_same_target_no_republish(self):
+        """Reprocessing an article like with unchanged target does not republish."""
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        integration, handler, pages_dir = self._make_integration(root)
+
+        article = pages_dir / "like-post.md"
+        article.write_text(
+            "[//]: # (title: I liked this)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "[//]: # (like-of: https://remote.social/statuses/99)\n"
+            "\n"
+            "# I liked this\n"
+            "This is a great post.\n",
+            encoding="utf-8",
+        )
+
+        handler.publish_object = MagicMock()
+        handler.publish_activity = MagicMock()
+
+        # First publish
+        integration.on_content_change(self.ChangeType.ADDED, str(article))
+        _join_ap_publish_threads()
+
+        self.assertEqual(handler.publish_activity.call_count, 1)
+        first_like = handler.publish_activity.call_args[0][0]
+        self.assertEqual(first_like["type"], "Like")
+
+        # Reprocess with same target (simulates startup sync with mtime change)
+        handler.publish_activity.reset_mock()
+        handler.publish_object.reset_mock()
+        integration.on_content_change(self.ChangeType.EDITED, str(article))
+        _join_ap_publish_threads()
+
+        # Article Update published, but Like should NOT be republished
+        handler.publish_object.assert_called_once()
+        handler.publish_activity.assert_not_called()
+
+    @skip_if_no_pubby
+    def test_reprocess_article_like_different_target_republishes(self):
+        """Reprocessing an article like with changed target republishes with Undo."""
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        root = Path(tmpdir.name)
+        integration, handler, pages_dir = self._make_integration(root)
+
+        article = pages_dir / "like-post.md"
+        article.write_text(
+            "[//]: # (title: I liked this)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "[//]: # (like-of: https://remote.social/statuses/99)\n"
+            "\n"
+            "# I liked this\n"
+            "This is a great post.\n",
+            encoding="utf-8",
+        )
+
+        handler.publish_object = MagicMock()
+        handler.publish_activity = MagicMock()
+
+        # First publish
+        integration.on_content_change(self.ChangeType.ADDED, str(article))
+        _join_ap_publish_threads()
+
+        self.assertEqual(handler.publish_activity.call_count, 1)
+
+        # Change target
+        article.write_text(
+            "[//]: # (title: I liked this)\n"
+            "[//]: # (published: 2025-07-10)\n"
+            "[//]: # (like-of: https://remote.social/statuses/200)\n"
+            "\n"
+            "# I liked this\n"
+            "Actually, I like this one more.\n",
+            encoding="utf-8",
+        )
+
+        handler.publish_activity.reset_mock()
+        handler.publish_object.reset_mock()
+        integration.on_content_change(self.ChangeType.EDITED, str(article))
+        _join_ap_publish_threads()
+
+        # Should publish Undo for old Like + new Like
+        calls = handler.publish_activity.call_args_list
+        self.assertEqual(len(calls), 2)
+
+        undo_call = next(c for c in calls if c[0][0].get("type") == "Undo")
+        like_call = next(c for c in calls if c[0][0].get("type") == "Like")
+
+        self.assertEqual(
+            undo_call[0][0]["object"]["object"],
+            "https://remote.social/statuses/99",
+        )
+        self.assertEqual(
+            like_call[0][0]["object"], "https://remote.social/statuses/200"
         )
 
 

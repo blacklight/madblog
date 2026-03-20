@@ -720,10 +720,16 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         if not like_of:
             return
 
-        # Undo any previously published Like for this file
         old_like_id = self._get_like_id(filepath)
+        old_object = self._get_like_object(filepath) if old_like_id else None
+
+        # Skip if we already have a Like for the same target URL
+        if old_like_id and old_object == like_of:
+            logger.debug("Like already published for %s, skipping", like_of)
+            return
+
+        # Undo any previously published Like for this file (target changed)
         if old_like_id:
-            old_object = self._get_like_object(filepath)
             self._publish_undo_like(old_like_id, actor_url, object_url=old_object)
 
         like_activity = self._publish_like(like_of)
