@@ -32,6 +32,7 @@ from madblog.markdown import render_html, resolve_relative_urls
 from madblog.monitor import ChangeType
 from madblog.sync import StartupSyncMixin
 from madblog.tags import extract_hashtags
+from madblog.visibility import resolve_visibility
 
 from ._replies import ActivityPubRepliesMixin
 
@@ -589,7 +590,7 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         public_url: str | None = None,
         *,
         allow_network: bool = False,
-    ) -> tuple["Object", str]:
+    ) -> tuple["Object", str] | tuple[None, None]:
         """
         Parse a markdown file and return a fully-populated
         ``(Object, activity_type)`` pair ready for publishing.
@@ -602,6 +603,8 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
             permitted for uncached mentions.  Pass ``True`` only from
             background threads; the request-serving path must use the
             default (``False``) so it never blocks.
+        :return: Tuple of ``(Object, activity_type)`` or ``(None, None)`` if
+            the post should not be federated (draft visibility).
         """
         public_url = public_url or url
         metadata = self._parse_metadata(filepath)
@@ -636,6 +639,16 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         # Make hashtag links absolute in HTML content
         content = self._make_hashtag_links_absolute(content)
 
+        # Resolve visibility and build addressing
+        visibility = resolve_visibility(metadata)
+        addressing = self._build_addressing(visibility, mention_cc)
+        if addressing is None:
+            # Draft visibility - do not federate
+            logger.info("Skipping federation for draft: %s", url)
+            return None, None
+
+        to_field, cc_field = addressing
+
         activity_type = "Update" if self._is_published(url) else "Create"
         quote_control, quote_policy, interaction_policy = self._build_quote_policy()
 
@@ -649,8 +662,8 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
             published=published or datetime.now(timezone.utc),
             updated=datetime.now(timezone.utc),
             summary=summary,
-            to=["https://www.w3.org/ns/activitystreams#Public"],
-            cc=[self.handler.followers_url] + mention_cc,
+            to=to_field,
+            cc=cc_field,
             tag=mention_tags + hashtag_tags,
             attachment=attachments,
             quote_control=quote_control,

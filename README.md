@@ -40,6 +40,11 @@
     - [Allowlist mode](#allowlist-mode)
     - [Moderation behavior](#moderation-behavior)
   - [Guestbook](#guestbook)
+  - [Visibility](#visibility)
+    - [Configuration](#configuration-1)
+    - [Per-post visibility](#per-post-visibility)
+    - [Visibility levels](#visibility-levels)
+    - [Unlisted replies](#unlisted-replies)
   - [View mode](#view-mode)
   - [Aggregator mode](#aggregator-mode)
   - [Tags](#tags)
@@ -590,6 +595,60 @@ displays messages chronologically (most recent first). Blocked actors (via
 - **Via Fediverse:** Mention your blog's ActivityPub handle (e.g.
   `@blog@example.com`) in a public post that is not a reply to one of your
   articles.
+
+### Visibility
+
+Posts (articles and replies) can have different visibility levels that control
+where they appear and how they are federated via ActivityPub.
+
+#### Configuration
+
+Set the default visibility for all posts:
+
+```yaml
+# config.yaml
+default_visibility: public  # or: unlisted, followers, direct, draft
+```
+
+Or via environment variable:
+
+```shell
+export MADBLOG_DEFAULT_VISIBILITY=public
+```
+
+#### Per-post visibility
+
+Override visibility for individual posts using metadata:
+
+```markdown
+[//]: # (visibility: unlisted)
+
+# My Unlisted Post
+
+This post won't appear in the index but can be accessed directly.
+```
+
+#### Visibility levels
+
+| Level | Blog Index | `/unlisted` Page | Reactions | ActivityPub | Direct URL |
+|-------|------------|------------------|-----------|-------------|------------|
+| `public` | ✓ | ✗ | ✓ | `to: [Public]`, `cc: [followers]` | ✓ |
+| `unlisted` | ✗ | ✓ | ✓ | `to: [followers]`, `cc: [Public]` | ✓ |
+| `followers` | ✗ | ✗ | ✗ | `to: [followers]`, `cc: []` | ✓ |
+| `direct` | ✗ | ✗ | ✗ | `to: [mentions]`, `cc: []` | ✓ |
+| `draft` | ✗ | ✗ | ✗ | Not federated | ✓ |
+
+- **public**: Appears in the blog index and RSS/Atom feeds. Federated publicly.
+- **unlisted**: Not in index/feeds, but listed on `/unlisted`. Federated to followers with Public in CC.
+- **followers**: Only visible via direct URL. Federated to followers only.
+- **direct**: Only visible via direct URL. Federated only to mentioned actors.
+- **draft**: Only visible via direct URL. Not federated at all (for previewing before publishing).
+
+#### Unlisted replies
+
+Root-level replies (files directly in `replies/` without `reply-to` or `like-of`
+metadata) default to `unlisted` visibility for backward compatibility. They
+appear on the `/unlisted` page unless explicitly given a different visibility.
 
 ### View mode
 

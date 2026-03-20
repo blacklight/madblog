@@ -84,6 +84,9 @@ class Config:
     # State directory
     state_dir: str | None = None  # None means use default: <content_dir>/.madblog
 
+    # Visibility
+    default_visibility: str = "public"
+
     @property
     def resolved_state_dir(self) -> Path:
         """Return the resolved state directory path."""
@@ -305,6 +308,10 @@ def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statem
     if cfg.get("state_dir"):
         config.state_dir = cfg["state_dir"]
 
+    # Visibility
+    if cfg.get("default_visibility"):
+        config.default_visibility = cfg["default_visibility"]
+
 
 def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-statements
     if os.getenv("MADBLOG_TITLE"):
@@ -465,6 +472,10 @@ def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-state
     # State directory
     if os.getenv("MADBLOG_STATE_DIR"):
         config.state_dir = os.environ["MADBLOG_STATE_DIR"]
+
+    # Visibility
+    if os.getenv("MADBLOG_DEFAULT_VISIBILITY"):
+        config.default_visibility = os.environ["MADBLOG_DEFAULT_VISIBILITY"]
 
 
 def _init_config_from_cli(args: Optional[Namespace]):

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Added
+
+- **Post visibility model**: Posts (articles and replies) now support visibility
+  levels that control where they appear and how they are federated:
+  - `public` (default): Appears in index/feeds, federated publicly
+  - `unlisted`: Not in index, listed on `/unlisted`, federated with Public in CC
+  - `followers`: Only via direct URL, federated to followers only
+  - `direct`: Only via direct URL, federated to mentioned actors only
+  - `draft`: Only via direct URL, not federated (for previewing)
+- **`default_visibility` config**: Set global default visibility via
+  `default_visibility` in config.yaml or `MADBLOG_DEFAULT_VISIBILITY` env var
+- **Per-post visibility**: Override with `[//]: # (visibility: <level>)` metadata
+- **Enhanced `/unlisted` page**: Now includes articles with `visibility: unlisted`
+  in addition to root-level unlisted replies
+
+### Changed
+
+- **Unlisted replies**: Root-level replies without `reply-to`/`like-of` now
+  default to `unlisted` visibility (backward compatible behavior)
+- **Reactions filtering**: Replies with `followers`, `direct`, or `draft`
+  visibility are excluded from article reactions display
+
 ### Fixed
 
 - **Private AP interactions filtered**: ActivityPub interactions that are not

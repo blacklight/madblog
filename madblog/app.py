@@ -35,6 +35,7 @@ from .monitor import ChangeType, ContentMonitor
 from .reactions import AuthorReactionsIndex
 from .replies import RepliesMixin
 from .tags import TagIndex
+from .visibility import Visibility, resolve_visibility
 from .webmentions import WebmentionsMixin
 from ._sorters import PagesSorter, PagesSortByTime
 
@@ -553,7 +554,8 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         skip_html_head: bool,
     ) -> dict:
         """Build a page entry dict for a single Markdown file."""
-        return {
+        metadata = self._parse_page_metadata(rel_path)
+        entry = {
             "path": rel_path,
             "folder": rel_folder,
             "content": (
@@ -565,8 +567,10 @@ class BlogApp(  # pylint: disable=too-many-ancestors
                 if with_content
                 else ""
             ),
-            **self._parse_page_metadata(rel_path),
+            **metadata,
         }
+        entry["resolved_visibility"] = resolve_visibility(metadata)
+        return entry
 
     def _get_pages_recursive(
         self,
@@ -701,6 +705,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         sorter: Type[PagesSorter] = PagesSortByTime,
         reverse: bool = True,
         include_external_feeds: bool = True,
+        filter_by_visibility: bool = True,
     ) -> List[Tuple[int, dict]]:
         local_pages = self._get_pages_from_files(
             folder=folder,
@@ -709,6 +714,14 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             skip_header=skip_header,
             skip_html_head=skip_html_head,
         )
+
+        # Filter by visibility: only show public posts in the index
+        if filter_by_visibility:
+            local_pages = [
+                p
+                for p in local_pages
+                if p.get("resolved_visibility") == Visibility.PUBLIC
+            ]
 
         remote_pages = []
         if (

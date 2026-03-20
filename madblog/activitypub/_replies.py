@@ -11,6 +11,7 @@ from madblog.markdown import render_html, resolve_relative_urls
 from madblog.monitor import ChangeType
 from madblog.tags import extract_hashtags
 
+from madblog.visibility import resolve_visibility
 from ._publish import ActivityPubPublishMixin
 
 logger = logging.getLogger(__name__)
@@ -151,7 +152,7 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         public_url: str | None = None,
         *,
         allow_network: bool = False,
-    ) -> tuple["Object", str]:
+    ) -> tuple["Object", str] | tuple[None, None]:
         """
         Build an AP Note object for an author reply.
 
@@ -164,6 +165,9 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         For unlisted posts (no in_reply_to):
         - If a title/heading exists, prepend a bold link at the top
         - If no title, append a bare URL link at the bottom
+
+        :return: Tuple of ``(Object, activity_type)`` or ``(None, None)`` if
+            the post should not be federated (draft visibility).
         """
         public_url = public_url or url
         metadata = self._parse_reply_metadata(filepath)
@@ -215,12 +219,24 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         # Make hashtag links absolute
         html = self._make_hashtag_links_absolute(html)
 
-        # Build CC list: followers + mentions + original author (if AP)
-        cc_list = [self.handler.followers_url] + mention_cc
+        # Determine if this is an unlisted reply (root reply without reply-to/like-of)
+        is_unlisted_reply = not reply_to and not metadata.get("like-of")
+
+        # Resolve visibility and build addressing
+        visibility = resolve_visibility(metadata, is_unlisted_reply=is_unlisted_reply)
+        addressing = self._build_addressing(visibility, mention_cc)
+        if addressing is None:
+            # Draft visibility - do not federate
+            logger.info("Skipping federation for draft reply: %s", url)
+            return None, None
+
+        to_field, cc_field = addressing
+
+        # For replies, also CC the original author (if AP interaction)
         if reply_to:
             target_actor = self._resolve_reply_target_actor(reply_to)
-            if target_actor and target_actor not in cc_list:
-                cc_list.append(target_actor)
+            if target_actor and target_actor not in cc_field:
+                cc_field = cc_field + [target_actor]
 
         activity_type = "Update" if self._is_published(url) else "Create"
         quote_control, quote_policy, interaction_policy = self._build_quote_policy()
@@ -235,8 +251,8 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
             in_reply_to=reply_to or None,
             published=published or datetime.now(timezone.utc),
             updated=datetime.now(timezone.utc),
-            to=["https://www.w3.org/ns/activitystreams#Public"],
-            cc=cc_list,
+            to=to_field,
+            cc=cc_field,
             tag=mention_tags + hashtag_tags,
             attachment=attachments,
             quote_control=quote_control,

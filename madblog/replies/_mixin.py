@@ -25,6 +25,7 @@ from madblog.reactions import (
     collect_interaction_counts,
     count_reactions,
 )
+from madblog.visibility import Visibility, resolve_visibility
 
 
 class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
@@ -41,11 +42,13 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
     """
 
     replies_dir: Path
+    pages_dir: Path
 
     _get_ap_interactions: Callable[..., list]
     _get_webmentions: Callable[[dict], list]
     _parse_author: Callable[[dict], dict]
     _parse_markdown_content: Callable[[IO], str]
+    _parse_page_metadata: Callable[[str], dict]
     _parse_reply_metadata: Callable[[str | None, str], dict]
 
     @property
@@ -74,8 +77,10 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
         Standalone likes (files with ``like-of`` but no ``reply-to`` and no
         content) are excluded — they are handled separately by the
         :class:`AuthorReactionsIndex`.
+
+        Replies with visibility ``followers``, ``direct``, or ``draft`` are
+        excluded from the reactions display.
         """
-        from madblog.markdown import render_html
 
         replies_subdir = self.replies_dir / article_slug
         if not replies_subdir.is_dir():
@@ -87,6 +92,15 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
             try:
                 metadata = self._parse_reply_metadata(article_slug, reply_slug)
             except Exception:
+                continue
+
+            # Skip replies with restricted visibility
+            visibility = resolve_visibility(metadata)
+            if visibility in (
+                Visibility.FOLLOWERS,
+                Visibility.DIRECT,
+                Visibility.DRAFT,
+            ):
                 continue
 
             md_file = metadata.pop("md_file")
@@ -128,66 +142,158 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
         replies.sort(key=lambda r: r.get("published") or datetime.date.min)
         return replies
 
+    def _build_unlisted_post_dict(
+        self,
+        *,
+        slug: str,
+        metadata: dict,
+        content: str,
+        permalink: str,
+        is_article: bool,
+    ) -> dict:
+        """
+        Build a standardized unlisted post dict.
+
+        :param slug: The post slug
+        :param metadata: Parsed metadata dict
+        :param content: Raw markdown content
+        :param permalink: URL path (e.g., "/reply/foo" or "/article/foo")
+        :param is_article: True for articles, False for replies
+        :return: Post dict with all standard fields
+        """
+        base_path = "/article" if is_article else "/reply"
+        author_info = self._parse_author(metadata)
+
+        return {
+            "slug": slug,
+            "title": metadata.get("title", slug),
+            "published": metadata.get("published"),
+            "content_html": render_html(
+                resolve_relative_urls(content, config.link, permalink, base_path)
+            ),
+            "permalink": permalink,
+            "full_url": config.link + permalink,
+            "uri": permalink,
+            "description": metadata.get("description"),
+            "image": metadata.get("image"),
+            "is_article": is_article,
+            **author_info,
+        }
+
     def get_unlisted_posts(self) -> list:
         """
-        Scan replies/ root for unlisted posts (not reactions, not replies).
+        Get all unlisted posts from both replies/ and pages_dir.
 
-        Returns a list of parsed post dicts for files at the root of replies_dir
-        that have content but no ``reply-to`` or ``like-of`` metadata.
+        Returns a list of parsed post dicts including:
+        - Root-level replies without ``reply-to`` or ``like-of`` metadata
+          (backward compatibility: these default to unlisted visibility)
+        - Articles from pages_dir with explicit ``visibility: unlisted``
 
         Each dict contains: slug, title, published, content_html, permalink,
-        full_url, author, author_url, author_photo.
+        full_url, author, author_url, author_photo, is_article (bool).
         """
-        if not self.replies_dir.is_dir():
-            return []
-
         posts = []
-        for md_path in self.replies_dir.glob("*.md"):
-            reply_slug = md_path.stem
+
+        # 1. Scan replies/ root for unlisted posts (backward compatible)
+        if self.replies_dir.is_dir():
+            for md_path in self.replies_dir.glob("*.md"):
+                reply_slug = md_path.stem
+                try:
+                    metadata = self._parse_reply_metadata(None, reply_slug)
+                except Exception:
+                    continue
+
+                md_file = metadata.pop("md_file")
+                with open(md_file, "r") as f:
+                    content = self._parse_markdown_content(f)
+
+                # Skip if it has reply-to or like-of (reactions/replies)
+                is_unlisted_reply = not (
+                    metadata.get("reply-to") or metadata.get("like-of")
+                )
+                if not is_unlisted_reply:
+                    continue
+
+                # Skip if no content
+                body_lines = [
+                    line
+                    for line in content.split("\n")
+                    if line.strip() and not re.match(r"^\[//]: # \(", line)
+                ]
+                if not body_lines:
+                    continue
+
+                # Check visibility - unlisted replies default to UNLISTED
+                visibility = resolve_visibility(metadata, is_unlisted_reply=True)
+                if visibility != Visibility.UNLISTED:
+                    continue
+
+                posts.append(
+                    self._build_unlisted_post_dict(
+                        slug=reply_slug,
+                        metadata=metadata,
+                        content=content,
+                        permalink=f"/reply/{reply_slug}",
+                        is_article=False,
+                    )
+                )
+
+        # 2. Scan pages_dir for articles with visibility: unlisted
+        posts.extend(self._get_unlisted_articles())
+
+        # Sort by published date descending (newest first)
+        posts.sort(key=lambda p: p.get("published") or datetime.date.min, reverse=True)
+        return posts
+
+    def _get_unlisted_articles(self) -> list:
+        """
+        Scan pages_dir for articles with visibility: unlisted.
+
+        Returns a list of article dicts formatted like unlisted posts.
+        """
+        posts = []
+        pages_dir = getattr(self, "pages_dir", None)
+        if not pages_dir or not pages_dir.is_dir():
+            return posts
+
+        replies_dir_str = str(self.replies_dir) if self.replies_dir else ""
+
+        # Walk through pages_dir recursively
+        for md_path in pages_dir.rglob("*.md"):
+            # Skip files under replies_dir
+            if replies_dir_str and str(md_path).startswith(replies_dir_str):
+                continue
+
+            # Skip index.md files
+            if md_path.name == "index.md":
+                continue
+
+            rel_path = str(md_path.relative_to(pages_dir))
             try:
-                metadata = self._parse_reply_metadata(None, reply_slug)
+                metadata = self._parse_page_metadata(rel_path)
             except Exception:
+                continue
+
+            # Check visibility
+            visibility = resolve_visibility(metadata)
+            if visibility != Visibility.UNLISTED:
                 continue
 
             md_file = metadata.pop("md_file")
             with open(md_file, "r") as f:
                 content = self._parse_markdown_content(f)
 
-            # Skip if it has reply-to or like-of (reactions/replies)
-            if metadata.get("reply-to") or metadata.get("like-of"):
-                continue
-
-            # Skip if no content
-            body_lines = [
-                line
-                for line in content.split("\n")
-                if line.strip() and not re.match(r"^\[//]: # \(", line)
-            ]
-            if not body_lines:
-                continue
-
-            author_info = self._parse_author(metadata)
-            permalink = f"/reply/{reply_slug}"
-
+            slug = rel_path.rsplit(".", 1)[0]
             posts.append(
-                {
-                    "slug": reply_slug,
-                    "title": metadata.get("title", reply_slug),
-                    "published": metadata.get("published"),
-                    "content_html": render_html(
-                        resolve_relative_urls(content, config.link, permalink, "/reply")
-                    ),
-                    "permalink": permalink,
-                    "full_url": config.link + permalink,
-                    "uri": permalink,
-                    "description": metadata.get("description"),
-                    "image": metadata.get("image"),
-                    **author_info,
-                }
+                self._build_unlisted_post_dict(
+                    slug=slug,
+                    metadata=metadata,
+                    content=content,
+                    permalink=f"/article/{slug}",
+                    is_article=True,
+                )
             )
 
-        # Sort by published date descending (newest first)
-        posts.sort(key=lambda p: p.get("published") or datetime.date.min, reverse=True)
         return posts
 
     @staticmethod

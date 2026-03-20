@@ -14,6 +14,8 @@ from typing import Callable
 from pubby import ActivityPubHandler, Mention, Object
 from pubby.webfinger import _MENTION_RE
 
+from madblog.visibility import Visibility
+
 logger = logging.getLogger(__name__)
 
 
@@ -162,6 +164,43 @@ class ActivityPubPublishMixin:  # pylint: disable=too-few-public-methods
         )
 
     # -----------------------------------------------------------------
+    # Visibility-based addressing
+    # -----------------------------------------------------------------
+
+    def _build_addressing(
+        self,
+        visibility: Visibility,
+        mention_cc: list[str],
+    ) -> tuple[list[str], list[str]] | None:
+        """
+        Build ActivityPub ``to`` and ``cc`` fields based on visibility.
+
+        :param visibility: The resolved visibility level.
+        :param mention_cc: List of mentioned actor URLs to include in CC.
+        :return: Tuple of ``(to, cc)`` lists, or ``None`` if the post
+            should not be federated (draft visibility).
+        """
+        AS_PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
+        followers_url = self.handler.followers_url
+
+        if visibility == Visibility.DRAFT:
+            return None  # Do not federate
+        if visibility == Visibility.UNLISTED:
+            return [followers_url], [AS_PUBLIC] + mention_cc
+        if visibility == Visibility.FOLLOWERS:
+            return [followers_url], mention_cc
+        if visibility == Visibility.DIRECT:
+            # Direct messages go only to mentioned actors
+            if not mention_cc:
+                logger.warning(
+                    "Direct visibility post without mentions - will be delivered to nobody"
+                )
+            return mention_cc, []
+
+        # Fallback + public case
+        return [AS_PUBLIC], [followers_url] + mention_cc
+
+    # -----------------------------------------------------------------
     # Quote policy building
     # -----------------------------------------------------------------
 
@@ -242,7 +281,8 @@ class ActivityPubPublishMixin:  # pylint: disable=too-few-public-methods
 
         :param filepath: Filesystem path of the source Markdown file.
         :param url: Canonical AP object ``id``.
-        :param build_fn: Zero-arg callable returning ``(Object, activity_type)``.
+        :param build_fn: Zero-arg callable returning ``(Object, activity_type)``
+            or ``(None, None)`` if the post should not be federated.
         :param label: Human-readable label for log messages (e.g. "reply").
         """
         tag = f"{label} " if label else ""
@@ -252,6 +292,10 @@ class ActivityPubPublishMixin:  # pylint: disable=too-few-public-methods
         except Exception:
             logger.exception("Failed to build AP %sobject for %s", tag, url)
             self._mark_as_published(url, self._get_file_mtime(filepath))
+            return
+
+        # Skip federation for drafts (build_fn returns None, None)
+        if obj is None:
             return
 
         self._mark_as_published(url, self._get_file_mtime(filepath))
