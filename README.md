@@ -44,6 +44,7 @@
     - [Configuration](#configuration-1)
     - [Per-post visibility](#per-post-visibility)
     - [Visibility levels](#visibility-levels)
+    - [Changing visibility](#changing-visibility)
     - [Unlisted replies](#unlisted-replies)
   - [View mode](#view-mode)
   - [Aggregator mode](#aggregator-mode)
@@ -643,6 +644,34 @@ This post won't appear in the index but can be accessed directly.
 - **followers**: Only visible via direct URL. Federated to followers only.
 - **direct**: Only visible via direct URL. Federated only to mentioned actors.
 - **draft**: Only visible via direct URL. Not federated at all (for previewing before publishing).
+
+#### Changing visibility
+
+Due to how ActivityPub federation works, **changing a post's visibility after
+it has been published requires deleting and recreating the post**. This is
+because:
+
+- The original `Create` activity was already delivered to the original audience
+- An `Update` activity only modifies content for recipients who already have the post
+- New recipients (or removed recipients) won't receive the update
+
+**Scenarios requiring delete + recreate:**
+
+| Change | Requires Delete + Recreate? | Reason |
+|--------|----------------------------|--------|
+| `public`/`unlisted`/`followers` → `direct` | **Yes** | Original audience already received the post |
+| `direct` → `public`/`unlisted`/`followers` | **Yes** | New broader audience never received the post |
+| `direct` (to user A) → `direct` (to user B) | **Yes** | Different recipients |
+| `public` ↔ `unlisted` | No | Same audience, only timeline visibility differs |
+
+To change visibility on an already-published post:
+
+1. Delete the file (this sends a `Delete` activity)
+2. Recreate the file with the new visibility
+3. The new `Create` activity will be sent to the correct audience
+
+Alternatively, you can manually remove the post from the published index
+(`.madblog/activitypub/file_urls.json`) and re-save the file.
 
 #### Unlisted replies
 
