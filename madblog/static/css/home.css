@@ -711,6 +711,10 @@ details.folders-section[open] .folders-toggle::before {
   border-radius: 0.5em;
 }
 
+.view-full .articles-section .articles {
+  background: none;
+}
+
 /* Mobile responsive for folders */
 @media screen and (max-width: 479px) {
   .folders-grid {
