@@ -150,8 +150,6 @@
                     <a href="/unlisted">&#128172; Unlisted <span class="nav-count">({{ unlisted_count }})</span></a>
                     {% endif %}
                     <a href="/tags">&#127991; Tags</a>
-                    <a href="/feed.atom" target="_blank">{% include 'icons/rss.html' %} Atom Feed</a>
-                    <a href="/feed.rss" target="_blank">{% include 'icons/rss.html' %} RSS Feed</a>
                     {% if config.nav_links %}
                     {% for nav_link in config.nav_links %}
                     {% set nav_url = nav_link.url if nav_link is mapping else nav_link %}
@@ -161,6 +159,8 @@
                     <a href="{{ nav_url }}" target="_blank" rel="noopener">{% if nav_icon_is_url %}<img class="nav-link-icon" src="{{ nav_icon }}" alt="">{% else %}{{ nav_icon }}{% endif %} {{ nav_label }}</a>
                     {% endfor %}
                     {% endif %}
+                    <a href="/feed.atom" target="_blank">{% include 'icons/rss.html' %} Atom Feed</a>
+                    <a href="/feed.rss" target="_blank">{% include 'icons/rss.html' %} RSS Feed</a>
                 </nav>
             </div>
         </div>
