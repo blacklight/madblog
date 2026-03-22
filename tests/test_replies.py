@@ -2464,3 +2464,138 @@ class AddInteractionUrlsAliasesTest(unittest.TestCase):
 
         self.assertIn("https://mastodon.social/@alice/123", url_set)
         self.assertIn("https://mastodon.social/users/alice/statuses/123", url_set)
+
+
+class DeepAlternatingChainTest(unittest.TestCase):
+    """Regression: iterative discovery of author ↔ fediverse reply chains.
+
+    Simulates the production pattern where multiple levels of
+    author-reply → fediverse-reaction → author-reply alternate,
+    requiring more than two passes to discover the full thread.
+    """
+
+    def setUp(self):
+        from madblog.app import app
+        from madblog.config import config
+
+        self.app = app
+        self.config = config
+
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+
+        root = Path(self._tmpdir.name)
+        markdown_dir = root / "markdown"
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+
+        replies_dir = root / "replies"
+        replies_dir.mkdir(parents=True, exist_ok=True)
+
+        # Root author reply (the page we're viewing)
+        (replies_dir / "root-reply.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (reply-to: https://remote.social/@user/100)",
+                    "[//]: # (published: 2025-07-01)",
+                    "",
+                    "Root reply content.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        # Level 1: author reply to root (via blog URL)
+        (replies_dir / "level-1-author.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (reply-to: https://example.com/reply/root-reply)",
+                    "[//]: # (published: 2025-07-02)",
+                    "",
+                    "Level 1 author reply.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        # Level 3: author reply to fediverse reaction (level 2)
+        (replies_dir / "level-3-author.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (reply-to: https://remote.social/users/user/statuses/200)",
+                    "[//]: # (published: 2025-07-04)",
+                    "",
+                    "Level 3 author reply.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        # Level 5: author reply to another fediverse reaction (level 4)
+        (replies_dir / "level-5-author.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (reply-to: https://remote.social/users/user/statuses/300)",
+                    "[//]: # (published: 2025-07-06)",
+                    "",
+                    "Level 5 author reply.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        self._orig_content_dir = config.content_dir
+        self._orig_link = config.link
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+        self.app.pages_dir = markdown_dir
+        self.app.replies_dir = replies_dir
+
+    def tearDown(self):
+        self.config.content_dir = self._orig_content_dir
+        self.config.link = self._orig_link
+
+    def test_find_descendant_replies_iteratively(self):
+        """_find_descendant_replies finds descendants at arbitrary depth
+        when valid_parent_urls is progressively expanded."""
+        from madblog.replies._mixin import RepliesMixin
+
+        with self.app.app_context():
+            all_replies = self.app._get_article_replies(None)
+
+        candidate_replies = {
+            r["slug"]: r for r in all_replies if r["slug"] != "root-reply"
+        }
+
+        valid_parent_urls = {
+            "https://example.com/reply/root-reply",
+        }
+
+        # First pass: find level-1-author (replies to blog URL of root)
+        found = RepliesMixin._find_descendant_replies(
+            candidate_replies, valid_parent_urls, None
+        )
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["slug"], "level-1-author")
+
+        # Simulate adding a fediverse interaction's URL (level 2)
+        valid_parent_urls.add("https://remote.social/users/user/statuses/200")
+
+        # Second pass: find level-3-author
+        found2 = RepliesMixin._find_descendant_replies(
+            candidate_replies, valid_parent_urls, None
+        )
+        self.assertEqual(len(found2), 1)
+        self.assertEqual(found2[0]["slug"], "level-3-author")
+
+        # Simulate adding another fediverse interaction's URL (level 4)
+        valid_parent_urls.add("https://remote.social/users/user/statuses/300")
+
+        # Third pass: find level-5-author
+        found3 = RepliesMixin._find_descendant_replies(
+            candidate_replies, valid_parent_urls, None
+        )
+        self.assertEqual(len(found3), 1)
+        self.assertEqual(found3[0]["slug"], "level-5-author")
+
+        # No more candidates left
+        self.assertEqual(len(candidate_replies), 0)

@@ -638,23 +638,33 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
             md_file, extra_target_urls=list(extra_target_urls)
         )
 
-        # Add interaction URLs to valid parents for second pass
-        self._add_interaction_urls(ap_interactions, valid_parent_urls)
+        # Iteratively discover deeper levels of the thread:
+        # author reply → fediverse reaction → author reply → …
+        # Each iteration adds interaction URLs to valid_parent_urls,
+        # finds new descendant author replies, fetches their AP
+        # interactions, and repeats until convergence (max 10).
+        _MAX_INTERLEAVE = 10
+        for _ in range(_MAX_INTERLEAVE):
+            self._add_interaction_urls(ap_interactions, valid_parent_urls)
 
-        # Second pass: find descendants via interactions (e.g., reply to fediverse reply)
-        more_descendants = self._find_descendant_replies(
-            candidate_replies, valid_parent_urls, ap_base_url
-        )
+            more_descendants = self._find_descendant_replies(
+                candidate_replies, valid_parent_urls, ap_base_url
+            )
 
-        if more_descendants:
+            if not more_descendants:
+                break
+
             descendant_replies.extend(more_descendants)
-            if ap_base_url:
-                extra_target_urls.update(
-                    self._collect_reply_ap_urls(more_descendants, ap_base_url)
-                )
-                ap_interactions = self._get_ap_interactions(
-                    md_file, extra_target_urls=list(extra_target_urls)
-                )
+
+            if not ap_base_url:
+                continue
+
+            extra_target_urls.update(
+                self._collect_reply_ap_urls(more_descendants, ap_base_url)
+            )
+            ap_interactions = self._get_ap_interactions(
+                md_file, extra_target_urls=list(extra_target_urls)
+            )
 
         # Follow nested fediverse reply chains
         self._follow_reply_chains(md_file, ap_interactions)

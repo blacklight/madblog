@@ -1,18 +1,21 @@
 # Changelog
 
-## 1.2.8
+## 1.2.9
 
 ### Fixed
 
 - **Threaded replies on root-level reply pages**: Author replies to fediverse
   replies were not rendered as nested children on root-level reply pages
-  (e.g. `/reply/slug`). Two issues were fixed:
+  (e.g. `/reply/slug`). Three issues were fixed:
   - `_get_article_replies` now scans root-level `.md` files in the replies
     directory when `article_slug` is `None`, so other root-level replies can
     be discovered as thread descendants.
   - `_add_interaction_urls` now includes fediverse URL aliases (e.g.
     `/@user/ID` ↔ `/users/user/statuses/ID`) when building the set of valid
     parent URLs, so reply-to matching works regardless of URL format.
+  - `_get_reply_interactions` now uses an iterative loop (instead of a fixed
+    two-pass approach) to discover arbitrarily deep alternating chains of
+    author replies and fediverse reactions (bounded to 10 iterations).
 
 ## 1.2.6
 
