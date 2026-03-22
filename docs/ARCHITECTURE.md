@@ -16,6 +16,7 @@ that composes independent feature areas via mixins:
 - `ActivityPubMixin` for ActivityPub actor + object publishing (optional)
 - `GuestbookMixin` for aggregating public mentions into a guestbook page
 - `RepliesMixin` for author reply management and interaction threading
+- `AboutMixin` for optional About page with h-card microformat support
 
 The runtime app is created in `madblog/app.py` and routes are registered in
 `madblog/routes.py`.
@@ -26,6 +27,7 @@ Top-level Python modules:
 
 | Module | Description |
 |---|---|
+| `about` | Optional About page with h-card microformat support |
 | `activitypub` | Optional ActivityPub support |
 | `app` | Main application class |
 | `cache` | Cache handling + HTTP headers |
@@ -355,6 +357,62 @@ mentions from Webmentions and ActivityPub into a single "guest registry" view.
 - `config.enable_guestbook` (default: `true`)
   - Config file: `enable_guestbook: true|false`
   - Environment variable: `MADBLOG_ENABLE_GUESTBOOK=1|0`
+
+## About page subsystem
+
+The About page provides an optional `/about` route that renders author
+information with [h-card](http://microformats.org/wiki/h-card) microformat
+support.
+
+- `madblog/about/_mixin.py` (`AboutMixin`)
+  - Mixed into `BlogApp` to provide About page functionality.
+  - **Key methods:**
+    - `has_about_page()`: Returns `True` if `ABOUT.md` exists in `pages_dir`.
+    - `get_about_page()`: Renders the About page with h-card data.
+    - `_build_hcard()`: Builds an `HCard` dataclass from metadata with config
+      fallbacks.
+  - **Context processor:** Injects `has_about_page` into all templates for
+    conditional nav rendering.
+
+- `madblog/about/__init__.py`
+  - Exports `AboutMixin`.
+
+### h-card metadata
+
+The About page parses h-card fields from Markdown metadata:
+
+| Field | Description |
+|-------|-------------|
+| `name` | Full name (fallback: `config.author`) |
+| `given-name` | First name |
+| `family-name` | Last name |
+| `url` | Personal URL (fallback: `config.author_url` or `config.link`) |
+| `photo` | Photo URL (fallback: `config.author_photo`) |
+| `email` | Email (fallback: `config.author_email` unless `config.hide_email`) |
+| `job-title` | Job title |
+| `org` | Organizations (format: `Name\|URL, Name2\|URL2`) |
+| `note` | Bio (fallback: `config.activitypub_summary`) |
+| `key` | PGP key (format: `URL\|fingerprint`) |
+| `links` | rel="me" links (format: `Label\|URL` or just URLs) |
+
+### Route
+
+- `madblog/routes.py` (`/about`)
+  - Returns 404 if no `ABOUT.md` exists in `pages_dir`.
+  - Renders `about.html` with h-card data and Markdown content.
+
+### Frontend
+
+- `madblog/templates/about.html`
+  - Renders h-card microformat structure with author info.
+  - Renders Markdown content below the h-card.
+
+- `madblog/templates/common-head.html`
+  - Conditionally renders an "About" navigation link when `has_about_page`
+    is true.
+
+- `madblog/static/css/about.css`
+  - Styles for the About page and h-card layout.
 
 ## Author Replies subsystem
 

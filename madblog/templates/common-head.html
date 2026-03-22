@@ -139,6 +139,9 @@
                     {% endif %}
                     <a href="/followers">&#128101; Followers <span class="nav-count">({{ followers_count }})</span></a>
                     {% endif %}
+                    {% if has_about_page %}
+                    <a href="/about">ℹ️ About</a>
+                    {% endif %}
                     {% if config.enable_guestbook %}
                     <a href="/guestbook">&#128221; Guestbook</a>
                     {% endif %}

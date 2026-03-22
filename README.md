@@ -40,6 +40,7 @@
     - [Allowlist mode](#allowlist-mode)
     - [Moderation behavior](#moderation-behavior)
   - [Guestbook](#guestbook)
+  - [About Page](#about-page)
   - [Visibility](#visibility)
     - [Configuration](#configuration-1)
     - [Per-post visibility](#per-post-visibility)
@@ -596,6 +597,61 @@ displays messages chronologically (most recent first). Blocked actors (via
 - **Via Fediverse:** Mention your blog's ActivityPub handle (e.g.
   `@blog@example.com`) in a public post that is not a reply to one of your
   articles.
+
+### About Page
+
+Madblog supports an optional About page that renders author information with
+[h-card](http://microformats.org/wiki/h-card) microformat support.
+
+**Setup:** Create an `ABOUT.md` file in your `pages_dir` (typically
+`<content_dir>/markdown/`). If this file exists, an "About" link will
+automatically appear in the navigation menu.
+
+**Example `ABOUT.md`:**
+
+```markdown
+[//]: # (title: About Me)
+[//]: # (name: Jane Doe)
+[//]: # (given-name: Jane)
+[//]: # (family-name: Doe)
+[//]: # (url: https://janedoe.com)
+[//]: # (photo: /img/avatar.png)
+[//]: # (email: jane@example.com)
+[//]: # (job-title: Software Engineer)
+[//]: # (org: ACME Corp|https://acme.com, Open Source|https://github.com)
+[//]: # (note: Developer, blogger, and open source enthusiast.)
+[//]: # (key: /key.txt|D90FBA7F76362774)
+[//]: # (links: Mastodon|https://mastodon.social/@jane, GitHub|https://github.com/jane)
+
+# About Me
+
+Welcome to my blog! I write about software development and technology.
+```
+
+**Supported h-card metadata fields:**
+
+| Field | Description |
+|-------|-------------|
+| `name` | Full name (falls back to `author` config) |
+| `given-name` | First name |
+| `family-name` | Last name |
+| `url` | Personal URL (falls back to `author_url` or `link` config) |
+| `photo` | Photo URL (falls back to `author_photo` config) |
+| `email` | Email address (falls back to `author_email` unless `hide_email` is set) |
+| `job-title` | Job title |
+| `org` | Organizations (format: `Name\|URL, Name2\|URL2`) |
+| `note` | Short bio (falls back to `activitypub_summary` config) |
+| `key` | PGP key (format: `URL\|fingerprint` or just `URL`) |
+| `links` | rel="me" links (format: `Label\|URL, Label2\|URL2` or just URLs) |
+
+**Privacy:** If you want to configure an email for notifications but not display
+it publicly on the About page, set `hide_email: true` in your config:
+
+```yaml
+# config.yaml
+author_email: notifications@example.com
+hide_email: true
+```
 
 ### Visibility
 

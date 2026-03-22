@@ -39,6 +39,7 @@ class Config:
     author_photo: str | None = None
     throttle_seconds_on_update: int = 10
     author_email: str | None = None
+    hide_email: bool = False
     smtp_server: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None
@@ -206,6 +207,8 @@ def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statem
         config.throttle_seconds_on_update = int(cfg["throttle_seconds_on_update"])
     if cfg.get("author_email"):
         config.author_email = cfg["author_email"]
+    if cfg.get("hide_email") is not None:
+        config.hide_email = bool(cfg["hide_email"])
     if cfg.get("smtp_server"):
         config.smtp_server = cfg["smtp_server"]
     if cfg.get("smtp_port"):
@@ -370,6 +373,8 @@ def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-state
         )
     if os.getenv("MADBLOG_AUTHOR_EMAIL"):
         config.author_email = os.environ["MADBLOG_AUTHOR_EMAIL"]
+    if os.getenv("MADBLOG_HIDE_EMAIL"):
+        config.hide_email = os.environ["MADBLOG_HIDE_EMAIL"] == "1"
     if os.getenv("MADBLOG_SMTP_SERVER"):
         config.smtp_server = os.environ["MADBLOG_SMTP_SERVER"]
     if os.getenv("MADBLOG_SMTP_PORT"):

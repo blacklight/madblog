@@ -138,6 +138,12 @@ link: https://myblog.example.com
 
 # The email address of the author. Mention notifications will be delivered here
 # author_email: 0q9aA@example.com
+
+# If true, the author email will not be shown publicly on the About page or
+# used as a fallback for article author URLs. The email can still be used for
+# notifications. (optional, default: false)
+# hide_email: false
+
 # Outgoing mail server configuration (optional)
 # smtp_server: smtp.example.com
 # smtp_port: 587

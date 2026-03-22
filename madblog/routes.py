@@ -121,6 +121,19 @@ def external_feed_index_route(feed_url: str):
     )
 
 
+@app.route("/about", methods=["GET"])
+def about_route():
+    """
+    Render the About page if ABOUT.md exists in pages_dir.
+    """
+    from flask import abort
+
+    response = app.get_about_page()
+    if response is None:
+        abort(404)
+    return response
+
+
 @app.route("/@<username>", methods=["GET"])
 def profile_route(username: str):
     """

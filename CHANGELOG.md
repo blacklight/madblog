@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **About page**: Optional `/about` page with
+  [h-card](http://microformats.org/wiki/h-card) microformat support. Create an
+  `ABOUT.md` file in your `pages_dir` to enable. Supports author metadata fields
+  including name, photo, email, job title, organizations, PGP key, and rel="me"
+  links. Falls back to existing config values (`author`, `author_url`, etc.)
+  when metadata is not provided.
+
+- **`hide_email` config option**: New configuration option to prevent email
+  addresses from being displayed publicly on the About page while still allowing
+  them to be used for notifications. Set `hide_email: true` in config.yaml or
+  `MADBLOG_HIDE_EMAIL=1` environment variable.
+
 ## 1.2.4
 
 ### Fixed

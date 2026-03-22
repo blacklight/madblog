@@ -18,6 +18,7 @@ from flask import (
     request,
 )
 
+from .about import AboutMixin
 from .activitypub import ActivityPubMixin
 from .cache import (
     CachedPage,
@@ -41,6 +42,7 @@ from ._sorters import PagesSorter, PagesSortByTime
 
 
 class BlogApp(  # pylint: disable=too-many-ancestors
+    AboutMixin,
     RepliesMixin,
     ActivityPubMixin,
     FeedsMixin,
@@ -95,6 +97,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             self.template_folder = os.path.abspath(templates_dir)
 
         self._register_template_filters()
+        self._register_about_context_processors()
         self._register_ap_context_processors()
         self._register_replies_context_processors()
         self._init_webmentions()
@@ -589,7 +592,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             dirs[:] = [d for d in dirs if os.path.join(root, d) != replies_dir]
 
             for f in files:
-                if not f.endswith(".md"):
+                if not f.endswith(".md") or f == "ABOUT.md":
                     continue
 
                 rel_path = os.path.join(root[len(pages_dir_str) + 1 :], f)
@@ -630,7 +633,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
                 continue
             if not f.endswith(".md"):
                 continue
-            if f == "index.md":
+            if f in ("index.md", "ABOUT.md"):
                 continue
 
             rel_path = os.path.join(folder, f) if folder else f

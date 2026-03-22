@@ -808,6 +808,10 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         if self.replies_dir and filepath.startswith(self.replies_dir + os.sep):
             return
 
+        # Skip ABOUT.md - it's the About page, not a regular article
+        if os.path.basename(filepath) == "ABOUT.md":
+            return
+
         url = self.file_to_url(filepath)
         actor_url = f"{self.base_url}{self.handler.actor_path}"
 

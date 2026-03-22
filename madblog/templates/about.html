@@ -1,0 +1,104 @@
+{% with title=title, description=description, image=image, url=config.link ~ '/about', type='article', skip_header=not config.header, styles=['/css/blog.css', '/css/about.css'] %}
+  {% include 'common-head.html' %}
+{% endwith %}
+
+<main>
+  <article class="container about-page">
+    {% if hcard and hcard.has_data() %}
+    <div class="h-card author-card">
+      {% if hcard.photo %}
+      <div class="author-photo-container">
+        <img class="u-photo u-logo author-photo" src="{{ hcard.photo }}" alt="{{ hcard.name or 'Author' }}">
+      </div>
+      {% endif %}
+
+      <div class="author-info">
+        {% if hcard.name %}
+        <div class="author-name">
+          {% if hcard.url %}
+          <a class="p-name u-url" rel="me" href="{{ hcard.url }}" target="_blank">{{ hcard.name }}</a>
+          {% else %}
+          <span class="p-name">{{ hcard.name }}</span>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        {% if hcard.job_title %}
+        <div class="p-job-title author-title">{{ hcard.job_title }}</div>
+        {% endif %}
+
+        {% if hcard.orgs %}
+        <div class="organizations">
+          {% for org in hcard.orgs %}
+            {% if org.url %}
+            <a class="p-org" href="{{ org.url }}" target="_blank">{{ org.name }}</a>
+            {% else %}
+            <span class="p-org">{{ org.name }}</span>
+            {% endif %}
+            {% if not loop.last %}<span class="org-separator">·</span>{% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if hcard.note %}
+        <div class="p-note author-note">{{ hcard.note }}</div>
+        {% endif %}
+
+        <div class="author-meta">
+          {% if hcard.email %}
+          <div class="email">
+            <a class="u-email" href="mailto:{{ hcard.email }}">
+              <span class="icon">📧</span>
+              <span>{{ hcard.email }}</span>
+            </a>
+          </div>
+          {% endif %}
+
+          {% if hcard.key %}
+          <div class="pgp">
+            <a class="u-key" href="{{ hcard.key }}" target="_blank">
+              <span class="icon">🔑</span>
+              <span>{% if hcard.key_fingerprint %}{{ hcard.key_fingerprint }}{% else %}PGP Key{% endif %}</span>
+            </a>
+          </div>
+          {% endif %}
+
+          {% if hcard.links %}
+          <div class="rel-me-links">
+            {% for link in hcard.links %}
+            <a rel="me" href="{{ link.url }}" target="_blank" class="rel-me-link">
+              <img class="link-favicon"
+                   src="https://icons.duckduckgo.com/ip3/{{ link.domain }}.ico"
+                   rel="noopener noreferrer"
+                   alt=""
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">
+                <span class="link-icon-fallback" style="display:none">🔗</span>
+              <span class="link-text">{{ link.label or link.url }}</span>
+            </a>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+
+        {# Hidden fields for full h-card compliance #}
+        <div class="meta" style="display: none">
+          {% if hcard.given_name %}
+          <span class="p-given-name">{{ hcard.given_name }}</span>
+          {% endif %}
+          {% if hcard.family_name %}
+          <span class="p-family-name">{{ hcard.family_name }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="content e-content">
+      {{ content | safe }}
+    </div>
+
+  </article>
+</main>
+
+{% include 'footer.html' %}
+{% include 'common-tail.html' %}
