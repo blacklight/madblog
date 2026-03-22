@@ -24,6 +24,7 @@ from madblog.reactions import (
     collect_author_likes_map,
     collect_interaction_counts,
     count_reactions,
+    _fediverse_url_aliases,
 )
 from madblog.visibility import Visibility, resolve_visibility
 
@@ -67,9 +68,12 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
             return uri[len("/article/") :]
         return uri.lstrip("/")
 
-    def _get_article_replies(self, article_slug: str) -> list:
+    def _get_article_replies(self, article_slug: str | None) -> list:
         """
         Scan replies/<article_slug>/ and return a list of parsed reply dicts.
+
+        When *article_slug* is ``None``, scans root-level ``.md`` files in
+        the replies directory (used for top-level / unlisted replies).
 
         Each dict contains: slug, title, reply_to, published, content_html,
         permalink, author, author_url, author_photo.
@@ -82,7 +86,10 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
         excluded from the reactions display.
         """
 
-        replies_subdir = self.replies_dir / article_slug
+        replies_subdir = (
+            self.replies_dir / article_slug if article_slug else self.replies_dir
+        )
+
         if not replies_subdir.is_dir():
             return []
 
@@ -121,7 +128,11 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
                 continue
 
             author_info = self._parse_author(metadata)
-            permalink = f"/reply/{article_slug}/{reply_slug}"
+            permalink = (
+                f"/reply/{article_slug}/{reply_slug}"
+                if article_slug
+                else f"/reply/{reply_slug}"
+            )
 
             replies.append(
                 {
@@ -570,18 +581,18 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
     @staticmethod
     def _add_interaction_urls(interactions: list, url_set: set[str]) -> None:
         """
-        Add object_id and activity_id from interactions to a URL set.
+        Add object_id and activity_id from interactions to a URL set,
+        together with their fediverse URL aliases.
 
         :param interactions: List of AP interaction objects
         :param url_set: Set to add URLs to (modified in-place)
         """
         for interaction in interactions:
-            obj_id = getattr(interaction, "object_id", None)
-            if obj_id:
-                url_set.add(obj_id)
-            act_id = getattr(interaction, "activity_id", None)
-            if act_id:
-                url_set.add(act_id)
+            for attr in ("object_id", "activity_id"):
+                url = getattr(interaction, attr, None)
+                if url:
+                    url_set.add(url)
+                    url_set.update(_fediverse_url_aliases(url))
 
     def _get_reply_interactions(
         self, md_file: str, metadata: dict, article_slug: str | None, reply_slug: str
@@ -606,10 +617,7 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
             valid_parent_urls.add(ap_base_url + reply_uri)
 
         # Get candidate replies (all except current)
-        # For top-level unlisted posts (article_slug=None), there are no sibling replies
-        all_author_replies = (
-            self._get_article_replies(article_slug) if article_slug else []
-        )
+        all_author_replies = self._get_article_replies(article_slug)
         candidate_replies = {
             r.get("slug"): r for r in all_author_replies if r.get("slug") != reply_slug
         }

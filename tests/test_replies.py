@@ -2356,3 +2356,111 @@ class MediaAttachmentRenderingTest(unittest.TestCase):
 
         self.assertIn("https://example.com/photo.jpg", html)
         self.assertIn('alt="A scenic view"', html)
+
+
+class RootLevelRepliesCollectionTest(unittest.TestCase):
+    """Tests for _get_article_replies(None) — root-level replies."""
+
+    def setUp(self):
+        from madblog.app import app
+        from madblog.config import config
+
+        self.app = app
+        self.config = config
+
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+
+        root = Path(self._tmpdir.name)
+        markdown_dir = root / "markdown"
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+
+        replies_dir = root / "replies"
+        replies_dir.mkdir(parents=True, exist_ok=True)
+
+        # Root-level reply with reply-to
+        (replies_dir / "reply-one.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (reply-to: https://mastodon.social/@user/111)",
+                    "[//]: # (published: 2025-07-01)",
+                    "",
+                    "First root reply.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        # Another root-level reply targeting a different post
+        (replies_dir / "reply-two.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (reply-to: https://mastodon.social/@user/222)",
+                    "[//]: # (published: 2025-07-02)",
+                    "",
+                    "Second root reply.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        self._orig_content_dir = config.content_dir
+        self._orig_link = config.link
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+        self.app.pages_dir = markdown_dir
+        self.app.replies_dir = replies_dir
+
+    def tearDown(self):
+        self.config.content_dir = self._orig_content_dir
+        self.config.link = self._orig_link
+
+    def test_get_article_replies_none_returns_root_level(self):
+        """_get_article_replies(None) returns root-level replies."""
+        with self.app.app_context():
+            replies = self.app._get_article_replies(None)
+
+        slugs = {r["slug"] for r in replies}
+        self.assertIn("reply-one", slugs)
+        self.assertIn("reply-two", slugs)
+
+    def test_root_level_reply_permalink_format(self):
+        """Root-level replies have /reply/<slug> permalink (no article prefix)."""
+        with self.app.app_context():
+            replies = self.app._get_article_replies(None)
+
+        for reply in replies:
+            self.assertRegex(reply["permalink"], r"^/reply/[^/]+$")
+
+
+class AddInteractionUrlsAliasesTest(unittest.TestCase):
+    """Tests that _add_interaction_urls includes fediverse URL aliases."""
+
+    def test_canonical_url_adds_pretty_alias(self):
+        """Adding a canonical /users/ URL also adds the /@user/ alias."""
+        from madblog.replies._mixin import RepliesMixin
+
+        class FakeInteraction:
+            object_id = "https://mastodon.social/users/alice/statuses/123"
+            activity_id = None
+
+        url_set: set[str] = set()
+        RepliesMixin._add_interaction_urls([FakeInteraction()], url_set)
+
+        self.assertIn("https://mastodon.social/users/alice/statuses/123", url_set)
+        self.assertIn("https://mastodon.social/@alice/statuses/123", url_set)
+        self.assertIn("https://mastodon.social/@alice/123", url_set)
+
+    def test_pretty_url_adds_canonical_alias(self):
+        """Adding a pretty /@user/ URL also adds the canonical /users/ alias."""
+        from madblog.replies._mixin import RepliesMixin
+
+        class FakeInteraction:
+            object_id = "https://mastodon.social/@alice/123"
+            activity_id = None
+
+        url_set: set[str] = set()
+        RepliesMixin._add_interaction_urls([FakeInteraction()], url_set)
+
+        self.assertIn("https://mastodon.social/@alice/123", url_set)
+        self.assertIn("https://mastodon.social/users/alice/statuses/123", url_set)
