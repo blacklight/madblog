@@ -395,6 +395,7 @@ environment variable.
 | `logo` | `MADBLOG_LOGO` | — | URL to a logo image for the blog. |
 | `language` | `MADBLOG_LANGUAGE` | `en-US` | Default language for the blog (can be overridden per article). |
 | `header` | `MADBLOG_HEADER` | `true` | Whether to show the blog header in generated pages. |
+| `default_index` | `MADBLOG_DEFAULT_INDEX` | `blog` | Default page at `/`. Options: `blog`, `about`, `tags`, `guestbook`, `unlisted`. The blog index is always available at `/blog`. |
 
 ### Author settings
 

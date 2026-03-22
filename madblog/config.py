@@ -88,6 +88,9 @@ class Config:
     # Visibility
     default_visibility: str = "public"
 
+    # Default index page: "blog", "about", "tags", "unlisted" or "guestbook"
+    default_index: str = "blog"
+
     @property
     def resolved_state_dir(self) -> Path:
         """Return the resolved state directory path."""
@@ -315,6 +318,10 @@ def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statem
     if cfg.get("default_visibility"):
         config.default_visibility = cfg["default_visibility"]
 
+    # Default index page
+    if cfg.get("default_index"):
+        config.default_index = cfg["default_index"]
+
 
 def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-statements
     if os.getenv("MADBLOG_TITLE"):
@@ -481,6 +488,10 @@ def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-state
     # Visibility
     if os.getenv("MADBLOG_DEFAULT_VISIBILITY"):
         config.default_visibility = os.environ["MADBLOG_DEFAULT_VISIBILITY"]
+
+    # Default index page
+    if os.getenv("MADBLOG_DEFAULT_INDEX"):
+        config.default_index = os.environ["MADBLOG_DEFAULT_INDEX"]
 
 
 def _init_config_from_cli(args: Optional[Namespace]):

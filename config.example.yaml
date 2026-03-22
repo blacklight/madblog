@@ -287,3 +287,11 @@ link: https://myblog.example.com
 # This affects how posts are federated via ActivityPub.
 # Can also be overridden per-article with `[//]: # (visibility: unlisted)`
 # default_visibility: public
+
+#### (Optional) Default Index Page ####
+
+# The default page to show at the root URL "/" (optional, default: "blog")
+# Supported values: "blog", "about", "tags", "guestbook"
+# When set to something other than "blog", the root URL will redirect to
+# that page. The blog index is always available at /blog regardless of this setting.
+# default_index: blog

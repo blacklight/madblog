@@ -16,6 +16,11 @@
   them to be used for notifications. Set `hide_email: true` in config.yaml or
   `MADBLOG_HIDE_EMAIL=1` environment variable.
 
+- **Customizable default index page**: New `default_index` configuration option
+  to set the default page shown at `/`. Supported values: `blog` (default),
+  `about`, `tags`, `guestbook`. The blog index is always available at `/blog`
+  regardless of this setting. Navigation menu now includes a "Blog" link.
+
 ## 1.2.4
 
 ### Fixed

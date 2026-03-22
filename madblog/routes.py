@@ -62,8 +62,8 @@ def _get_followers_count() -> int:
         return 0
 
 
-@app.route("/", methods=["GET"])
-def home_route():
+def _blog_index_response():
+    """Render the blog index page."""
     view_mode = request.args.get("view", config.view_mode)
     if view_mode not in ("cards", "list", "full"):
         view_mode = config.view_mode
@@ -79,6 +79,30 @@ def home_route():
         view_mode=view_mode,
         followers_count=_get_followers_count(),
     )
+
+
+@app.route("/", methods=["GET"])
+def home_route():
+    from flask import redirect
+
+    default_index = config.default_index
+    if default_index == "about":
+        return redirect("/about")
+    if default_index == "tags":
+        return redirect("/tags")
+    if default_index == "guestbook":
+        return redirect("/guestbook")
+    if default_index == "unlisted":
+        return redirect("/unlisted")
+    # Default to blog index
+    return _blog_index_response()
+
+
+@app.route("/blog", methods=["GET"])
+@app.route("/blog/", methods=["GET"])
+def blog_route():
+    """Render the blog index page at /blog."""
+    return _blog_index_response()
 
 
 @app.route("/~<path:folder>/", methods=["GET"])
