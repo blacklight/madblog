@@ -39,10 +39,10 @@
     <!-- Webmention handler -->
     <link rel="webmention" href="{{ config.webmention_url }}">
     {% endif %}
-    {% if config.external_links %}
+    {% if config.rel_me %}
     <!-- Rel="me" links for identity verification -->
-    {% for external_link in config.external_links %}
-    <link rel="me" href="{{ external_link }}">
+    {% for rel_me_link in config.rel_me %}
+    <link rel="me" href="{{ rel_me_link }}">
     {% endfor %}
     {% endif %}
     {% if config.activitypub_profile_url %}
@@ -152,6 +152,15 @@
                     <a href="/tags">&#127991; Tags</a>
                     <a href="/feed.atom" target="_blank">{% include 'icons/rss.html' %} Atom Feed</a>
                     <a href="/feed.rss" target="_blank">{% include 'icons/rss.html' %} RSS Feed</a>
+                    {% if config.nav_links %}
+                    {% for nav_link in config.nav_links %}
+                    {% set nav_url = nav_link.url if nav_link is mapping else nav_link %}
+                    {% set nav_label = nav_link.display_name if nav_link is mapping and nav_link.display_name else nav_url %}
+                    {% set nav_icon = nav_link.icon if nav_link is mapping and nav_link.icon else '🔗' %}
+                    {% set nav_icon_is_url = nav_icon.startswith('http://') or nav_icon.startswith('https://') or nav_icon.startswith('/') %}
+                    <a href="{{ nav_url }}" target="_blank" rel="noopener">{% if nav_icon_is_url %}<img class="nav-link-icon" src="{{ nav_icon }}" alt="">{% else %}{{ nav_icon }}{% endif %} {{ nav_label }}</a>
+                    {% endfor %}
+                    {% endif %}
                 </nav>
             </div>
         </div>
@@ -235,6 +244,12 @@
     flex-shrink: 0;
     width: 20px;
     height: 20px;
+}
+.hamburger-nav .nav-link-icon {
+    width: 1.2em;
+    height: 1.2em;
+    vertical-align: middle;
+    object-fit: contain;
 }
 .hamburger-nav .nav-count {
     opacity: 0.7;

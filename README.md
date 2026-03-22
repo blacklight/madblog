@@ -32,6 +32,9 @@
   - [Site metadata](#site-metadata)
   - [Author settings](#author-settings)
   - [External links](#external-links)
+    - [`rel_me` — Identity verification links](#rel_me--identity-verification-links)
+    - [`external_links` — About page links](#external_links--about-page-links)
+    - [`nav_links` — Navigation panel links](#nav_links--navigation-panel-links)
   - [Feed settings](#feed-settings)
   - [Email notifications](#email-notifications)
   - [Webmentions](#webmentions)
@@ -408,11 +411,15 @@ environment variable.
 
 ### External links
 
-You can add external profile links that will be rendered as `<link rel="me">` on
-each page, useful for profile verification:
+Madblog supports three types of external link configurations:
+
+#### `rel_me` — Identity verification links
+
+These are rendered as `<link rel="me">` in the HTML `<head>` for profile
+verification (e.g., Mastodon), but not displayed on any page:
 
 ```yaml
-external_links:
+rel_me:
   - https://mastodon.social/@myprofile
   - https://github.com/myprofile
 ```
@@ -420,7 +427,38 @@ external_links:
 Or via environment variable (comma-separated):
 
 ```shell
-export MADBLOG_EXTERNAL_LINKS="https://mastodon.social/@myprofile,https://github.com/myprofile"
+export MADBLOG_REL_ME="https://mastodon.social/@myprofile,https://github.com/myprofile"
+```
+
+#### `external_links` — About page links
+
+These are displayed on the `/about` page. Can be simple URLs or objects with
+`display_name` (optional) and `url`:
+
+```yaml
+external_links:
+  - https://github.com/myprofile
+  - display_name: My Portfolio
+    url: https://portfolio.example.com
+```
+
+Links specified in `ABOUT.md` metadata take priority over these config values.
+
+#### `nav_links` — Navigation panel links
+
+These are added to the main navigation panel (hamburger menu). Can be simple
+URLs or objects with `url` (required), `display_name` (optional), and `icon`
+(optional). The `icon` can be an emoji/text or a URL (local path or absolute):
+
+```yaml
+nav_links:
+  - https://example.com
+  - display_name: GitHub
+    icon: 🐙
+    url: https://github.com/myprofile
+  - display_name: Portfolio
+    icon: /img/portfolio-icon.png
+    url: https://portfolio.example.com
 ```
 
 ### Feed settings

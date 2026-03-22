@@ -17,13 +17,39 @@ link: https://myblog.example.com
 # link (optional, but useful for blogs hosted on a different domain)
 # home_link: https://myblog.example.com/home
 
-# External links to social media profiles (optional)
-# These will be rendered on each page as <link rel="me" href="...">
-# These can also be specified via the MADBLOG_EXTERNAL_LINKS environment
-# variable as a comma-separated list of URLs
-# external_links:
-#   - https://x.com/myprofile
+# Rel="me" links for identity verification (optional)
+# These will be rendered on each page as <link rel="me" href="..."> in the <head>
+# but not displayed anywhere else. Useful for Mastodon profile verification.
+# Can also be specified via the MADBLOG_REL_ME environment variable as a
+# comma-separated list of URLs.
+# rel_me:
 #   - https://mastodon.social/@myprofile
+#   - https://github.com/myprofile
+
+# External links to show on the About page (optional)
+# These can be simple URLs or objects with display_name (optional) and url fields.
+# Links specified in ABOUT.md metadata take priority over these.
+# Can also be specified via MADBLOG_EXTERNAL_LINKS environment variable as a
+# comma-separated list of URLs.
+# external_links:
+#   - https://github.com/myprofile
+#   - display_name: My Portfolio
+#     url: https://portfolio.example.com
+
+# Navigation links to show in the main navigation panel (optional)
+# These can be simple URLs or objects with url (required), display_name (optional),
+# and icon (optional) fields. The icon can be an emoji/text or a URL (local path
+# or absolute URL to an image).
+# Can also be specified via MADBLOG_NAV_LINKS environment variable as a
+# comma-separated list of URLs.
+# nav_links:
+#   - https://example.com
+#   - display_name: GitHub
+#     icon: 🐙
+#     url: https://github.com/myprofile
+#   - display_name: Portfolio
+#     icon: /img/portfolio-icon.png
+#     url: https://portfolio.example.com
 
 # Listening address for the built-in web server (optional, default: "0.0.0.0")
 # host: 0.0.0.0

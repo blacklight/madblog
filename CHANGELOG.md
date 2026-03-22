@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **External links configuration refactored**: Split `external_links` into three
+  separate configurations:
+  - `rel_me`: Links rendered as `<link rel="me">` in `<head>` for identity
+    verification (e.g., Mastodon profile verification), not displayed visually.
+  - `external_links`: Links displayed on the `/about` page, supporting both
+    simple URLs and objects with `display_name` and `url` fields.
+  - `nav_links`: Links added to the navigation panel, supporting `url`,
+    `display_name`, and `icon` fields.
+
 ## 1.2.5
 
 ### Added

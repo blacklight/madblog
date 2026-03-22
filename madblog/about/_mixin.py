@@ -233,12 +233,20 @@ class AboutMixin(ABC):
         link_urls = {link["url"] for link in links}
         if config.external_links:
             for ext_link in config.external_links:
-                if ext_link not in link_urls:
+                # Handle both string URLs and dict format
+                if isinstance(ext_link, dict):
+                    url = ext_link.get("url", "")
+                    label = ext_link.get("display_name")
+                else:
+                    url = ext_link
+                    label = None
+
+                if url and url not in link_urls:
                     links.append(
                         {
-                            "label": None,
-                            "url": ext_link,
-                            "domain": _extract_domain(ext_link),
+                            "label": label,
+                            "url": url,
+                            "domain": _extract_domain(url),
                         }
                     )
 

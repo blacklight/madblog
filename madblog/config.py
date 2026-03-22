@@ -3,7 +3,7 @@ import re
 from argparse import Namespace
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import yaml
 from webmentions import WebmentionStatus
@@ -19,7 +19,9 @@ class Config:
     description: str = ""
     link: str = "/"
     home_link: str = "/"
-    external_links: List[str] = field(default_factory=list)
+    rel_me: List[str] = field(default_factory=list)
+    external_links: List[Union[str, Dict[str, str]]] = field(default_factory=list)
+    nav_links: List[Union[str, Dict[str, Any]]] = field(default_factory=list)
     host: str = "0.0.0.0"
     port: int = 8000
     language: str = "en-US"
@@ -174,8 +176,12 @@ def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statem
         config.link = cfg["link"]
     if cfg.get("home_link"):
         config.home_link = cfg["home_link"]
+    if cfg.get("rel_me"):
+        config.rel_me = cfg["rel_me"]
     if cfg.get("external_links"):
         config.external_links = cfg["external_links"]
+    if cfg.get("nav_links"):
+        config.nav_links = cfg["nav_links"]
     if cfg.get("host"):
         config.host = cfg["host"]
     if cfg.get("port"):
@@ -332,10 +338,14 @@ def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-state
         config.link = os.environ["MADBLOG_LINK"]
     if os.getenv("MADBLOG_HOME_LINK"):
         config.home_link = os.environ["MADBLOG_HOME_LINK"]
+    if os.getenv("MADBLOG_REL_ME"):
+        config.rel_me = re.split(r"[,\s]+", os.environ["MADBLOG_REL_ME"].strip())
     if os.getenv("MADBLOG_EXTERNAL_LINKS"):
         config.external_links = re.split(
             r"[,\s]+", os.environ["MADBLOG_EXTERNAL_LINKS"].strip()
         )
+    if os.getenv("MADBLOG_NAV_LINKS"):
+        config.nav_links = re.split(r"[,\s]+", os.environ["MADBLOG_NAV_LINKS"].strip())
     if os.getenv("MADBLOG_HOST"):
         config.host = os.environ["MADBLOG_HOST"]
     if os.getenv("MADBLOG_PORT"):
