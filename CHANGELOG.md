@@ -2,6 +2,10 @@
 
 ## 1.2.9
 
+### Added
+
+- Support for **`new_tab`** configuration option for `nav_links`.
+
 ### Fixed
 
 - **Threaded replies on root-level reply pages**: Author replies to fediverse

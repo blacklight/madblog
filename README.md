@@ -447,8 +447,10 @@ Links specified in `ABOUT.md` metadata take priority over these config values.
 #### `nav_links` — Navigation panel links
 
 These are added to the main navigation panel (hamburger menu). Can be simple
-URLs or objects with `url` (required), `display_name` (optional), and `icon`
-(optional). The `icon` can be an emoji/text or a URL (local path or absolute):
+URLs or objects with `url` (required), `display_name` (optional), `icon`
+(optional), and `new_tab` (optional, default: `false`). The `icon` can be an
+emoji/text or a URL (local path or absolute). Set `new_tab` to `true` to open
+the link in a new browser tab/window:
 
 ```yaml
 nav_links:
@@ -459,6 +461,7 @@ nav_links:
   - display_name: Portfolio
     icon: /img/portfolio-icon.png
     url: https://portfolio.example.com
+    new_tab: true
 ```
 
 ### Feed settings

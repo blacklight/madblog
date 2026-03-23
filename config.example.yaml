@@ -38,8 +38,9 @@ link: https://myblog.example.com
 
 # Navigation links to show in the main navigation panel (optional)
 # These can be simple URLs or objects with url (required), display_name (optional),
-# and icon (optional) fields. The icon can be an emoji/text or a URL (local path
-# or absolute URL to an image).
+# icon (optional) and new_tab (optional, default: false) fields. The icon can be
+# an emoji/text or a URL (local path or absolute URL to an image). Set new_tab to
+# true to open the link in a new browser tab/window.
 # Can also be specified via MADBLOG_NAV_LINKS environment variable as a
 # comma-separated list of URLs.
 # nav_links:
@@ -50,6 +51,7 @@ link: https://myblog.example.com
 #   - display_name: Portfolio
 #     icon: /img/portfolio-icon.png
 #     url: https://portfolio.example.com
+#     new_tab: true
 
 # Listening address for the built-in web server (optional, default: "0.0.0.0")
 # host: 0.0.0.0
