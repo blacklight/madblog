@@ -287,7 +287,7 @@ Running it in Gunicorn:
 # in this case, to prevent clashes with gunicorn's own `--config` option.
 # In this case we bind to 127.0.0.1:8000, with 8 workers and a 5s timeout
 MADBLOG_CONFIG=/your/config.yaml \
-  gunicorn -w 8 -b 127.0.0.1:8000 madblog.uwsgi \
+  gunicorn --preload -w 8 -b 127.0.0.1:8000 madblog.uwsgi \
   /your/content
 ```
 

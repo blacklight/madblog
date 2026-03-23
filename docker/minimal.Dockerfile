@@ -24,5 +24,5 @@ VOLUME /etc/madblog/config.yaml
 
 EXPOSE 8000
 
-ENTRYPOINT ["gunicorn", "-w", "8", "-b", "0.0.0.0:8000"]
+ENTRYPOINT ["gunicorn", "--preload", "-w", "8", "-b", "0.0.0.0:8000"]
 CMD ["madblog.uwsgi", "/data"]
