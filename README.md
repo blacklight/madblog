@@ -144,8 +144,38 @@ This project powers the following blogs:
 
 ## Quickstart
 
-```
-mkdir -p ~/madblog/markdown
+```bash
+export MADBLOG_DIR="$HOME/madblog"
+
+# The directory with your Markdown files
+mkdir -p "$MADBLOG_DIR/markdown"
+
+# Create a basic configuration file
+cat <<EOF > "$MADBLOG_DIR/config.yaml
+title: My blog
+link: https://blog.example.com
+author: Joe Doe
+author_photo: https://static.example.com/avatar.png
+author_email: joe@example.com
+logo: https://static.example.com/logo.png
+
+# Only if you want email notifications
+# smtp_server: mail.example.com
+# smtp_port: 587
+# smtp_username: joe@example.com
+# smtp_password: secret
+# smtp_starttls: true
+# smtp_enable_starttls_auto: true
+
+# Only if you want ActivityPub federation.
+# The following setup will create a federated handle
+# as @blog@example.com
+# enable_activitypub: true
+# activitypub_link: https://example.com
+# activitypub_username: blog
+# activitypub_domain: example.com
+EOF
+
 cat <<EOF >~/madblog/markdown/article-1.md
 # My first article
 
@@ -154,9 +184,10 @@ This is my first article!
 Welcome to [Madblog](https://git.fabiomanganiello.com/madblog)!
 EOF
 
-docker run -it \
+docker run --rm --name madblog -it \
   -p 8000:8000 \
-  -v "$HOME/madblog:/data" \
+  -v "$MADBLOG_DIR/config.yaml:/etc/madblog/config.yaml" \
+  -v "$MADBLOG_DIR:/data" \
   quay.io/blacklight/madblog
 ```
 
