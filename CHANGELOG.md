@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.10
+
+### Changed
+
+- **Gunicorn `--preload` support**: Deferred content monitor startup from
+  module-level to a `before_request` hook so that file-watcher threads are
+  created *after* fork. This allows `gunicorn --preload` to share the
+  loaded application across workers via copy-on-write, significantly
+  reducing total memory usage.
+- **Memory optimizations in `uwsgi` entry point**: Applied malloc arena
+  limiting (`MALLOC_ARENA_MAX=2`) and reduced thread stack size (2 MB) to
+  the gunicorn/uWSGI entry point, matching the CLI entry point.
+
+### Added
+
+- Expanded Quick Start section in README with `config.yaml` example and
+  `docker run` usage.
+
 ## 1.2.9
 
 ### Added
