@@ -5,7 +5,7 @@ from typing import List, Union
 from urllib.parse import urljoin
 
 from markdown import Extension, markdown
-from markdown.extensions.codehilite import CodeHiliteExtension
+from markdown.extensions.codehilite import CodeHilite, CodeHiliteExtension
 
 from madblog.config import config
 
@@ -16,6 +16,31 @@ from ._processors import (
     MarkdownTaskList,
     MarkdownTocMarkers,
 )
+
+# ---------------------------------------------------------------------------
+# Resilient syntax highlighting: wrap CodeHilite.hilite() so that a failure
+# in Pygments (bad lexer name, formatter bug, …) only degrades the single
+# code block instead of aborting the entire page render.
+# ---------------------------------------------------------------------------
+
+_original_hilite = CodeHilite.hilite
+
+
+def _safe_hilite(self, shebang: bool = True) -> str:
+    try:
+        return _original_hilite(self, shebang=shebang)
+    except Exception as e:
+        _logger = getLogger(__name__)
+        _logger.warning("Syntax highlighting failed (lang=%s): %s", self.lang, e)
+        txt = self.src.replace("&", "&amp;")
+        txt = txt.replace("<", "&lt;")
+        txt = txt.replace(">", "&gt;")
+        txt = txt.replace('"', "&quot;")
+        css_class = self.options.get("cssclass", "codehilite")
+        return f'<pre class="{css_class}"><code>{txt}\n</code></pre>\n'
+
+
+CodeHilite.hilite = _safe_hilite  # type: ignore[assignment]
 
 # Pattern for fenced code block delimiters
 _FENCE_PATTERN = re.compile(r"^(`{3,}|~{3,})")
