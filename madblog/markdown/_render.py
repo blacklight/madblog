@@ -5,6 +5,7 @@ from typing import List, Union
 from urllib.parse import urljoin
 
 from markdown import Extension, markdown
+from markdown.extensions.codehilite import CodeHiliteExtension
 
 from madblog.config import config
 
@@ -75,7 +76,7 @@ def _build_extensions() -> List[Union[str, Extension]]:
     """
     extensions: List[Union[str, Extension]] = [
         "fenced_code",
-        "codehilite",
+        CodeHiliteExtension(guess_lang=False),
         "tables",
         "toc",
         "attr_list",

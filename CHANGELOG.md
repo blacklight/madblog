@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.11
+
+### Changed
+
+- Removed **`guess_lang`** from codehilite extension for performance and
+  stability reasons.
+
 ## 1.2.10
 
 ### Changed
