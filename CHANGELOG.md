@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Reply Metadata Index** (`ReplyMetadataIndex`): A JSON-persisted metadata
+  index for reply files that provides O(1) lookups without full directory scans.
+  Stores `reply_to`, `like_of`, `visibility`, `published`, `has_content`, and
+  `title` per file. Incrementally updated via `ContentMonitor` callbacks.
+  Query methods: `get_unlisted_slugs()`, `get_ap_reply_slugs()`,
+  `get_article_reply_slugs()`, `get_likes_for_target()`.
+  ([#36](https://git.fabiomanganiello.com/madblog/issues/36))
+
+### Changed
+
+- **Author likes lookup migrated**: `author_likes` rendering in article and
+  reply pages now uses `ReplyMetadataIndex.get_likes_for_target()` instead of
+  `AuthorReactionsIndex.get_reactions()`.
+
 ## 1.2.11
 
 ### Changed

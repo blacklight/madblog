@@ -532,9 +532,32 @@ nesting depth with CSS-based indentation (capped at depth 5).
 | `madblog/routes.py` | `/reply/…` routes |
 | `madblog/reactions.py` | `build_thread_tree()`, `ThreadNode`, `ReactionType`, AP alias handling |
 | `madblog/replies/_mixin.py` | `RepliesMixin`: `_get_article_replies()`, `_get_page_interactions()`, `_get_reply_interactions()`, `_render_reply_html()` |
+| `madblog/replies/_index.py` | `ReplyMetadataIndex`: JSON-persisted metadata index for reply files |
 | `madblog/activitypub/_replies.py` | `ActivityPubRepliesMixin`: AP Note publishing, reply-to derivation, startup sync |
 | `madblog/templates/reply.html` | Reply page template |
 | `madblog/templates/reactions.html` | Unified threaded reactions template |
+
+### Reply Metadata Index
+
+`ReplyMetadataIndex` (`madblog/replies/_index.py`) provides O(1) metadata
+lookups for reply files without requiring full directory scans on each request.
+
+- **Storage:** `<state_dir>/reply_metadata_index.json`
+- **Stored fields per entry:** `rel_path`, `reply_to`, `like_of`, `visibility`,
+  `published`, `has_content`, `title`
+- **Lifecycle:**
+  - On startup: loads from JSON; if missing or schema mismatch, performs full
+    scan of `replies/**/*.md` and persists.
+  - On file change: `on_reply_change()` callback (registered on `replies_monitor`)
+    incrementally updates the affected entry and persists.
+- **Query methods:**
+  - `get_unlisted_slugs()`: root-level files with no `reply_to`/`like_of`,
+    `has_content=True`, `visibility=unlisted`.
+  - `get_ap_reply_slugs()`: root-level files with `reply_to` set,
+    `has_content=True`, `visibility` in `public`/`unlisted`.
+  - `get_article_reply_slugs(article_slug)`: replies under a specific article.
+  - `get_likes_for_target(url)`: reverse lookup for author likes (replaces
+    `AuthorReactionsIndex.get_reactions()`).
 
 ## Shared infrastructure
 

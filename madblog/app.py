@@ -34,7 +34,7 @@ from .guestbook import GuestbookMixin
 from .markdown import MarkdownMixin
 from .monitor import ChangeType, ContentMonitor
 from .reactions import AuthorReactionsIndex
-from .replies import RepliesMixin
+from .replies import ReplyMetadataIndex, RepliesMixin
 from .tags import TagIndex
 from .visibility import Visibility, resolve_visibility
 from .webmentions import WebmentionsMixin
@@ -111,6 +111,10 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             state_dir=config.resolved_state_dir,
             replies_dir=self.replies_dir,
             base_url=config.link,
+        )
+        self.reply_metadata_index = ReplyMetadataIndex(
+            replies_dir=self.replies_dir,
+            state_dir=config.resolved_state_dir,
         )
         self.replies_monitor: Optional[ContentMonitor] = None
 
@@ -200,6 +204,9 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         # Load the author-reactions index (likes targeting local pages)
         self.author_reactions_index.load()
 
+        # Load the reply metadata index
+        self.reply_metadata_index.load()
+
         # Start replies monitor for federation
         self._start_replies_monitor()
 
@@ -234,6 +241,9 @@ class BlogApp(  # pylint: disable=too-many-ancestors
 
         # Register author-reactions index callback
         self.replies_monitor.register(self.author_reactions_index.on_reply_change)
+
+        # Register reply metadata index callback
+        self.replies_monitor.register(self.reply_metadata_index.on_reply_change)
 
         self.replies_monitor.start()
 

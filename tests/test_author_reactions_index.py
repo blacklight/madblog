@@ -415,6 +415,15 @@ class AuthorReactionsTemplateTest(unittest.TestCase):
         )
         self.app.author_reactions_index.load()
 
+        # Rebuild the reply metadata index for the new content
+        from madblog.replies import ReplyMetadataIndex
+
+        self.app.reply_metadata_index = ReplyMetadataIndex(
+            replies_dir=replies_dir,
+            state_dir=config.resolved_state_dir,
+        )
+        self.app.reply_metadata_index.load()
+
         self.client = self.app.test_client()
 
     def tearDown(self):

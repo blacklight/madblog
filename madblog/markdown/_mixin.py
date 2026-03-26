@@ -298,16 +298,16 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
         reactions_counts = count_reactions(reactions_tree)
 
         page_url = config.link + metadata.get("uri", "")
-        reactions_index = getattr(self, "author_reactions_index", None)
+        metadata_index = getattr(self, "reply_metadata_index", None)
         author_likes = (
-            reactions_index.get_reactions(page_url) if reactions_index else []
+            metadata_index.get_likes_for_target(page_url) if metadata_index else []
         )
 
         # Per-interaction author likes (e.g. author liked a fediverse reply)
         author_likes_map: dict = {}
-        if reactions_index:
+        if metadata_index:
             author_likes_map = collect_author_likes_map(
-                reactions_tree, reactions_index.get_reactions
+                reactions_tree, metadata_index.get_likes_for_target
             )
 
         # Compute per-interaction reaction counts using O(1) indexed lookups
