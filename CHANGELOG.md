@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.0
 
 ### Added
 
@@ -11,6 +11,7 @@
   Query methods: `get_unlisted_slugs()`, `get_ap_reply_slugs()`,
   `get_article_reply_slugs()`, `get_likes_for_target()`.
   ([#36](https://git.fabiomanganiello.com/madblog/issues/36))
+- **Unlisted page**: Added _Posts and Replies_ tab.
 
 ### Changed
 
