@@ -58,6 +58,17 @@ def create_article(temp_dir: str, filename: str, visibility: str | None = None) 
     return filepath
 
 
+def _fail_on_root_replies_glob(monkeypatch, replies_dir: Path) -> None:
+    original_glob = Path.glob
+
+    def glob_guard(self: Path, pattern: str, *args, **kwargs):
+        if self == replies_dir and pattern == "*.md":
+            raise AssertionError("replies_dir.glob('*.md') should not be called")
+        return original_glob(self, pattern, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "glob", glob_guard)
+
+
 def create_reply(
     replies_dir: str,
     filename: str,
@@ -123,6 +134,21 @@ class TestUnlistedPageVisibility:
         assert len(posts) == 1
         assert posts[0]["slug"] == "unlisted-reply"
         assert posts[0]["is_article"] is False
+
+    def test_get_unlisted_posts_uses_index_when_available(
+        self, temp_blog_dir, blog_app, monkeypatch
+    ):
+        replies_dir = os.path.join(temp_blog_dir, "replies")
+        create_reply(replies_dir, "unlisted-reply.md")
+
+        blog_app.reply_metadata_index.load()
+        _fail_on_root_replies_glob(monkeypatch, blog_app.replies_dir)
+
+        with blog_app.test_request_context("/unlisted"):
+            posts = blog_app.get_unlisted_posts()
+
+        assert len(posts) == 1
+        assert posts[0]["slug"] == "unlisted-reply"
 
     def test_reply_with_reply_to_excluded_from_unlisted(self, temp_blog_dir, blog_app):
         """Replies with reply-to don't appear on /unlisted page."""
@@ -215,6 +241,26 @@ class TestGetApReplies:
             reply_to="https://remote.social/statuses/123",
             visibility="public",
         )
+
+        with blog_app.test_request_context("/unlisted"):
+            posts = blog_app.get_ap_replies()
+
+        assert len(posts) == 1
+        assert posts[0]["slug"] == "public-ap-reply"
+
+    def test_get_ap_replies_uses_index_when_available(
+        self, temp_blog_dir, blog_app, monkeypatch
+    ):
+        replies_dir = os.path.join(temp_blog_dir, "replies")
+        create_reply(
+            replies_dir,
+            "public-ap-reply.md",
+            reply_to="https://remote.social/statuses/123",
+            visibility="public",
+        )
+
+        blog_app.reply_metadata_index.load()
+        _fail_on_root_replies_glob(monkeypatch, blog_app.replies_dir)
 
         with blog_app.test_request_context("/unlisted"):
             posts = blog_app.get_ap_replies()

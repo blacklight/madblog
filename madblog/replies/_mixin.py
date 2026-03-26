@@ -207,47 +207,87 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
 
         # 1. Scan replies/ root for unlisted posts (backward compatible)
         if self.replies_dir.is_dir():
-            for md_path in self.replies_dir.glob("*.md"):
-                reply_slug = md_path.stem
-                try:
-                    metadata = self._parse_reply_metadata(None, reply_slug)
-                except Exception:
-                    continue
+            metadata_index = getattr(self, "reply_metadata_index", None)
+            if metadata_index:
+                index_replies_dir = getattr(metadata_index, "_replies_dir", None)
+                if index_replies_dir and Path(index_replies_dir) != self.replies_dir:
+                    from madblog.replies import ReplyMetadataIndex
 
-                md_file = metadata.pop("md_file")
-                with open(md_file, "r") as f:
-                    content = self._parse_markdown_content(f)
-
-                # Skip if it has reply-to or like-of (reactions/replies)
-                is_unlisted_reply = not (
-                    metadata.get("reply-to") or metadata.get("like-of")
-                )
-                if not is_unlisted_reply:
-                    continue
-
-                # Skip if no content
-                body_lines = [
-                    line
-                    for line in content.split("\n")
-                    if line.strip() and not re.match(r"^\[//]: # \(", line)
-                ]
-                if not body_lines:
-                    continue
-
-                # Check visibility - unlisted replies default to UNLISTED
-                visibility = resolve_visibility(metadata, is_unlisted_reply=True)
-                if visibility != Visibility.UNLISTED:
-                    continue
-
-                posts.append(
-                    self._build_unlisted_post_dict(
-                        slug=reply_slug,
-                        metadata=metadata,
-                        content=content,
-                        permalink=f"/reply/{reply_slug}",
-                        is_article=False,
+                    metadata_index = ReplyMetadataIndex(
+                        replies_dir=self.replies_dir,
+                        state_dir=config.resolved_state_dir,
                     )
-                )
+                    self.reply_metadata_index = metadata_index
+
+                try:
+                    if not metadata_index.is_loaded:
+                        metadata_index.load()
+                except Exception:
+                    metadata_index = None
+
+            if metadata_index:
+                slugs = metadata_index.get_unlisted_slugs()
+                for reply_slug in slugs:
+                    try:
+                        metadata = self._parse_reply_metadata(None, reply_slug)
+                    except Exception:
+                        continue
+
+                    md_file = metadata.pop("md_file")
+                    with open(md_file, "r") as f:
+                        content = self._parse_markdown_content(f)
+
+                    posts.append(
+                        self._build_unlisted_post_dict(
+                            slug=reply_slug,
+                            metadata=metadata,
+                            content=content,
+                            permalink=f"/reply/{reply_slug}",
+                            is_article=False,
+                        )
+                    )
+            else:
+                for md_path in self.replies_dir.glob("*.md"):
+                    reply_slug = md_path.stem
+                    try:
+                        metadata = self._parse_reply_metadata(None, reply_slug)
+                    except Exception:
+                        continue
+
+                    md_file = metadata.pop("md_file")
+                    with open(md_file, "r") as f:
+                        content = self._parse_markdown_content(f)
+
+                    # Skip if it has reply-to or like-of (reactions/replies)
+                    is_unlisted_reply = not (
+                        metadata.get("reply-to") or metadata.get("like-of")
+                    )
+                    if not is_unlisted_reply:
+                        continue
+
+                    # Skip if no content
+                    body_lines = [
+                        line
+                        for line in content.split("\n")
+                        if line.strip() and not re.match(r"^\[//\]: # \(", line)
+                    ]
+                    if not body_lines:
+                        continue
+
+                    # Check visibility - unlisted replies default to UNLISTED
+                    visibility = resolve_visibility(metadata, is_unlisted_reply=True)
+                    if visibility != Visibility.UNLISTED:
+                        continue
+
+                    posts.append(
+                        self._build_unlisted_post_dict(
+                            slug=reply_slug,
+                            metadata=metadata,
+                            content=content,
+                            permalink=f"/reply/{reply_slug}",
+                            is_article=False,
+                        )
+                    )
 
         # 2. Scan pages_dir for articles with visibility: unlisted
         posts.extend(self._get_unlisted_articles())
@@ -274,51 +314,91 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
         if not self.replies_dir.is_dir():
             return posts
 
-        for md_path in self.replies_dir.glob("*.md"):
-            reply_slug = md_path.stem
+        metadata_index = getattr(self, "reply_metadata_index", None)
+        if metadata_index:
+            index_replies_dir = getattr(metadata_index, "_replies_dir", None)
+            if index_replies_dir and Path(index_replies_dir) != self.replies_dir:
+                from madblog.replies import ReplyMetadataIndex
+
+                metadata_index = ReplyMetadataIndex(
+                    replies_dir=self.replies_dir,
+                    state_dir=config.resolved_state_dir,
+                )
+                self.reply_metadata_index = metadata_index
+
             try:
-                metadata = self._parse_reply_metadata(None, reply_slug)
+                if not metadata_index.is_loaded:
+                    metadata_index.load()
             except Exception:
-                continue
+                metadata_index = None
 
-            # Only include replies that have reply-to
-            if not metadata.get("reply-to"):
-                continue
+        if metadata_index:
+            slugs = metadata_index.get_ap_reply_slugs()
+            for reply_slug in slugs:
+                try:
+                    metadata = self._parse_reply_metadata(None, reply_slug)
+                except Exception:
+                    continue
 
-            # Skip standalone likes (like-of present, no reply-to, no content)
-            # Note: we already checked reply-to is present, so this handles
-            # the case where both like-of and reply-to are set but no content.
-            md_file = metadata.pop("md_file")
-            with open(md_file, "r") as f:
-                content = self._parse_markdown_content(f)
+                md_file = metadata.pop("md_file")
+                with open(md_file, "r") as f:
+                    content = self._parse_markdown_content(f)
 
-            body_lines = [
-                line
-                for line in content.split("\n")
-                if line.strip() and not re.match(r"^\[//]: # \(", line)
-            ]
+                post = self._build_unlisted_post_dict(
+                    slug=reply_slug,
+                    metadata=metadata,
+                    content=content,
+                    permalink=f"/reply/{reply_slug}",
+                    is_article=False,
+                )
+                post["reply_to"] = metadata.get("reply-to", "")
+                posts.append(post)
+        else:
+            for md_path in self.replies_dir.glob("*.md"):
+                reply_slug = md_path.stem
+                try:
+                    metadata = self._parse_reply_metadata(None, reply_slug)
+                except Exception:
+                    continue
 
-            if metadata.get("like-of") and not body_lines:
-                continue
+                # Only include replies that have reply-to
+                if not metadata.get("reply-to"):
+                    continue
 
-            # Skip if no content at all
-            if not body_lines:
-                continue
+                # Skip standalone likes (like-of present, no reply-to, no content)
+                # Note: we already checked reply-to is present, so this handles
+                # the case where both like-of and reply-to are set but no content.
+                md_file = metadata.pop("md_file")
+                with open(md_file, "r") as f:
+                    content = self._parse_markdown_content(f)
 
-            # Check visibility - only include public or unlisted
-            visibility = resolve_visibility(metadata)
-            if visibility not in (Visibility.PUBLIC, Visibility.UNLISTED):
-                continue
+                body_lines = [
+                    line
+                    for line in content.split("\n")
+                    if line.strip() and not re.match(r"^\[//\]: # \(", line)
+                ]
 
-            post = self._build_unlisted_post_dict(
-                slug=reply_slug,
-                metadata=metadata,
-                content=content,
-                permalink=f"/reply/{reply_slug}",
-                is_article=False,
-            )
-            post["reply_to"] = metadata.get("reply-to", "")
-            posts.append(post)
+                if metadata.get("like-of") and not body_lines:
+                    continue
+
+                # Skip if no content at all
+                if not body_lines:
+                    continue
+
+                # Check visibility - only include public or unlisted
+                visibility = resolve_visibility(metadata)
+                if visibility not in (Visibility.PUBLIC, Visibility.UNLISTED):
+                    continue
+
+                post = self._build_unlisted_post_dict(
+                    slug=reply_slug,
+                    metadata=metadata,
+                    content=content,
+                    permalink=f"/reply/{reply_slug}",
+                    is_article=False,
+                )
+                post["reply_to"] = metadata.get("reply-to", "")
+                posts.append(post)
 
         # Sort by published date descending (newest first)
         posts.sort(key=lambda p: p.get("published") or datetime.date.min, reverse=True)

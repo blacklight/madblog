@@ -62,6 +62,12 @@ class ReplyMetadataIndex:
         self._index_file = self._state_dir / "reply_metadata_index.json"
         self._entries: dict[str, ReplyMetadata] = {}
         self._lock = threading.RLock()
+        self._loaded = False
+
+    @property
+    def is_loaded(self) -> bool:
+        with self._lock:
+            return self._loaded
 
     # ------------------------------------------------------------------
     # Persistence
@@ -75,31 +81,35 @@ class ReplyMetadataIndex:
         one-time full scan of all ``.md`` files under ``replies_dir``
         to build the index, then persist it.
         """
-        if self._index_file.exists():
-            try:
-                with open(self._index_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+        with self._lock:
+            if self._index_file.exists():
+                try:
+                    with open(self._index_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
 
-                if data.get("schema_version") == _SCHEMA_VERSION:
-                    self._entries = {
-                        rel_path: ReplyMetadata.from_dict(entry)
-                        for rel_path, entry in data.get("entries", {}).items()
-                    }
-                    logger.debug(
-                        "Loaded reply metadata index: %d entries", len(self._entries)
-                    )
-                    return
-                else:
-                    logger.info(
-                        "Reply metadata index schema mismatch (v%s != v%s); rebuilding",
-                        data.get("schema_version"),
-                        _SCHEMA_VERSION,
-                    )
-            except Exception:
-                logger.warning("Failed to load reply metadata index; rebuilding")
+                    if data.get("schema_version") == _SCHEMA_VERSION:
+                        self._entries = {
+                            rel_path: ReplyMetadata.from_dict(entry)
+                            for rel_path, entry in data.get("entries", {}).items()
+                        }
+                        self._loaded = True
+                        logger.debug(
+                            "Loaded reply metadata index: %d entries",
+                            len(self._entries),
+                        )
+                        return
+                    else:
+                        logger.info(
+                            "Reply metadata index schema mismatch (v%s != v%s); rebuilding",
+                            data.get("schema_version"),
+                            _SCHEMA_VERSION,
+                        )
+                except Exception:
+                    logger.warning("Failed to load reply metadata index; rebuilding")
 
-        self._full_scan()
-        self._save()
+            self._full_scan()
+            self._save()
+            self._loaded = True
 
     def _save(self) -> None:
         """Persist the in-memory index to JSON."""
