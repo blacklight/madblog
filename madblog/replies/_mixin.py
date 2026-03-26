@@ -79,8 +79,7 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
         permalink, author, author_url, author_photo.
 
         Standalone likes (files with ``like-of`` but no ``reply-to`` and no
-        content) are excluded — they are handled separately by the
-        :class:`AuthorReactionsIndex`.
+        content) are excluded.
 
         Replies with visibility ``followers``, ``direct``, or ``draft`` are
         excluded from the reactions display.

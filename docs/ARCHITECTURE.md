@@ -556,8 +556,7 @@ lookups for reply files without requiring full directory scans on each request.
   - `get_ap_reply_slugs()`: root-level files with `reply_to` set,
     `has_content=True`, `visibility` in `public`/`unlisted`.
   - `get_article_reply_slugs(article_slug)`: replies under a specific article.
-  - `get_likes_for_target(url)`: reverse lookup for author likes (replaces
-    `AuthorReactionsIndex.get_reactions()`).
+  - `get_likes_for_target(url)`: reverse lookup for author likes.
 
 ## Shared infrastructure
 

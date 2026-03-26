@@ -15,8 +15,7 @@
 ### Changed
 
 - **Author likes lookup migrated**: `author_likes` rendering in article and
-  reply pages now uses `ReplyMetadataIndex.get_likes_for_target()` instead of
-  `AuthorReactionsIndex.get_reactions()`.
+  reply pages now uses `ReplyMetadataIndex.get_likes_for_target()`.
 
 ## 1.2.11
 

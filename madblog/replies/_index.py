@@ -17,6 +17,7 @@ from typing import Any
 
 from madblog.constants import REGEX_MARKDOWN_METADATA
 from madblog.monitor import ChangeType
+from madblog.reactions import _fediverse_url_aliases
 
 logger = logging.getLogger(__name__)
 
@@ -398,8 +399,6 @@ class ReplyMetadataIndex:
         - rel_path: Relative path to the file
         - source_url: The /reply/... URL
 
-        This replaces AuthorReactionsIndex.get_reactions().
-
         :return: Dict mapping target URLs to lists of source info.
         """
         result: dict[str, list[dict]] = {}
@@ -428,10 +427,11 @@ class ReplyMetadataIndex:
         :param target_url: The URL to look up.
         :return: List of like info dicts.
         """
+        target_urls = {target_url} | set(_fediverse_url_aliases(target_url))
         result = []
         with self._lock:
             for rel_path, entry in self._entries.items():
-                if entry.like_of != target_url:
+                if entry.like_of not in target_urls:
                     continue
                 stem = rel_path.rsplit(".", 1)[0]
                 result.append(
