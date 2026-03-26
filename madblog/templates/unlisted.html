@@ -17,6 +17,17 @@
       </p>
     </div>
 
+    <nav class="unlisted-tabs" role="tablist">
+      <a href="/unlisted"
+         class="unlisted-tab{% if active_tab == 'posts' %} active{% endif %}"
+         role="tab"
+         aria-selected="{{ 'true' if active_tab == 'posts' else 'false' }}">Posts</a>
+      <a href="/unlisted?tab=posts_and_replies"
+         class="unlisted-tab{% if active_tab == 'posts_and_replies' %} active{% endif %}"
+         role="tab"
+         aria-selected="{{ 'true' if active_tab == 'posts_and_replies' else 'false' }}">Posts and Replies</a>
+    </nav>
+
     {% if reactions_tree %}
       {% with utils=utils, is_unlisted=true %}
         {% include 'reactions.html' %}
@@ -30,6 +41,32 @@
 </main>
 
 <style>
+.unlisted-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 1.5em;
+}
+
+.unlisted-tab {
+  padding: 0.6em 1.2em;
+  font-size: 0.85em;
+  font-weight: 500;
+  color: var(--color-fg-secondary) !important;
+  border-bottom: 2px solid transparent !important;
+  text-decoration: none !important;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.unlisted-tab:hover {
+  color: var(--color-fg-primary) !important;
+}
+
+.unlisted-tab.active {
+  color: var(--color-fg-primary) !important;
+  border-bottom: 2px solid var(--color-link-fg) !important;
+}
+
 .unlisted-empty {
   text-align: center;
   padding: 2em;

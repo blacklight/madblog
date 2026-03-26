@@ -256,6 +256,74 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
         posts.sort(key=lambda p: p.get("published") or datetime.date.min, reverse=True)
         return posts
 
+    def get_ap_replies(self) -> list:
+        """
+        Get root-level AP replies with ``public`` or ``unlisted`` visibility.
+
+        These are reply files in ``replies/`` that have ``reply-to`` metadata
+        (i.e. they are federated replies to external posts) but are not
+        anchored to any blog article page.
+
+        Standalone likes (``like-of`` present, no body content) are excluded.
+
+        Each dict contains: slug, title, published, content_html, permalink,
+        full_url, reply_to, author, author_url, author_photo, is_article
+        (always ``False``).
+        """
+        posts = []
+        if not self.replies_dir.is_dir():
+            return posts
+
+        for md_path in self.replies_dir.glob("*.md"):
+            reply_slug = md_path.stem
+            try:
+                metadata = self._parse_reply_metadata(None, reply_slug)
+            except Exception:
+                continue
+
+            # Only include replies that have reply-to
+            if not metadata.get("reply-to"):
+                continue
+
+            # Skip standalone likes (like-of present, no reply-to, no content)
+            # Note: we already checked reply-to is present, so this handles
+            # the case where both like-of and reply-to are set but no content.
+            md_file = metadata.pop("md_file")
+            with open(md_file, "r") as f:
+                content = self._parse_markdown_content(f)
+
+            body_lines = [
+                line
+                for line in content.split("\n")
+                if line.strip() and not re.match(r"^\[//]: # \(", line)
+            ]
+
+            if metadata.get("like-of") and not body_lines:
+                continue
+
+            # Skip if no content at all
+            if not body_lines:
+                continue
+
+            # Check visibility - only include public or unlisted
+            visibility = resolve_visibility(metadata)
+            if visibility not in (Visibility.PUBLIC, Visibility.UNLISTED):
+                continue
+
+            post = self._build_unlisted_post_dict(
+                slug=reply_slug,
+                metadata=metadata,
+                content=content,
+                permalink=f"/reply/{reply_slug}",
+                is_article=False,
+            )
+            post["reply_to"] = metadata.get("reply-to", "")
+            posts.append(post)
+
+        # Sort by published date descending (newest first)
+        posts.sort(key=lambda p: p.get("published") or datetime.date.min, reverse=True)
+        return posts
+
     def _get_unlisted_articles(self) -> list:
         """
         Scan pages_dir for articles with visibility: unlisted.

@@ -9,15 +9,18 @@ from flask import Response, has_request_context, make_response, request
 from madblog.config import config
 
 
-def generate_etag(mtime: float) -> str:
+def generate_etag(mtime: float, *extra: str) -> str:
     """
     Generate an ETag based on modification time.
 
     :param mtime: File modification timestamp
+    :param extra: Optional extra strings folded into the hash so that
+        different variants (e.g. tab names) produce distinct ETags.
     :return: ETag string (quoted)
     """
-    # Use hash of timestamp for more compact ETag
-    etag_hash = hashlib.md5(str(mtime).encode()).hexdigest()[:16]
+    # Use hash of timestamp (+ optional discriminators) for compact ETag
+    parts = [str(mtime)] + list(extra)
+    etag_hash = hashlib.md5(":".join(parts).encode()).hexdigest()[:16]
     return f'"{etag_hash}"'
 
 

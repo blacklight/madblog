@@ -221,6 +221,24 @@
   color: var(--color-fg-secondary);
 }
 
+/* Reply context (shown for AP replies on /unlisted) */
+.reaction-reply-context {
+  font-size: 0.75em;
+  color: var(--color-fg-tertiary);
+  margin: 0.3em 0 0.5em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reaction-reply-context a {
+  color: var(--color-fg-tertiary) !important;
+}
+
+.reaction-reply-context a:hover {
+  color: var(--color-fg-secondary) !important;
+}
+
 /* Date */
 .reaction-date {
   font-size: 0.7em;

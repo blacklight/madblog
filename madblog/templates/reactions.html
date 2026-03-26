@@ -477,6 +477,11 @@ reply-{{ node.item.full_url | hash_id }}
         </div>
       </div>
     </div>
+    {% if reply.reply_to is defined and reply.reply_to %}
+      <div class="reaction-reply-context">
+        &#8617; In reply to <a href="{{ reply.reply_to }}" rel="nofollow noopener" target="_blank">{{ reply.reply_to }}</a>
+      </div>
+    {% endif %}
     {% if reply.title and reply.title != reply.slug %}
       <div class="reaction-title">
         <a href="{{ reply.permalink }}">{{ reply.title }}</a>

@@ -28,7 +28,7 @@ from .cache import (
 from .config import config
 from .feeds import FeedAuthor
 from .templates import TemplateUtils
-from .reactions import build_thread_tree, count_reactions
+from .reactions import ReactionType, ThreadNode, build_thread_tree, count_reactions
 from ._sorters import PagesSortByTimeGroupedByFolder
 
 logger = logging.getLogger(__name__)
@@ -1168,13 +1168,40 @@ def unlisted_route():
     Unlisted posts are files in the replies/ root directory that have content
     but no reply-to or like-of metadata. They are published to the Fediverse
     but not listed on the main blog index.
+
+    Supports a ``tab`` query parameter:
+    - ``posts`` (default): Only unlisted posts (no reply-to/like-of).
+    - ``posts_and_replies``: Unlisted posts plus AP replies with
+      ``public`` or ``unlisted`` visibility.
     """
     from flask import make_response, render_template
 
-    unlisted_posts = app.get_unlisted_posts()
+    tab = request.args.get("tab", "posts")
+    if tab not in ("posts", "posts_and_replies"):
+        tab = "posts"
 
-    if not unlisted_posts:
+    unlisted_posts = app.get_unlisted_posts()
+    ap_replies = app.get_ap_replies() if tab == "posts_and_replies" else []
+
+    all_posts = unlisted_posts + ap_replies
+    if not all_posts:
+        if tab == "posts" and not unlisted_posts:
+            return Response("No unlisted posts", status=404, mimetype="text/plain")
         return Response("No unlisted posts", status=404, mimetype="text/plain")
+
+    # De-duplicate by slug (unlisted_posts and ap_replies scan the same
+    # directory but with disjoint filters, so overlap should not happen;
+    # this is a safety net).
+    seen_slugs: set[str] = set()
+    deduped: list[dict] = []
+    for post in all_posts:
+        slug = post.get("slug", "")
+        if slug not in seen_slugs:
+            seen_slugs.add(slug)
+            deduped.append(post)
+
+    # Re-sort merged list by published date descending
+    deduped.sort(key=lambda p: p.get("published") or datetime.date.min, reverse=True)
 
     # Compute mtime from replies directory
     mtime = get_dir_mtime(app.replies_dir)
@@ -1184,16 +1211,15 @@ def unlisted_route():
     etag = None
     if mtime > 0:
         last_modified = email.utils.formatdate(mtime, usegmt=True)
-        etag = generate_etag(mtime)
+        # Include tab in the ETag so different tabs are cached separately
+        etag = generate_etag(mtime, tab)
         if check_cache_validity(mtime, etag):
             return make_304_response(last_modified, etag, {})
 
-    # Build thread tree from unlisted posts (no webmentions/AP interactions,
+    # Build thread tree from posts (no webmentions/AP interactions,
     # just the posts themselves as author replies)
-    from .reactions import ReactionType, ThreadNode
-
     reactions_tree = []
-    for post in unlisted_posts:
+    for post in deduped:
         node = ThreadNode(
             item=post,
             reaction_type=ReactionType.AUTHOR_REPLY,
@@ -1205,7 +1231,6 @@ def unlisted_route():
         reactions_tree.append(node)
 
     reactions_counts = count_reactions(reactions_tree)
-
     response = make_response(
         render_template(
             "unlisted.html",
@@ -1214,6 +1239,7 @@ def unlisted_route():
             reactions_counts=reactions_counts,
             utils=TemplateUtils(),
             followers_count=_get_followers_count(),
+            active_tab=tab,
         )
     )
 
