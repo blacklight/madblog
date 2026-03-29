@@ -122,7 +122,9 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         @self.template_filter("hash_id")
         def hash_id_filter(value: str) -> str:
             """Generate a short hash ID from a string for use in anchor IDs."""
-            return hashlib.md5(str(value).encode()).hexdigest()[:12]
+            return hashlib.md5(str(value).encode(), usedforsecurity=False).hexdigest()[
+                :12
+            ]
 
         @self.template_filter("fromjson")
         def fromjson_filter(value: object) -> object:

@@ -33,7 +33,7 @@ class RenderCache:
     @staticmethod
     def hash(content: str, *extra: str) -> str:
         """SHA-1 hash of content + optional extra keys (e.g. theme)."""
-        h = hashlib.sha1(content.encode())
+        h = hashlib.sha1(content.encode(), usedforsecurity=False)
         for e in extra:
             h.update(e.encode())
         return h.hexdigest()

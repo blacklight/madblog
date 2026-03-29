@@ -381,7 +381,9 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         """
         Generate unique, safe filename for mentions.
         """
-        url_hash = hashlib.md5(source_url.encode()).hexdigest()[:8]
+        url_hash = hashlib.md5(source_url.encode(), usedforsecurity=False).hexdigest()[
+            :8
+        ]
 
         # Extract domain for readability
         domain = urlparse(source_url).netloc.replace(".", "-")

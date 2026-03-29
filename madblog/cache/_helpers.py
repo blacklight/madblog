@@ -20,7 +20,9 @@ def generate_etag(mtime: float, *extra: str) -> str:
     """
     # Use hash of timestamp (+ optional discriminators) for compact ETag
     parts = [str(mtime)] + list(extra)
-    etag_hash = hashlib.md5(":".join(parts).encode()).hexdigest()[:16]
+    etag_hash = hashlib.md5(
+        ":".join(parts).encode(), usedforsecurity=False
+    ).hexdigest()[:16]
     return f'"{etag_hash}"'
 
 

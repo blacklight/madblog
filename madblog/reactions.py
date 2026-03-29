@@ -42,7 +42,7 @@ def reaction_anchor_id(prefix: str, identity: str) -> str:
     :param identity: The unique identity URL of the reaction
     :return: A stable anchor ID like 'wm-abc123def456'
     """
-    digest = hashlib.md5(identity.encode()).hexdigest()[:12]
+    digest = hashlib.md5(identity.encode(), usedforsecurity=False).hexdigest()[:12]
     return f"{prefix}-{digest}"
 
 
