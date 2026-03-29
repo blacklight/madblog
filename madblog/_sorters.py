@@ -25,7 +25,7 @@ class PagesSorter(ABC):
 
     @abstractmethod
     def __call__(self, page: dict) -> Any:
-        raise NotImplemented()
+        raise NotImplementedError()
 
 
 class PagesSortByTime(PagesSorter):
