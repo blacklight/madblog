@@ -327,7 +327,9 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             return False
 
         ap_quality = self._ap_accept_quality()
-        return bool(ap_quality and ap_quality > request.accept_mimetypes["text/html"])
+        return bool(
+            ap_quality > 0 and ap_quality > request.accept_mimetypes["text/html"]
+        )
 
     def _get_activitypub_object_response(
         self,
