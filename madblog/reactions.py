@@ -214,6 +214,18 @@ def _create_ap_interaction_nodes(
             if alias not in nodes:
                 nodes[alias] = node
 
+        # Also register under the human-readable URL from raw_object metadata
+        # (e.g., https://mastodon.social/@user/12345 vs the canonical AP URL)
+        metadata = getattr(interaction, "metadata", None) or {}
+        raw_object = metadata.get("raw_object", {})
+        object_url = raw_object.get("url") if isinstance(raw_object, dict) else None
+        if object_url and object_url not in nodes:
+            nodes[object_url] = node
+            # Also register aliases for the object_url
+            for alias in _fediverse_url_aliases(object_url):
+                if alias not in nodes:
+                    nodes[alias] = node
+
 
 def _create_author_reply_nodes(
     author_replies: list, nodes: dict[str, ThreadNode]

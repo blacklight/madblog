@@ -962,6 +962,51 @@ class ThreadingModelTest(unittest.TestCase):
         self.assertEqual(id1, id2)
         self.assertTrue(id1.startswith("wm-"))
 
+    def test_raw_object_url_used_as_alias(self):
+        """Author reply using raw_object.url threads under AP interaction."""
+        from unittest.mock import MagicMock
+        from madblog.reactions import build_thread_tree, ReactionType
+
+        # AP interaction has canonical object_id but raw_object contains
+        # the human-readable url field
+        ap = MagicMock()
+        ap.object_id = "https://mastodon.social/users/alice/statuses/100"
+        ap.activity_id = "https://mastodon.social/users/alice/statuses/100/activity"
+        ap.interaction_type = MagicMock(value="reply")
+        ap.target_resource = "https://example.com/article/post"
+        ap.published = "2026-01-01T00:00:00+00:00"
+        ap.created_at = None
+        ap.metadata = {
+            "raw_object": {
+                "id": "https://mastodon.social/users/alice/statuses/100",
+                "url": "https://mastodon.social/@alice/100",
+            }
+        }
+
+        # Author reply uses the human-readable URL from raw_object.url
+        author_reply = {
+            "slug": "ar1",
+            "title": "Author Reply",
+            "reply_to": "https://mastodon.social/@alice/100",
+            "published": "2026-01-02T00:00:00+00:00",
+            "content_html": "<p>Reply</p>",
+            "permalink": "/reply/post/ar1",
+            "full_url": "https://example.com/reply/post/ar1",
+        }
+
+        tree = build_thread_tree(
+            webmentions=[],
+            ap_interactions=[ap],
+            author_replies=[author_reply],
+            article_url="https://example.com/article/post",
+        )
+
+        # AP interaction is root, author reply is its child
+        self.assertEqual(len(tree), 1)
+        self.assertEqual(tree[0].reaction_type, ReactionType.AP_INTERACTION)
+        self.assertEqual(len(tree[0].children), 1)
+        self.assertEqual(tree[0].children[0].reaction_type, ReactionType.AUTHOR_REPLY)
+
 
 class ArticleRepliesCollectionTest(unittest.TestCase):
     """Tests for _get_article_replies()."""

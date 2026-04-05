@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.2
+
+### Added
+
+- Support both long and short URLs (or any supported URL aliases) for the in
+  `reply-to` URL is an ActivityPub object not in the (canonical) long format.
+
 ## 1.3.1
 
 ### Added
