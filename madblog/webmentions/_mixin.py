@@ -58,9 +58,15 @@ class WebmentionsMixin(ABC):  # pylint: disable=too-few-public-methods
                 ),
             )
 
+        # Build list of base URLs for webmention validation
+        # Include both link and activitypub_link for split-domain setups
+        base_urls = [config.link]
+        if config.activitypub_link and config.activitypub_link != config.link:
+            base_urls.append(config.activitypub_link)
+
         self.webmentions_handler = WebmentionsHandler(
             storage=self.webmentions_storage,
-            base_url=config.link,
+            base_urls=base_urls,
             user_agent=f"Madblog/{__version__} ({config.link})",
             on_mention_processed=on_mention_processed,
         )

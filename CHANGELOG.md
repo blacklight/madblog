@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1
+
+### Added
+
+- Support split-domain ActivityPub configuration also for Webmentions.
+
 ## 1.3.0
 
 ### Added

@@ -7,4 +7,4 @@ pygments
 pyyaml
 requests
 watchdog
-webmentions[file]
+webmentions[file]>=0.1.22
