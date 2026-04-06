@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.3
+
+### Fixed
+
+- **URL normalization for `link` and `activitypub_link` config**: Bare hostnames
+  (e.g. `blog.example.com`) are now automatically normalized to include `https://`.
+  This fixes ActivityPub federation issues where Mastodon/Akkoma couldn't find
+  articles because the object `id` was missing the protocol scheme.
+
 ## 1.3.2
 
 ### Added

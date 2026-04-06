@@ -157,6 +157,22 @@ class Config:
 config = Config()
 
 
+def _normalize_url(url: str) -> str:
+    """
+    Ensure a URL has a scheme (https:// by default).
+
+    ActivityPub requires object IDs to be valid URLs with a scheme.
+    This normalizes user-provided URLs that may be missing the protocol.
+    """
+    if not url or url == "/":
+        return url
+    # Already has a scheme
+    if re.match(r"^https?://", url):
+        return url
+    # Prepend https:// for bare hostnames
+    return f"https://{url}"
+
+
 def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statements
     config_file: str,
 ):
@@ -173,7 +189,7 @@ def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statem
     if cfg.get("description"):
         config.description = cfg["description"]
     if cfg.get("link"):
-        config.link = cfg["link"]
+        config.link = _normalize_url(cfg["link"])
     if cfg.get("home_link"):
         config.home_link = cfg["home_link"]
     if cfg.get("rel_me"):
@@ -246,7 +262,7 @@ def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statem
     if cfg.get("enable_activitypub") is not None:
         config.enable_activitypub = bool(cfg["enable_activitypub"])
     if cfg.get("activitypub_link"):
-        config.activitypub_link = cfg["activitypub_link"]
+        config.activitypub_link = _normalize_url(cfg["activitypub_link"])
     if cfg.get("activitypub_username"):
         config.activitypub_username = cfg["activitypub_username"]
     if cfg.get("activitypub_domain"):
@@ -335,7 +351,7 @@ def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-state
     if os.getenv("MADBLOG_DESCRIPTION"):
         config.description = os.environ["MADBLOG_DESCRIPTION"]
     if os.getenv("MADBLOG_LINK"):
-        config.link = os.environ["MADBLOG_LINK"]
+        config.link = _normalize_url(os.environ["MADBLOG_LINK"])
     if os.getenv("MADBLOG_HOME_LINK"):
         config.home_link = os.environ["MADBLOG_HOME_LINK"]
     if os.getenv("MADBLOG_REL_ME"):
@@ -425,7 +441,7 @@ def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-state
     if os.getenv("MADBLOG_ENABLE_ACTIVITYPUB"):
         config.enable_activitypub = os.environ["MADBLOG_ENABLE_ACTIVITYPUB"] == "1"
     if os.getenv("MADBLOG_ACTIVITYPUB_LINK"):
-        config.activitypub_link = os.environ["MADBLOG_ACTIVITYPUB_LINK"]
+        config.activitypub_link = _normalize_url(os.environ["MADBLOG_ACTIVITYPUB_LINK"])
     if os.getenv("MADBLOG_ACTIVITYPUB_USERNAME"):
         config.activitypub_username = os.environ["MADBLOG_ACTIVITYPUB_USERNAME"]
     if os.getenv("MADBLOG_ACTIVITYPUB_DOMAIN"):
