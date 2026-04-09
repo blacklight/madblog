@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 
 from datetime import datetime, timezone
 from typing import Callable
@@ -78,6 +79,9 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
             # Detect stale URLs with "None" from before top-level support
             if "/None/" in stored or stored.endswith("/None"):
                 logger.info("Clearing stale URL mapping with None: %s", stored)
+                self._remove_reply_file_url(filepath)
+            elif not re.match(r"^https?://", stored):
+                logger.info("Clearing stale URL without scheme: %s", stored)
                 self._remove_reply_file_url(filepath)
             else:
                 return stored

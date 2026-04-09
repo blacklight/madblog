@@ -224,7 +224,7 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
 
     def file_to_url(self, filepath: str) -> str:
         stored = self._get_file_url(filepath)
-        if stored:
+        if stored and re.match(r"^https?://", stored):
             return stored
 
         # Generate the base URL

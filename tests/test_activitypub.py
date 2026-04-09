@@ -1561,6 +1561,51 @@ class ActivityPubPublishTest(unittest.TestCase):
         )
 
     # ------------------------------------------------------------------
+    # URL cache validation
+    # ------------------------------------------------------------------
+
+    @skip_if_no_pubby
+    def test_file_to_url_discards_cached_url_without_scheme(self):
+        """A cached URL missing https:// is discarded and regenerated."""
+        integration, _, test_file, _ = self._make_integration()
+
+        # Simulate a stale cache entry from before _normalize_url existed
+        integration._set_file_url(str(test_file), "example.com/article/test-post")
+
+        url = integration.file_to_url(str(test_file))
+        self.assertTrue(
+            url.startswith("https://"),
+            f"Expected URL with scheme, got: {url}",
+        )
+
+    @skip_if_no_pubby
+    def test_reply_file_to_url_discards_cached_url_without_scheme(self):
+        """A cached reply URL missing https:// is discarded and regenerated."""
+        integration, _, _, pages_dir = self._make_integration()
+
+        replies_dir = pages_dir.parent / "replies"
+        replies_dir.mkdir()
+        integration.replies_dir = str(replies_dir)
+
+        art_dir = replies_dir / "some-article"
+        art_dir.mkdir()
+        reply_file = art_dir / "my-reply.md"
+        reply_file.write_text(
+            "[//]: # (reply-to: https://remote.example/post/1)\n\nGreat post!"
+        )
+
+        # Simulate a stale cache entry without scheme
+        integration._set_reply_file_url(
+            str(reply_file), "example.com/reply/some-article/my-reply"
+        )
+
+        url = integration.reply_file_to_url(str(reply_file))
+        self.assertTrue(
+            url.startswith("https://"),
+            f"Expected URL with scheme, got: {url}",
+        )
+
+    # ------------------------------------------------------------------
     # Non-blocking / concurrency
     # ------------------------------------------------------------------
 

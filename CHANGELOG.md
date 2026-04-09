@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.5
+
+### Fixed
+
+- **Stale cached URLs without scheme**: `file_to_url` and
+  `reply_file_to_url` now validate that cached URLs in `file_urls.json`
+  have a proper `https://` (or `http://`) scheme. Entries cached before
+  the URL normalization fix (v1.3.3) are discarded and regenerated,
+  ensuring ActivityPub object IDs are always fully qualified URLs.
+
 ## 1.3.4
 
 ### Fixed
