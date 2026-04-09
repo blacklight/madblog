@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Tuple
 
 from madblog.config import config
 from madblog.constants import REGEX_HASHTAG, REGEX_MARKDOWN_METADATA
+from madblog.markdown import parse_metadata_header
 
 from ._parsers import extract_hashtags, normalize_tag, parse_metadata_tags
 
@@ -98,23 +99,6 @@ class _PostTagInfo:
     @classmethod
     def from_dict(cls, d: dict) -> "_PostTagInfo":
         return cls(**d)
-
-
-def _parse_metadata_fast(filepath: str) -> dict:
-    """Read only the metadata header from a Markdown file (no full parse)."""
-    metadata: dict = {}
-    try:
-        with open(filepath, "r", encoding="utf-8") as fh:
-            for line in fh:
-                if not line.strip() or re.match(r"(^---\s*$)|(^#\s+.*)", line):
-                    continue
-                m = REGEX_MARKDOWN_METADATA.match(line)
-                if not m:
-                    break
-                metadata[m.group(1)] = m.group(2)
-    except OSError:
-        pass
-    return metadata
 
 
 def _read_body(filepath: str) -> str:
@@ -322,7 +306,7 @@ class TagIndex:
 
     def _index_post(self, filepath: str, rel_path: str) -> Optional[_PostTagInfo]:
         """Parse one Markdown file and return its tag info."""
-        metadata = _parse_metadata_fast(filepath)
+        metadata = parse_metadata_header(filepath)
         body = _read_body(filepath)
 
         title = metadata.get("title", "")

@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.4
+
+### Fixed
+
+- Outgoing Webmentions are no longer sent for posts with `visibility:
+  direct`, `visibility: followers`, or `visibility: draft`. Previously
+  only ActivityPub federation respected visibility; Webmentions were
+  always dispatched regardless.
+
+### Changed
+
+- Extracted shared `parse_metadata_header` utility into
+  `madblog.markdown` to deduplicate metadata parsing across
+  `webmentions/_storage.py`, `tags/_index.py`, and
+  `activitypub/_integration.py`.
+
 ## 1.3.3
 
 ### Fixed

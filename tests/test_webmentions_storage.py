@@ -283,5 +283,152 @@ class TestNormalizeContent(unittest.TestCase):
         self.assertNotIn("\nNone\n", md)
 
 
+class TestOutgoingWebmentionVisibility(unittest.TestCase):
+    """
+    Outgoing webmentions must be suppressed for posts with
+    ``visibility: direct``, ``visibility: followers``, or
+    ``visibility: draft``.
+    """
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+
+        self.root = Path(self._tmpdir.name)
+        self.pages_dir = self.root / "markdown"
+        self.pages_dir.mkdir(parents=True, exist_ok=True)
+        self.mentions_dir = self.root / "mentions"
+        self.replies_dir = self.root / "replies"
+        self.replies_dir.mkdir(parents=True, exist_ok=True)
+
+        self._old_content_dir = config.content_dir
+        config.content_dir = str(self.root)
+        self.addCleanup(self._restore_config)
+
+        self.storage = FileWebmentionsStorage(
+            content_dir=self.pages_dir,
+            mentions_dir=self.mentions_dir,
+            base_url="https://example.com",
+            root_dir=self.root,
+            replies_dir=self.replies_dir,
+        )
+
+        self.handler = MagicMock()
+        self.storage.set_handler(self.handler)
+
+    def _restore_config(self):
+        config.content_dir = self._old_content_dir
+
+    def _write_md(self, path, visibility=None, body="Check https://other.blog/post\n"):
+        lines = []
+        if visibility:
+            lines.append(f"[//]: # (visibility: {visibility})\n")
+        lines.append(body)
+        path.write_text("".join(lines), encoding="utf-8")
+
+    # -- articles --
+
+    def test_public_article_sends_webmentions(self):
+        md = self.pages_dir / "pub.md"
+        self._write_md(md, visibility="public")
+
+        from madblog.monitor import ChangeType
+
+        self.storage.on_content_change(ChangeType.ADDED, str(md))
+        self.handler.process_outgoing_webmentions.assert_called_once()
+
+    def test_unlisted_article_sends_webmentions(self):
+        md = self.pages_dir / "unl.md"
+        self._write_md(md, visibility="unlisted")
+
+        from madblog.monitor import ChangeType
+
+        self.storage.on_content_change(ChangeType.ADDED, str(md))
+        self.handler.process_outgoing_webmentions.assert_called_once()
+
+    def test_direct_article_skips_webmentions(self):
+        md = self.pages_dir / "dm.md"
+        self._write_md(md, visibility="direct")
+
+        from madblog.monitor import ChangeType
+
+        self.storage.on_content_change(ChangeType.ADDED, str(md))
+        self.handler.process_outgoing_webmentions.assert_not_called()
+
+    def test_followers_article_skips_webmentions(self):
+        md = self.pages_dir / "fol.md"
+        self._write_md(md, visibility="followers")
+
+        from madblog.monitor import ChangeType
+
+        self.storage.on_content_change(ChangeType.ADDED, str(md))
+        self.handler.process_outgoing_webmentions.assert_not_called()
+
+    def test_draft_article_skips_webmentions(self):
+        md = self.pages_dir / "draft.md"
+        self._write_md(md, visibility="draft")
+
+        from madblog.monitor import ChangeType
+
+        self.storage.on_content_change(ChangeType.ADDED, str(md))
+        self.handler.process_outgoing_webmentions.assert_not_called()
+
+    def test_no_visibility_defaults_to_public(self):
+        md = self.pages_dir / "default.md"
+        self._write_md(md)
+
+        from madblog.monitor import ChangeType
+
+        self.storage.on_content_change(ChangeType.ADDED, str(md))
+        self.handler.process_outgoing_webmentions.assert_called_once()
+
+    # -- replies --
+
+    def test_direct_reply_skips_webmentions(self):
+        sub = self.replies_dir / "some-article"
+        sub.mkdir(parents=True, exist_ok=True)
+        md = sub / "dm-reply.md"
+        self._write_md(md, visibility="direct")
+
+        from madblog.monitor import ChangeType
+
+        self.storage.on_reply_change(ChangeType.ADDED, str(md))
+        self.handler.process_outgoing_webmentions.assert_not_called()
+
+    def test_followers_reply_skips_webmentions(self):
+        sub = self.replies_dir / "some-article"
+        sub.mkdir(parents=True, exist_ok=True)
+        md = sub / "fol-reply.md"
+        self._write_md(md, visibility="followers")
+
+        from madblog.monitor import ChangeType
+
+        self.storage.on_reply_change(ChangeType.ADDED, str(md))
+        self.handler.process_outgoing_webmentions.assert_not_called()
+
+    def test_public_reply_sends_webmentions(self):
+        sub = self.replies_dir / "some-article"
+        sub.mkdir(parents=True, exist_ok=True)
+        md = sub / "pub-reply.md"
+        self._write_md(md, visibility="public")
+
+        from madblog.monitor import ChangeType
+
+        self.storage.on_reply_change(ChangeType.ADDED, str(md))
+        self.handler.process_outgoing_webmentions.assert_called_once()
+
+    # -- deleted files should still be processed (retraction) --
+
+    def test_deleted_direct_still_processes(self):
+        """Deletion must still send retraction even for previously-direct posts."""
+        md = self.pages_dir / "dm-del.md"
+        self._write_md(md, visibility="direct")
+
+        from madblog.monitor import ChangeType
+
+        self.storage.on_content_change(ChangeType.DELETED, str(md))
+        self.handler.process_outgoing_webmentions.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

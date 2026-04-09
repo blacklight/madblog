@@ -24,11 +24,10 @@ from pubby import ActivityPubHandler, Object
 
 from madblog.config import config
 from madblog.constants import (
-    REGEX_MARKDOWN_METADATA,
     REGEX_MERMAID_BLOCK,
     REGEX_TOC_MARKER,
 )
-from madblog.markdown import render_html, resolve_relative_urls
+from madblog.markdown import parse_metadata_header, render_html, resolve_relative_urls
 from madblog.monitor import ChangeType
 from madblog.sync import StartupSyncMixin
 from madblog.tags import extract_hashtags
@@ -252,30 +251,16 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
     @staticmethod
     def _parse_metadata(filepath: str) -> dict:  # type: ignore
         """Extract metadata headers from a Markdown file."""
-        metadata: dict = {}
-        try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                for line in f:
-                    if not line.strip() or re.match(r"(^---\s*$)|(^#\s+.*)", line):
-                        continue
-
-                    m = REGEX_MARKDOWN_METADATA.match(line)
-                    if not m:
-                        break
-
-                    key, value = m.group(1), m.group(2)
-                    if key == "published":
-                        try:
-                            metadata[key] = datetime.fromisoformat(
-                                value.replace("Z", "+00:00")
-                            )
-                        except ValueError:
-                            metadata[key] = value
-                    else:
-                        metadata[key] = value
-        except OSError:
-            pass
-
+        metadata = parse_metadata_header(filepath)
+        # Post-process: parse ``published`` into a datetime when possible.
+        pub = metadata.get("published")
+        if isinstance(pub, str):
+            try:
+                metadata["published"] = datetime.fromisoformat(
+                    pub.replace("Z", "+00:00")
+                )
+            except ValueError:
+                pass  # keep as raw string
         return metadata
 
     def _extract_title(self, filepath: str) -> str:

@@ -22,9 +22,10 @@ from webmentions import (
 from webmentions.storage.adapters.file._watcher import ContentTextFormat
 
 from madblog.config import config
-from madblog.markdown import resolve_relative_urls
+from madblog.markdown import parse_metadata_header, resolve_relative_urls
 from madblog.monitor import ChangeType
 from madblog.sync import StartupSyncMixin
+from madblog.visibility import Visibility, resolve_visibility
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,11 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         ext = os.path.splitext(filepath)[1].lower()
         return self._EXT_FORMAT_MAP.get(ext, ContentTextFormat.MARKDOWN)
 
+    @staticmethod
+    def _resolve_file_visibility(filepath: str) -> Visibility:
+        """Parse visibility from a Markdown file's metadata header."""
+        return resolve_visibility(parse_metadata_header(filepath))
+
     def _process_outgoing_change(
         self,
         source_url: str,
@@ -116,6 +122,18 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
         """
         if self._webmentions_handler is None:
             return
+
+        # Skip outgoing webmentions for non-public visibility
+        if change_type.value != "deleted":
+            visibility = self._resolve_file_visibility(filepath)
+            if visibility not in (Visibility.PUBLIC, Visibility.UNLISTED):
+                logger.info(
+                    "Skipping outgoing webmentions for %s%s (visibility: %s)",
+                    label,
+                    source_url,
+                    visibility.value,
+                )
+                return
 
         text_format = self._get_text_format(filepath)
 
