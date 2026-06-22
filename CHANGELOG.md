@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.6
+
+### Fixed
+
+- Run outgoing webmentions sync in a background thread under uWSGI.
+
 ## 1.3.5
 
 ### Fixed
