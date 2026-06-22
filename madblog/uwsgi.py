@@ -99,7 +99,7 @@ def _start_monitor_once() -> None:
         return
 
     try:
-        app.start()
+        app.start(async_webmentions_sync=True)
     except Exception:
         logging.getLogger(__name__).exception("Failed to start content monitor")
 

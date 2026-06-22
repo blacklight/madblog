@@ -2,6 +2,7 @@ import contextlib
 import hashlib
 import json
 import os
+import threading
 
 from pathlib import Path
 from urllib.parse import quote, urlparse
@@ -111,6 +112,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             state_dir=config.resolved_state_dir,
         )
         self.replies_monitor: Optional[ContentMonitor] = None
+        self._webmentions_startup_sync_thread: Optional[threading.Thread] = None
 
     @property
     def _app(self) -> Flask:
@@ -169,7 +171,36 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         """Bridge: forward content changes to the tag indexer."""
         self.tag_index.reindex_file(filepath)
 
-    def start(self) -> None:
+    def _sync_webmentions_on_startup(self, *, reraise: bool = False) -> None:
+        try:
+            self.webmentions_storage.sync_on_startup()
+        except Exception:
+            self.logger.exception("Failed to sync outgoing webmentions on startup")
+            if reraise:
+                raise
+
+    def _start_webmentions_startup_sync(self, *, async_sync: bool = False) -> None:
+        if not config.enable_webmentions:
+            return
+
+        if not async_sync:
+            self._sync_webmentions_on_startup(reraise=True)
+            return
+
+        if (
+            self._webmentions_startup_sync_thread
+            and self._webmentions_startup_sync_thread.is_alive()
+        ):
+            return
+
+        self._webmentions_startup_sync_thread = threading.Thread(
+            target=self._sync_webmentions_on_startup,
+            name="madblog-webmentions-startup-sync",
+            daemon=True,
+        )
+        self._webmentions_startup_sync_thread.start()
+
+    def start(self, *, async_webmentions_sync: bool = False) -> None:
         from . import __version__
 
         self.logger.info(
@@ -193,9 +224,8 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         self.content_monitor.register(self._on_content_change_tags)
         self.content_monitor.start()
 
-        # Sync outgoing webmentions for new/modified content
-        if config.enable_webmentions:
-            self.webmentions_storage.sync_on_startup()
+        # Sync outgoing webmentions for new/modified content.
+        self._start_webmentions_startup_sync(async_sync=async_webmentions_sync)
 
         # Load the reply metadata index
         self.reply_metadata_index.load()

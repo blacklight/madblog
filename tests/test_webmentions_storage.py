@@ -4,7 +4,10 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from madblog.config import config
-from madblog.webmentions._storage import FileWebmentionsStorage
+from madblog.webmentions._storage import (
+    FileWebmentionsStorage,
+    _is_safe_outgoing_webmention_target,
+)
 
 
 class TestWebmentionsStateDirPlacement(unittest.TestCase):
@@ -129,6 +132,69 @@ class TestOnContentChangeMalformedUrl(unittest.TestCase):
 
         # Must not raise
         self.storage.on_content_change(ChangeType.DELETED, str(md_file))
+
+
+class TestOutgoingWebmentionTargetFiltering(unittest.TestCase):
+    """Outgoing Webmention discovery must not probe local/private URLs."""
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+
+        self.root = Path(self._tmpdir.name)
+        self.pages_dir = self.root / "markdown"
+        self.pages_dir.mkdir(parents=True, exist_ok=True)
+        self.mentions_dir = self.root / "mentions"
+
+        self.storage = FileWebmentionsStorage(
+            content_dir=self.pages_dir,
+            mentions_dir=self.mentions_dir,
+            base_url="https://example.com",
+            root_dir=self.root,
+        )
+
+    def test_local_and_private_targets_are_unsafe(self):
+        unsafe_urls = [
+            "http://localhost:8008/execute",
+            "http://127.0.0.1:11434/v1",
+            "http://[::1]:8008/",
+            "http://10.0.0.8/status",
+            "http://172.16.0.8/status",
+            "http://192.168.1.8/status",
+            "http://169.254.1.8/status",
+        ]
+
+        for url in unsafe_urls:
+            with self.subTest(url=url):
+                self.assertFalse(_is_safe_outgoing_webmention_target(url))
+
+    def test_public_targets_are_safe(self):
+        self.assertTrue(
+            _is_safe_outgoing_webmention_target("https://blog.platypush.tech/article/x")
+        )
+        self.assertTrue(
+            _is_safe_outgoing_webmention_target("https://docs.platypush.tech/plugin")
+        )
+
+    def test_handler_extract_targets_skips_local_and_private_urls(self):
+        from webmentions import ContentTextFormat, WebmentionsHandler
+
+        handler = WebmentionsHandler(
+            storage=self.storage,
+            base_urls=["https://example.com"],
+        )
+        self.storage.set_handler(handler)
+
+        md = """
+        [Public](https://docs.platypush.tech/plugins.html)
+        [Localhost](http://localhost:8008/execute)
+        [Loopback](http://127.0.0.1:11434/v1/chat/completions)
+        [Private](http://192.168.1.8/status)
+        """
+
+        targets = handler.outgoing._extract_targets(md, ContentTextFormat.MARKDOWN)
+
+        self.assertEqual(targets, {"https://docs.platypush.tech/plugins.html"})
 
 
 class TestNormalizeAuthor(unittest.TestCase):

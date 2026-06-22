@@ -1,4 +1,5 @@
 import hashlib
+import ipaddress
 import json
 import logging
 import os
@@ -28,6 +29,43 @@ from madblog.sync import StartupSyncMixin
 from madblog.visibility import Visibility, resolve_visibility
 
 logger = logging.getLogger(__name__)
+
+
+def _is_safe_outgoing_webmention_target(url: str) -> bool:
+    """
+    Return whether *url* is safe to probe for an outgoing Webmention endpoint.
+
+    Public blog posts often include localhost/private-network examples.  Those
+    URLs are valid article links, but they are not meaningful Webmention
+    targets and probing them from the server is both wasteful and SSRF-prone.
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+
+    if parsed.scheme not in ("http", "https"):
+        return False
+
+    hostname = (parsed.hostname or "").strip().lower()
+    if not hostname:
+        return False
+
+    if hostname == "localhost" or hostname.endswith(".localhost"):
+        return False
+
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        return True
+
+    return not (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
 
 
 class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
@@ -75,6 +113,26 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
     def set_handler(self, handler: WebmentionsHandler) -> None:
         """Wire the :class:`WebmentionsHandler` used for outgoing mentions."""
         self._webmentions_handler = handler
+        self._install_outgoing_target_filter(handler)
+
+    @staticmethod
+    def _install_outgoing_target_filter(handler: WebmentionsHandler) -> None:
+        outgoing = getattr(handler, "outgoing", None)
+        original = getattr(outgoing, "_clean_and_filter_targets", None)
+        if original is None or getattr(original, "_madblog_target_filter", False):
+            return
+
+        def _clean_and_filter_targets(urls: set[str]) -> set[str]:
+            targets = original(urls)
+            safe_targets = {
+                url for url in targets if _is_safe_outgoing_webmention_target(url)
+            }
+            for url in sorted(targets - safe_targets):
+                logger.info("Skipping outgoing Webmention to local/private URL %s", url)
+            return safe_targets
+
+        _clean_and_filter_targets._madblog_target_filter = True  # type: ignore[attr-defined]
+        outgoing._clean_and_filter_targets = _clean_and_filter_targets
 
     # -- StartupSyncMixin hooks --
 
