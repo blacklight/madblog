@@ -6,6 +6,7 @@ that publishes Article objects to followers.
 """
 
 import base64
+import fcntl
 import hashlib
 import logging
 import os
@@ -73,6 +74,8 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         self.deleted_urls_file = self.workdir / "deleted_urls.json"
         self.file_urls_file = self.workdir / "file_urls.json"
         self._mention_cache_file = self.workdir / "mention_cache.json"
+        self._media_cache_dir = self.workdir / "media-cache"
+        self._media_cache_dir.mkdir(parents=True, exist_ok=True)
 
         # StartupSyncMixin configuration
         self._sync_cache_file = self.workdir / "published_objects.json"
@@ -353,6 +356,36 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
             return None
 
         cmd = [mmdc] if mmdc else [npx, "-y", "@mermaid-js/mermaid-cli"]
+        cache_key = hashlib.sha256(mermaid_source.encode()).hexdigest()
+        cached_png = self._media_cache_dir / f"mermaid-{cache_key}.png"
+        lock_path = self._media_cache_dir / f"mermaid-{cache_key}.lock"
+
+        try:
+            return cached_png.read_bytes()
+        except OSError:
+            pass
+
+        try:
+            with open(lock_path, "w", encoding="utf-8") as lock_f:
+                fcntl.flock(lock_f, fcntl.LOCK_EX)
+                try:
+                    return cached_png.read_bytes()
+                except OSError:
+                    pass
+
+                png_bytes = self._render_mermaid_png(cmd, mermaid_source)
+                if png_bytes:
+                    tmp_cache = cached_png.with_suffix(".png.tmp")
+                    tmp_cache.write_bytes(png_bytes)
+                    os.replace(tmp_cache, cached_png)
+                return png_bytes
+        except Exception as e:
+            logger.warning("Mermaid → PNG rendering failed: %s", e)
+            return None
+
+    @staticmethod
+    def _render_mermaid_png(cmd: list[str], mermaid_source: str) -> bytes | None:
+        """Render Mermaid source to PNG bytes with the provided command."""
         mmd_path = png_path = None
 
         try:
@@ -385,9 +418,6 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
 
             with open(png_path, "rb") as f:
                 return f.read()
-        except Exception as e:
-            logger.warning("Mermaid → PNG rendering failed: %s", e)
-            return None
         finally:
             for p in (mmd_path, png_path):
                 try:

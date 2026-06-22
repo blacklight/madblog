@@ -1411,6 +1411,48 @@ class ActivityPubPublishTest(unittest.TestCase):
 
         self.assertTrue(marked_during_publish[0])
 
+    @skip_if_no_pubby
+    def test_mermaid_png_render_is_cached(self):
+        """ActivityPub Mermaid PNG rendering is cached by source hash."""
+        integration, _, _, _ = self._make_integration()
+        source = "graph TD\nA --> B\n"
+        png = b"png-data"
+
+        with patch.object(
+            integration,
+            "_render_mermaid_png",
+            return_value=png,
+        ) as render:
+            self.assertEqual(integration._mermaid_to_png(source), png)
+            self.assertEqual(integration._mermaid_to_png(source), png)
+
+        render.assert_called_once()
+
+    @skip_if_no_pubby
+    def test_mermaid_png_cache_is_shared_between_integrations(self):
+        """The AP media cache is file-backed and reusable across instances."""
+        integration, _, _, _ = self._make_integration()
+        source = "graph TD\nA --> B\n"
+        png = b"png-data"
+
+        with patch.object(integration, "_render_mermaid_png", return_value=png):
+            self.assertEqual(integration._mermaid_to_png(source), png)
+
+        from madblog.activitypub import ActivityPubIntegration
+
+        second = ActivityPubIntegration(
+            handler=integration.handler,
+            pages_dir=integration.pages_dir,
+            base_url=integration.base_url,
+        )
+
+        with patch.object(
+            second,
+            "_render_mermaid_png",
+            side_effect=AssertionError("mmdc should not be called for cached PNG"),
+        ):
+            self.assertEqual(second._mermaid_to_png(source), png)
+
     # ------------------------------------------------------------------
     # Mention caching
     # ------------------------------------------------------------------

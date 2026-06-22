@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.7
+
+### Fixed
+
+- Cache Mermaid images in ActivityPub responses
+
 ## 1.3.6
 
 ### Fixed
