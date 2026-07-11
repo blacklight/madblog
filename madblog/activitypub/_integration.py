@@ -348,14 +348,6 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
 
     def _mermaid_to_png(self, mermaid_source: str) -> bytes | None:
         """Render Mermaid source directly to PNG via mmdc."""
-        mmdc = shutil.which("mmdc")
-        npx = shutil.which("npx")
-
-        if not mmdc and not npx:
-            logger.warning("Neither mmdc nor npx found; cannot render Mermaid to PNG")
-            return None
-
-        cmd = [mmdc] if mmdc else [npx, "-y", "@mermaid-js/mermaid-cli"]
         cache_key = hashlib.sha256(mermaid_source.encode()).hexdigest()
         cached_png = self._media_cache_dir / f"mermaid-{cache_key}.png"
         lock_path = self._media_cache_dir / f"mermaid-{cache_key}.lock"
@@ -373,7 +365,7 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
                 except OSError:
                     pass
 
-                png_bytes = self._render_mermaid_png(cmd, mermaid_source)
+                png_bytes = self._render_mermaid_png(mermaid_source)
                 if png_bytes:
                     tmp_cache = cached_png.with_suffix(".png.tmp")
                     tmp_cache.write_bytes(png_bytes)
@@ -384,8 +376,16 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
             return None
 
     @staticmethod
-    def _render_mermaid_png(cmd: list[str], mermaid_source: str) -> bytes | None:
-        """Render Mermaid source to PNG bytes with the provided command."""
+    def _render_mermaid_png(mermaid_source: str) -> bytes | None:
+        """Render Mermaid source to PNG bytes via mmdc (or npx)."""
+        mmdc = shutil.which("mmdc")
+        npx = shutil.which("npx")
+
+        if not mmdc and not npx:
+            logger.warning("Neither mmdc nor npx found; cannot render Mermaid to PNG")
+            return None
+
+        cmd = [mmdc] if mmdc else [npx, "-y", "@mermaid-js/mermaid-cli"]
         mmd_path = png_path = None
 
         try:

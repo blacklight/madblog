@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The Mermaid PNG cache is now checked before probing for the `mmdc`/`npx`
+  binaries, so cached diagrams are served even on hosts where the Mermaid
+  CLI is not installed.
+
 ## 1.3.7
 
 ### Fixed
