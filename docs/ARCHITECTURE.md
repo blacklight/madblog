@@ -111,6 +111,49 @@ Configuration controls:
       a content-change hook.
     - Tag index (`TagIndex`) and registers it to content change notifications.
 
+## Authentication subsystem
+
+- `madblog/auth/_mixin.py` (`AuthMixin`)
+  - Mixed into `BlogApp` so `_init_auth()` boots the auth subsystem whenever
+    `config.auth_password` / `MADBLOG_AUTH_PASSWORD` is provided and a hash is
+    present under `<state_dir>/auth/`.
+  - Creates the `UserStore`, ensures the Flask `secret_key`, sets session flags
+    (HTTPOnly, SameSite `Lax`, Secure when `link` is HTTPS), installs CSRF
+    protection (exempting `/ap/inbox` and `/webmentions`), and registers login
+    routes with `register_auth_routes()`.
+  - Instantiates `flask-limiter` for `auth_login_rate_limit` (default `5/minute`)
+    when available and exposes `auth_enabled` + `current_user` context helpers.
+
+- `madblog/auth/_secrets.py`
+  - Enforces directory mode `0700` and file mode `0600` when persisting the
+    Flask secret key and each user’s `password.hash` file.
+  - Hashes plaintext passwords with `bcrypt` and loads them with permission
+    checks so the runtime never exposes raw secrets.
+
+- `madblog/auth/_users.py` (`UserStore`)
+  - Manages `<state_dir>/auth/users/<username>/` directories, validates usernames,
+    and writes `password.hash` blobs atomically.
+  - Provides `verify()`, `set_password()`, and `is_auth_enabled()` helpers that
+    the login routes rely on.
+
+- `madblog/auth/_routes.py`
+  - Implements `/login` and `/logout` via `LoginForm`, flashing, CSRF, sessions,
+    and optional rate limiting. Login POSTs redirect safely or return 401 when
+    credentials fail.
+
+- `madblog/auth/_forms.py` defines the `LoginForm` (username/password fields
+  with WTForms validators).
+- `madblog/auth/_decorators.py` exposes `current_user()` and `login_required`.
+
+- `madblog/cli.py` adds the `set-password` subcommand (interactive prompt or
+  `MADBLOG_AUTH_PASSWORD`) to update hashes in the `UserStore`.
+
+Authentication settings are read from YAML, CLI args, or env vars (`MADBLOG_AUTH_PASSWORD`,
+`MADBLOG_AUTH_LOGIN_RATE_LIMIT`, `MADBLOG_AUTH_SESSION_LIFETIME_DAYS`, `MADBLOG_ENABLE_MULTI_USER`,
+`MADBLOG_DEFAULT_USER`). The default user is sourced from `config.default_user`, the ActivityPub
+actor, or `admin`. All auth state is stored under `<state_dir>/auth/` so it can be managed apart from
+content files.
+
 ### Background services
 
 `BlogApp.start()` is responsible for:

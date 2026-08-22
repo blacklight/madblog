@@ -24,6 +24,7 @@
       - [Build from source](#build-from-source)
     - [Full Docker installation](#full-docker-installation)
 - [Usage](#usage)
+- [Authentication](#authentication)
   - [Running Madblog from a uWSGI wrapper](#running-madblog-from-a-uwsgi-wrapper)
   - [Running Madblog in Docker](#running-madblog-in-docker)
 - [Markdown files](#markdown-files)
@@ -252,6 +253,18 @@ docker build -f docker/full.Dockerfile -t madblog .
 $ madblog
 usage: madblog [-h] [--config CONFIG] [--host HOST] [--port PORT] [--debug] [dir]
 ```
+
+## Authentication
+
+Madblog can protect access to the author/admin UI with password-based authentication when you set `auth_password` (or `MADBLOG_AUTH_PASSWORD`). The login form lives at `/login`, the logout form is embedded in the navigation drawer, and CSRF protection with `flask-wtf`/`flask-csrf` keeps POSTs safe.
+
+- **Config file**: add `auth_password: <secret>` and optionally `auth_login_rate_limit: 5/minute` and `auth_session_lifetime_days: 30`. The configured value is hashed into `<state_dir>/auth/users/<user>/password.hash` with strict 0700/0600 permissions.
+- **Environment variables**: bind the same settings via `MADBLOG_AUTH_PASSWORD`, `MADBLOG_AUTH_LOGIN_RATE_LIMIT`, `MADBLOG_AUTH_SESSION_LIFETIME_DAYS`, `MADBLOG_ENABLE_MULTI_USER`, and `MADBLOG_DEFAULT_USER` if you need different runtime paths.
+- **CLI helper**: use `madblog set-password` (or `madblog set-password --user alice`) to interactively update a user’s password. If `MADBLOG_AUTH_PASSWORD` is set, it is consumed automatically and not echoed.
+- **Rate limiting**: login POSTs are rate-limited through `flask-limiter` (default `5/minute`); disable rate limiting by removing the dependency or overriding `auth_login_rate_limit` to an empty value.
+- **Sessions**: session cookies are HTTPOnly, SameSite `Lax`, and marked Secure only when `link` starts with `https://`.
+
+The authentication subsystem currently supports a single default user (`config.default_user` / `config.activitypub_username` / `admin`) and can be extended to multi-user scenarios later, but the UI remains the same for now. Authentication state is stored under `<state_dir>/auth/` so you can back up or inspect hashes if needed.
 
 Recommended setup (for clear separation of content, configuration and static
 files):

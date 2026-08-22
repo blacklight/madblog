@@ -93,6 +93,20 @@ class Config:
     # Default index page: "blog", "about", "tags", "unlisted" or "guestbook"
     default_index: str = "blog"
 
+    # Authentication
+    auth_password: str | None = None
+    auth_login_rate_limit: str = "5/minute"
+    auth_session_lifetime_days: int = 30
+
+    # Multi-user (wired in Phase 3; declared here so config loading is stable)
+    enable_multi_user: bool = False
+    default_user: str | None = None
+
+    @property
+    def auth_dir(self) -> Path:
+        """Return the path to the auth state directory."""
+        return self.resolved_state_dir / "auth"
+
     @property
     def resolved_state_dir(self) -> Path:
         """Return the resolved state directory path."""
@@ -344,6 +358,18 @@ def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statem
     if cfg.get("default_index"):
         config.default_index = cfg["default_index"]
 
+    # Authentication
+    if cfg.get("auth_password"):
+        config.auth_password = cfg["auth_password"]
+    if cfg.get("auth_login_rate_limit"):
+        config.auth_login_rate_limit = cfg["auth_login_rate_limit"]
+    if cfg.get("auth_session_lifetime_days") is not None:
+        config.auth_session_lifetime_days = int(cfg["auth_session_lifetime_days"])
+    if cfg.get("enable_multi_user") is not None:
+        config.enable_multi_user = bool(cfg["enable_multi_user"])
+    if cfg.get("default_user"):
+        config.default_user = cfg["default_user"]
+
 
 def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-statements
     if os.getenv("MADBLOG_TITLE"):
@@ -518,6 +544,20 @@ def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-state
     # Default index page
     if os.getenv("MADBLOG_DEFAULT_INDEX"):
         config.default_index = os.environ["MADBLOG_DEFAULT_INDEX"]
+
+    # Authentication
+    if os.getenv("MADBLOG_AUTH_PASSWORD"):
+        config.auth_password = os.environ["MADBLOG_AUTH_PASSWORD"]
+    if os.getenv("MADBLOG_AUTH_LOGIN_RATE_LIMIT"):
+        config.auth_login_rate_limit = os.environ["MADBLOG_AUTH_LOGIN_RATE_LIMIT"]
+    if os.getenv("MADBLOG_AUTH_SESSION_LIFETIME_DAYS"):
+        config.auth_session_lifetime_days = int(
+            os.environ["MADBLOG_AUTH_SESSION_LIFETIME_DAYS"]
+        )
+    if os.getenv("MADBLOG_ENABLE_MULTI_USER"):
+        config.enable_multi_user = os.environ["MADBLOG_ENABLE_MULTI_USER"] == "1"
+    if os.getenv("MADBLOG_DEFAULT_USER"):
+        config.default_user = os.environ["MADBLOG_DEFAULT_USER"]
 
 
 def _init_config_from_cli(args: Optional[Namespace]):

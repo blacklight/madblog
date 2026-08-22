@@ -21,6 +21,7 @@ from flask import (
 
 from .about import AboutMixin
 from .activitypub import ActivityPubMixin
+from .auth import AuthMixin
 from .cache import (
     CachedPage,
     check_cache_validity,
@@ -42,6 +43,7 @@ from ._sorters import PagesSorter, PagesSortByTime
 
 
 class BlogApp(  # pylint: disable=too-many-ancestors
+    AuthMixin,
     AboutMixin,
     RepliesMixin,
     ActivityPubMixin,
@@ -113,6 +115,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         )
         self.replies_monitor: Optional[ContentMonitor] = None
         self._webmentions_startup_sync_thread: Optional[threading.Thread] = None
+        self._init_auth()
 
     @property
     def _app(self) -> Flask:

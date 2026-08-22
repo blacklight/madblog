@@ -38,9 +38,12 @@ setup(
         "dev": ["pytest", "nodejs-wheel"],
     },
     install_requires=[
+        "bcrypt>=4.0",
         "feedgen2",
         "feedparser",
         "flask",
+        "flask-limiter>=3.5",
+        "flask-wtf>=1.2",
         "markdown",
         "pubby>=0.2.16",
         "pygments",
