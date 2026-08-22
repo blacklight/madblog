@@ -4,9 +4,24 @@
 
 ### Fixed
 
+- Stale HTTP cache invalidation for pages that depend on nested
+  ActivityPub interactions, folder subtrees, or the shared nav follower
+  count. Cache validators now incorporate recursive interaction trees,
+  folder-scoped page mtimes, and follower-directory changes so revalidation
+  returns `200` instead of stale `304` responses.
 - The Mermaid PNG cache is now checked before probing for the `mmdc`/`npx`
   binaries, so cached diagrams are served even on hosts where the Mermaid
   CLI is not installed.
+
+### Changed
+
+- `CachedPage.effective_mtime` is now memoized to avoid repeated
+  recursive tree walks on every cache-header access.
+- ActivityPub follower-directory construction is now centralized in
+  `get_followers_dir()` and `get_followers_mtime_for_app()`, removing
+  duplicated `hasattr`/`resolved_state_dir` blocks across routes and the
+  article builder.
+- Removed the redundant duplicate 404 branch in `unlisted_route`.
 
 ## 1.3.7
 

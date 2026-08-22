@@ -26,6 +26,8 @@ from .cache import (
     check_cache_validity,
     compute_pages_mtime,
     generate_etag,
+    get_followers_dir,
+    get_followers_mtime_for_app,
     make_304_response,
     set_cache_headers,
 )
@@ -332,6 +334,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             ),
             ap_interactions_dir=ap_interactions_dir,
             replies_dir=str(self.replies_dir),
+            followers_dir=get_followers_dir(self),
         )
 
     def _render_markdown_output(self, md_file: str, title: str) -> str:
@@ -456,7 +459,12 @@ class BlogApp(  # pylint: disable=too-many-ancestors
         """
         metadata = self._parse_reply_metadata(article_slug, reply_slug)
         md_file = metadata.pop("md_file")
-        cached_page = CachedPage(md_file, metadata=metadata)
+
+        cached_page = CachedPage(
+            md_file,
+            metadata=metadata,
+            followers_dir=get_followers_dir(self),
+        )
         title = metadata.get("title") or reply_slug
 
         def render_html():
@@ -853,7 +861,14 @@ class BlogApp(  # pylint: disable=too-many-ancestors
                 include_external_feeds=include_external_feeds and (not folder),
             )
 
-        most_recent_mtime = compute_pages_mtime(pages, self.pages_dir)
+        followers_mtime = get_followers_mtime_for_app(self)
+
+        most_recent_mtime = compute_pages_mtime(
+            pages,
+            self.pages_dir,
+            folder=folder,
+            followers_mtime=followers_mtime,
+        )
         last_modified = (
             formatdate(most_recent_mtime, usegmt=True)
             if most_recent_mtime > 0

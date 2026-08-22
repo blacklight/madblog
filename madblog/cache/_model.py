@@ -1,13 +1,15 @@
 import email.utils
 import os
 from dataclasses import dataclass, field
-from typing import Optional
+from functools import cached_property
+from pathlib import Path
+from typing import Optional, Union
 
 from ._helpers import (
     check_cache_validity,
     generate_etag,
+    get_followers_mtime,
     get_interactions_mtime,
-    get_max_mtime,
     make_304_response,
 )
 
@@ -28,10 +30,14 @@ class CachedPage:
     mentions_dir: Optional[str] = None
     ap_interactions_dir: Optional[str] = None
     replies_dir: Optional[str] = None
+    followers_dir: Optional[Union[str, Path]] = None
 
     @property
     def file_mtime(self) -> float:
-        return os.stat(self.md_file).st_mtime
+        try:
+            return os.stat(self.md_file).st_mtime
+        except OSError:
+            return 0.0
 
     @property
     def interactions_mtime(self) -> float:
@@ -45,11 +51,13 @@ class CachedPage:
             replies_dir=self.replies_dir,
         )
 
-    @property
+    @cached_property
     def effective_mtime(self) -> float:
-        """Get the most recent mtime considering both file and interactions."""
-        return get_max_mtime(self.md_file) or max(
-            self.file_mtime, self.interactions_mtime
+        """Get the most recent mtime considering file, interactions, and followers."""
+        return max(
+            self.file_mtime,
+            self.interactions_mtime,
+            get_followers_mtime(self.followers_dir),
         )
 
     @property

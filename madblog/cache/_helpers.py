@@ -2,7 +2,7 @@ import email.utils
 import hashlib
 import os
 from pathlib import Path
-from typing import Union
+from typing import Any, Optional, Union
 
 from flask import Response, has_request_context, make_response, request
 
@@ -41,6 +41,54 @@ def get_dir_mtime(path: Union[str, Path]) -> float:
         return os.stat(path).st_mtime
     except (OSError, TypeError):
         return 0.0
+
+
+def get_recursive_max_mtime(path: Union[str, Path, None]) -> float:
+    """
+    Get the maximum modification time of a path and all nested entries.
+
+    For a directory, this walks the entire tree and returns the most
+    recent ``st_mtime`` found on the directory itself or any file or
+    subdirectory under it. For a file, only the file's own mtime is
+    considered.
+
+    Use this when a route depends on nested content (e.g. interaction
+    directories stored by target URL hash, or folder subtrees).
+
+    :param path: Path to a file or directory (``None`` or missing paths
+        return ``0.0``)
+    :return: Maximum modification timestamp found, or 0 if the path does
+        not exist or is not accessible
+    """
+    if not path:
+        return 0.0
+
+    try:
+        path = Path(path)
+    except (TypeError, ValueError):
+        return 0.0
+
+    if not path.exists():
+        return 0.0
+
+    max_mtime = 0.0
+    try:
+        max_mtime = path.stat().st_mtime
+    except OSError:
+        pass
+
+    if path.is_dir():
+        for root, dirs, files in os.walk(path):
+            for name in dirs + files:
+                entry_path = Path(root) / name
+                try:
+                    mtime = entry_path.stat().st_mtime
+                    if mtime > max_mtime:
+                        max_mtime = mtime
+                except OSError:
+                    pass
+
+    return max_mtime
 
 
 def get_max_mtime(*paths: Union[str, Path, None]) -> float:
@@ -87,26 +135,26 @@ def get_interactions_mtime(
     :param replies_dir: Base directory for author replies
     :return: Maximum modification timestamp found, or 0 if none exist
     """
-    paths_to_check = []
+    mtimes = []
 
     # Webmentions: <mentions_dir>/incoming/<slug>/
     if mentions_dir:
         # For paths like "subdir/my-article", use just the basename for mentions
         slug_basename = os.path.basename(article_slug)
         wm_path = Path(mentions_dir) / "incoming" / slug_basename
-        paths_to_check.append(wm_path)
+        mtimes.append(get_recursive_max_mtime(wm_path))
 
-    # ActivityPub interactions: check the whole interactions dir
+    # ActivityPub interactions: check the whole interactions dir recursively
     # (interactions are stored by target URL hash, not by slug)
     if ap_interactions_dir:
-        paths_to_check.append(ap_interactions_dir)
+        mtimes.append(get_recursive_max_mtime(ap_interactions_dir))
 
     # Author replies: <replies_dir>/<slug>/
     if replies_dir:
         replies_path = Path(replies_dir) / article_slug
-        paths_to_check.append(replies_path)
+        mtimes.append(get_recursive_max_mtime(replies_path))
 
-    return get_max_mtime(*paths_to_check)
+    return max(mtimes) if mtimes else 0.0
 
 
 def get_guestbook_mtime(
@@ -128,22 +176,23 @@ def get_guestbook_mtime(
     :param replies_dir: Base directory for author replies
     :return: Maximum modification timestamp found, or 0 if none exist
     """
-    paths_to_check = []
+    mtimes = []
 
     # Webmentions targeting the home page are stored in incoming/_homepage/
-    # or in the root incoming/ directory
+    # or in the root incoming/ directory. Walk recursively so nested
+    # additions under existing subdirectories are seen.
     if mentions_dir:
-        paths_to_check.append(Path(mentions_dir) / "incoming")
+        mtimes.append(get_recursive_max_mtime(Path(mentions_dir) / "incoming"))
 
-    # ActivityPub interactions directory
+    # ActivityPub interactions directory (stored by target URL hash)
     if ap_interactions_dir:
-        paths_to_check.append(ap_interactions_dir)
+        mtimes.append(get_recursive_max_mtime(ap_interactions_dir))
 
     # Author replies to guestbook are in replies/_guestbook/
     if replies_dir:
-        paths_to_check.append(Path(replies_dir) / "_guestbook")
+        mtimes.append(get_recursive_max_mtime(Path(replies_dir) / "_guestbook"))
 
-    return get_max_mtime(*paths_to_check)
+    return max(mtimes) if mtimes else 0.0
 
 
 def check_cache_validity(file_mtime: float, etag: str | None) -> bool:
@@ -229,19 +278,79 @@ def set_cache_headers(
         response.headers["Language"] = config.language
 
 
-def compute_pages_mtime(pages: list, pages_dir) -> float:
+def get_followers_mtime(path: Union[str, Path, None]) -> float:
+    """
+    Get the most recent modification time for ActivityPub followers.
+
+    This is a thin wrapper around :func:`get_recursive_max_mtime` so that
+    call sites express their intent clearly. It returns the most recent
+    mtime of the followers directory and any files or subdirectories
+    inside it.
+
+    :param path: Path to the followers state directory
+    :return: Maximum modification timestamp found, or 0 if it does not exist
+    """
+    return get_recursive_max_mtime(path)
+
+
+def get_followers_dir(app: Any) -> Optional[Path]:
+    """
+    Return the ActivityPub followers state directory for ``app``.
+
+    Returns ``None`` when ActivityPub is disabled or the storage backend
+    has not been initialized.
+    """
+    if not config.enable_activitypub:
+        return None
+    if not getattr(app, "activitypub_storage", None):
+        return None
+    return config.resolved_state_dir / "activitypub" / "state" / "followers"
+
+
+def get_followers_mtime_for_app(app: Any) -> float:
+    """
+    Return the most recent mtime of the ActivityPub followers tree.
+
+    Returns ``0.0`` when ActivityPub is disabled or the storage backend
+    has not been initialized.
+    """
+    return get_followers_mtime(get_followers_dir(app))
+
+
+def compute_pages_mtime(
+    pages: list,
+    pages_dir,
+    folder: str = "",
+    followers_mtime: Optional[float] = None,
+) -> float:
     """
     Compute the most recent modification time from pages and pages_dir.
 
-    Considers both local file mtimes and the directory itself
-    (to detect added/removed articles).
+    Considers:
+    - The folder subtree (when ``folder`` is provided) or the pages
+      directory itself (to detect added/removed articles).
+    - Local file mtimes for the pages in the list.
+    - An optional follower mtime contribution for any page that renders
+      the shared nav follower count.
 
     :param pages: List of (index, page_data) tuples from get_pages()
     :param pages_dir: Path to the pages directory
+    :param folder: Optional folder path (relative to ``pages_dir``) to
+        scope the recursive tree signal to a folder index
+    :param followers_mtime: Optional pre-computed followers modification
+        timestamp to fold into the result
     :return: Most recent modification timestamp
     """
-    most_recent_mtime = get_max_mtime(pages_dir)
+    if folder:
+        most_recent_mtime = get_recursive_max_mtime(Path(pages_dir) / folder)
+    else:
+        most_recent_mtime = get_max_mtime(pages_dir)
+
     for _, page_data in pages:
         if "file_mtime" in page_data:
             most_recent_mtime = max(most_recent_mtime, page_data["file_mtime"])
+
+    if followers_mtime:
+        most_recent_mtime = max(most_recent_mtime, followers_mtime)
+
     return most_recent_mtime

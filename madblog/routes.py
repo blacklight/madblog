@@ -20,9 +20,10 @@ from .app import app
 from .cache import (
     check_cache_validity,
     generate_etag,
-    get_dir_mtime,
+    get_followers_mtime_for_app,
     get_guestbook_mtime,
     get_max_mtime,
+    get_recursive_max_mtime,
     make_304_response,
 )
 from .config import config
@@ -681,10 +682,13 @@ def rss_route():
 def tags_route():
     from flask import make_response, render_template
 
-    # Use the tag index file mtime for caching
-    # The tag index is updated whenever posts change
+    # Use the tag index file mtime for caching.
+    # The tag index is updated whenever posts change.
     tag_index_path = config.resolved_state_dir / "cache" / "tags-index.json"
     mtime = get_max_mtime(tag_index_path, app.pages_dir)
+
+    # The shared nav renders the follower count, so include it.
+    mtime = max(mtime, get_followers_mtime_for_app(app))
 
     # Check cache validity
     last_modified = None
@@ -722,6 +726,9 @@ def tag_posts_route(tag: str):
     # Use the tag index file mtime for caching
     tag_index_path = config.resolved_state_dir / "cache" / "tags-index.json"
     mtime = get_max_mtime(tag_index_path, app.pages_dir)
+
+    # The shared nav renders the follower count, so include it.
+    mtime = max(mtime, get_followers_mtime_for_app(app))
 
     # Check cache validity
     last_modified = None
@@ -904,16 +911,16 @@ def guestbook_route():
     mentions_dir = str(app.mentions_dir) if hasattr(app, "mentions_dir") else None
     ap_interactions_dir = None
     if hasattr(app, "activitypub_storage"):
-        ap_interactions_dir = str(
-            config.resolved_state_dir / "activitypub" / "state" / "interactions"
-        )
+        ap_state_dir = config.resolved_state_dir / "activitypub" / "state"
+        ap_interactions_dir = str(ap_state_dir / "interactions")
     replies_dir = str(app.replies_dir) if hasattr(app, "replies_dir") else None
 
-    mtime = get_guestbook_mtime(
+    guestbook_mtime = get_guestbook_mtime(
         mentions_dir=mentions_dir,
         ap_interactions_dir=ap_interactions_dir,
         replies_dir=replies_dir,
     )
+    mtime = max(guestbook_mtime, get_followers_mtime_for_app(app))
 
     # Check cache validity
     last_modified = None
@@ -1098,8 +1105,7 @@ def followers_route():
         return Response("ActivityPub is not enabled", status=404, mimetype="text/plain")
 
     # Compute mtime from followers directory
-    followers_dir = config.resolved_state_dir / "activitypub" / "state" / "followers"
-    mtime = get_dir_mtime(followers_dir)
+    mtime = get_followers_mtime_for_app(app)
 
     # Check cache validity
     last_modified = None
@@ -1185,8 +1191,6 @@ def unlisted_route():
 
     all_posts = unlisted_posts + ap_replies
     if not all_posts:
-        if tab == "posts" and not unlisted_posts:
-            return Response("No unlisted posts", status=404, mimetype="text/plain")
         return Response("No unlisted posts", status=404, mimetype="text/plain")
 
     # De-duplicate by slug (unlisted_posts and ap_replies scan the same
@@ -1203,8 +1207,10 @@ def unlisted_route():
     # Re-sort merged list by published date descending
     deduped.sort(key=lambda p: p.get("published") or datetime.date.min, reverse=True)
 
-    # Compute mtime from replies directory
-    mtime = get_dir_mtime(app.replies_dir)
+    # Compute mtime from the replies tree and the followers directory,
+    # since the page renders the shared nav follower count.
+    replies_mtime = get_recursive_max_mtime(app.replies_dir)
+    mtime = max(replies_mtime, get_followers_mtime_for_app(app))
 
     # Check cache validity
     last_modified = None
