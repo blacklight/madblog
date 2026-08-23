@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.10
 
 ### Fixed
 
@@ -9,6 +9,13 @@
   count. Cache validators now incorporate recursive interaction trees,
   folder-scoped page mtimes, and follower-directory changes so revalidation
   returns `200` instead of stale `304` responses.
+- `ActivityPubMixin` now wraps `storage.get_followers()` with `*args, **kwargs`
+  so it works with both the current Pubby API and the upcoming
+  multi-actor `get_followers(actor_id=...)` signature.
+- `StaleCacheRouteTest` setUp/tearDown now saves and restores
+  `config.state_dir`, fixing test isolation when the full suite is run.
+- `test_home_index_invalidates_on_follower_removal` now uses explicit,
+  monotonically increasing mtimes to avoid timing-sensitive 304/200 flakiness.
 - The Mermaid PNG cache is now checked before probing for the `mmdc`/`npx`
   binaries, so cached diagrams are served even on hosts where the Mermaid
   CLI is not installed.

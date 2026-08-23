@@ -585,8 +585,10 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         # --- 2. Wrap get_followers ---
         original_get_followers = self.activitypub_storage.get_followers
 
-        def _filtered_get_followers() -> list:
-            followers = original_get_followers()
+        def _filtered_get_followers(*args, **kwargs) -> list:
+            # Forward actor_id (Pubby >= 0.2.22) while staying compatible
+            # with older versions that take no arguments.
+            followers = original_get_followers(*args, **kwargs)
             return [
                 f for f in followers if self._blocklist_cache.is_permitted(f.actor_id)
             ]

@@ -109,9 +109,12 @@ class StaleCacheRouteTest(unittest.TestCase):
         self._orig_mentions_dir = getattr(self.app, "mentions_dir", None)
         self._orig_ap_storage = getattr(self.app, "activitypub_storage", None)
         self._orig_reply_index = getattr(self.app, "reply_metadata_index", None)
+        self._orig_state_dir = config.state_dir
 
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
+
+        config.state_dir = None
 
         root = Path(self._tmpdir.name)
         self.markdown_dir = root / "markdown"
@@ -148,6 +151,7 @@ class StaleCacheRouteTest(unittest.TestCase):
         config.enable_guestbook = self._orig_enable_guestbook
         config.enable_webmentions = self._orig_enable_webmentions
         config.enable_activitypub = self._orig_enable_activitypub
+        config.state_dir = self._orig_state_dir
 
         self.app.pages_dir = self._orig_pages_dir
         self.app.replies_dir = self._orig_replies_dir
@@ -303,12 +307,18 @@ class StaleCacheRouteTest(unittest.TestCase):
         base = self._base_time()
         self._write_article("home-article-removal.md", "Home Article Removal", base)
 
+        # Force page/follower directory mtimes to the base value so the
+        # initial response ETag depends only on the article, and later
+        # follower changes produce strictly increasing mtimes.
+        os.utime(self.markdown_dir, (base, base))
+        os.utime(self.ap_state_dir / "followers", (base, base))
+
         first = self.client.get("/blog")
         self.assertEqual(first.status_code, 200)
         first_etag = first.headers["ETag"]
 
         follower = self.ap_state_dir / "followers" / "home-remove-me.json"
-        _touch(follower)
+        _touch(follower, base + 100)
 
         second = self.client.get("/blog", headers=self._revalidation_headers(first))
         self.assertEqual(second.status_code, 200)
@@ -316,6 +326,9 @@ class StaleCacheRouteTest(unittest.TestCase):
         second_etag = second.headers["ETag"]
 
         follower.unlink()
+        # Simulate a directory mtime update caused by the removal with a
+        # strictly higher mtime, so the third request sees a newer ETag.
+        os.utime(self.ap_state_dir / "followers", (base + 200, base + 200))
 
         third = self.client.get("/blog", headers=self._revalidation_headers(second))
         self.assertEqual(third.status_code, 200)
