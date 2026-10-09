@@ -2922,5 +2922,95 @@ class IsPublicInteractionTest(unittest.TestCase):
         self.assertTrue(ActivityPubMixin._is_public_interaction(interaction))
 
 
+class FollowAutoAcceptTest(unittest.TestCase):
+    """Inbound Follows must be auto-accepted even when
+    ``activitypub_manually_approves_followers`` is set — Pubby >= 0.3.9
+    otherwise parks them as pending FollowRequests, and madblog has no
+    approval path."""
+
+    @skip_if_no_pubby
+    def setUp(self):
+        from madblog.config import config
+
+        self.config = config
+        self._orig_enable_ap = config.enable_activitypub
+        self._orig_content_dir = config.content_dir
+        self._orig_link = config.link
+        self._orig_ap_link = config.activitypub_link
+        self._orig_ap_domain = config.activitypub_domain
+        self._orig_manually = config.activitypub_manually_approves_followers
+        self._orig_blocked = config.blocked_actors[:]
+        self._orig_allowed = config.allowed_actors[:]
+
+        self._tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self._tmpdir.cleanup)
+        root = Path(self._tmpdir.name)
+        (root / "markdown").mkdir(parents=True)
+
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+        config.enable_activitypub = True
+        config.activitypub_link = None
+        config.activitypub_domain = None
+        config.activitypub_private_key_path = None
+        config.activitypub_manually_approves_followers = True
+        config.blocked_actors = []
+        config.allowed_actors = []
+
+        from madblog.app import BlogApp
+
+        with patch("madblog.activitypub._mixin.threading.Thread"):
+            self.app = BlogApp(__name__)
+
+    def tearDown(self):
+        if hasattr(self, "config"):
+            self.config.enable_activitypub = self._orig_enable_ap
+            self.config.content_dir = self._orig_content_dir
+            self.config.link = self._orig_link
+            self.config.activitypub_link = self._orig_ap_link
+            self.config.activitypub_domain = self._orig_ap_domain
+            self.config.activitypub_manually_approves_followers = self._orig_manually
+            self.config.blocked_actors = self._orig_blocked
+            self.config.allowed_actors = self._orig_allowed
+
+    @skip_if_no_pubby
+    def test_follow_is_auto_accepted(self):
+        handler = self.app.activitypub_handler
+        remote_actor = "https://remote.example.com/users/alice"
+
+        # Stub out HTTP: serve a canned actor document and capture the
+        # Accept delivery instead of POSTing it.
+        handler.inbox._fetch_actor = MagicMock(
+            return_value={
+                "id": remote_actor,
+                "type": "Person",
+                "preferredUsername": "alice",
+                "inbox": f"{remote_actor}/inbox",
+                "endpoints": {"sharedInbox": "https://remote.example.com/inbox"},
+            }
+        )
+        handler.inbox._deliver_to_inbox = MagicMock()
+
+        result = handler.process_inbox_activity(
+            {
+                "@context": "https://www.w3.org/ns/activitystreams",
+                "type": "Follow",
+                "id": f"{remote_actor}/follows/1",
+                "actor": remote_actor,
+                "object": handler.actor_id,
+            },
+            skip_verification=True,
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.get("type"), "Accept")
+        handler.inbox._deliver_to_inbox.assert_called_once()
+
+        storage = self.app.activitypub_storage
+        self.assertIn(remote_actor, [f.actor_id for f in storage.get_followers()])
+        if hasattr(storage, "get_follow_requests"):
+            self.assertEqual(storage.get_follow_requests(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

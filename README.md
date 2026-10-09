@@ -1470,7 +1470,7 @@ Great article by @alice@mastodon.social about federation!
 | `activitypub_posts_content_wrapped` | `MADBLOG_ACTIVITYPUB_POSTS_CONTENT_WRAPPED` | `false` | If true, the article title is sent as the ActivityPub "summary" field (Content Warning). When false, title and description are rendered inline. |
 | `activitypub_profile_field_name` | `MADBLOG_ACTIVITYPUB_PROFILE_FIELD_NAME` | `Blog` | Label used for the primary ActivityPub profile field that points to your blog URL (`link`). |
 | `activitypub_profile_fields` | N/A | empty mapping | Additional profile fields to advertise on the ActivityPub actor as a name->value mapping. If a value is an http(s) URL it will be rendered as a `rel="me"` link. |
-| `activitypub_manually_approves_followers` | `MADBLOG_ACTIVITYPUB_MANUALLY_APPROVES_FOLLOWERS` | `false` | Require manual approval for new followers. |
+| `activitypub_manually_approves_followers` | `MADBLOG_ACTIVITYPUB_MANUALLY_APPROVES_FOLLOWERS` | `false` | Advertise `manuallyApprovesFollowers` on the actor document. Note: follows are still auto-accepted — madblog has no approval flow. |
 | `activitypub_quote_control` | `MADBLOG_ACTIVITYPUB_QUOTE_CONTROL` | `public` | Quote policy for ActivityPub posts. Mastodon will refuse quote-boosts unless set to `public`. |
 | `activitypub_auto_approve_quotes` | `MADBLOG_ACTIVITYPUB_AUTO_APPROVE_QUOTES` | `true` | Automatically send QuoteAuthorization when a remote actor quotes your posts. Without this, Mastodon keeps quotes in "pending" state. |
 | `activitypub_email_notifications` | `MADBLOG_ACTIVITYPUB_EMAIL_NOTIFICATIONS` | `true` | Send email notifications for ActivityPub interactions (requires SMTP configuration and `author_email`). |

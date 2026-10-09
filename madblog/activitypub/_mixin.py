@@ -190,6 +190,19 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         if config.link and config.link.rstrip("/") != ap_base_url:
             local_base_urls.append(config.link.rstrip("/"))
 
+        # Pubby >= 0.3.9 defaults inbound Follows to a pending
+        # FollowRequest when actor_config.manually_approves_followers is
+        # set and no follow_policy is provided. Madblog has no approval
+        # flow, so keep the previous auto-accept behaviour — the flag
+        # stays advertise-only.
+        handler_kwargs = {}
+        try:
+            from pubby import FollowPolicy
+
+            handler_kwargs["follow_policy"] = lambda *_: FollowPolicy.ACCEPT
+        except ImportError:
+            pass
+
         # Create the ActivityPub handler
         self.activitypub_handler = ActivityPubHandler(
             storage=self.activitypub_storage,
@@ -214,6 +227,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             software_name="madblog",
             software_version=__version__,
             async_delivery=True,
+            **handler_kwargs,
         )
 
         self._install_activitypub_moderation()

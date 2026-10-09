@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Inbound `Follow` activities are auto-accepted again when
+  `activitypub_manually_approves_followers` is enabled. Pubby >= 0.3.9
+  parks such follows as pending `FollowRequest`s unless a
+  `follow_policy` is provided, but madblog has no approval flow — the
+  config flag stays advertise-only (`manuallyApprovesFollowers` in the
+  actor document) as before.
+
 ## 1.3.10
 
 ### Fixed
