@@ -978,7 +978,7 @@ data
 │   └── reactions.css
 ├── img
 │   ├── favicon.ico
-│   ├── icon.png
+│   └── icon.png
 └── markdown
     ├── ABOUT.md
     └── hello-world.md
