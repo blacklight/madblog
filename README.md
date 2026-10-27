@@ -980,8 +980,8 @@ data
 │   ├── favicon.ico
 │   └── icon.png
 └── markdown
-    ├── ABOUT.md
-    └── hello-world.md
+    ├── ABOUT.md
+    └── hello-world.md
 ```
 Note that this folder replaces the original one, so you need to maintain all files. If you want to get updates to the files in the upstream repo, you have to keep track of that yourself and copy the changes.
 
