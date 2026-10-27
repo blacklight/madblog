@@ -112,6 +112,21 @@ class FeedRouteTest(unittest.TestCase):
         self.assertEqual(rsp.status_code, 200)
         ElementTree.fromstring(rsp.data)
 
+    def test_rss_feed_without_description(self):
+        """RSS feed should render with a placeholder when no description is set."""
+        original_description = self.config.description
+        self.config.description = ""
+        try:
+            rsp = self.client.get("/feed.rss")
+            self.assertEqual(rsp.status_code, 200)
+
+            root = ElementTree.fromstring(rsp.data)
+            description = root.find("channel").find("description")
+            self.assertIsNotNone(description)
+            self.assertTrue(description.text)
+        finally:
+            self.config.description = original_description
+
 
 if __name__ == "__main__":
     unittest.main()

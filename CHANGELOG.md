@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- `/feed.rss` and `/rss` no longer return a 500 error when the blog has
+  no `description` configured. RSS requires a non-empty channel
+  description, so the feed now falls back to a placeholder derived from
+  the blog title.
 - Inbound `Follow` activities are auto-accepted again when
   `activitypub_manually_approves_followers` is enabled. Pubby >= 0.3.9
   parks such follows as pending `FollowRequest`s unless a

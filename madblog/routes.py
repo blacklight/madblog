@@ -454,7 +454,7 @@ def _get_feed(request: Request, feed_type: Optional[str] = None):
     fg.id(config.link)
     fg.title(config.title)
     fg.link(href=config.link, rel="alternate")
-    fg.description(config.description)
+    fg.description(config.description or f"Latest articles from {config.title}")
     fg.language(config.language)
 
     fg.author(
