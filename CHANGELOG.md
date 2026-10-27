@@ -19,6 +19,10 @@
   `follow_policy` is provided, but madblog has no approval flow — the
   config flag stays advertise-only (`manuallyApprovesFollowers` in the
   actor document) as before.
+- The "Neither mmdc nor npx found in PATH" warning is now emitted only
+  once per process instead of on every page render or ActivityPub
+  Mermaid-to-PNG conversion. The `mmdc`/`npx` lookup is shared and
+  memoized via `resolve_mermaid_cmd()`.
 
 ## 1.3.10
 

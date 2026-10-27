@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from typing import Optional
 
 import markdown
@@ -38,6 +39,31 @@ _MERMAID_CONFIG = {
 }
 
 
+@lru_cache(maxsize=1)
+def resolve_mermaid_cmd() -> Optional[tuple]:
+    """
+    Return the base command to invoke mmdc, or None if unavailable.
+
+    The PATH lookup — and the associated log messages — runs once per
+    process; subsequent calls return the cached result.
+    """
+    if shutil.which("mmdc"):
+        return ("mmdc",)
+    if shutil.which("npx"):
+        logger.info(
+            "mmdc not found in PATH — will use npx to run "
+            "@mermaid-js/mermaid-cli. First render may be slow while "
+            "dependencies are fetched."
+        )
+        return ("npx", "-y", "@mermaid-js/mermaid-cli")
+
+    logger.warning(
+        "Neither mmdc nor npx found in PATH — Mermaid blocks will be "
+        "rendered as plain code. Install with: pip install madblog[mermaid]"
+    )
+    return None
+
+
 class MermaidPreprocessor(  # pylint: disable=too-few-public-methods
     markdown.preprocessors.Preprocessor
 ):
@@ -48,30 +74,11 @@ class MermaidPreprocessor(  # pylint: disable=too-few-public-methods
     def __init__(self, *_, **__):
         super().__init__()
         self.cache = RenderCache("mermaid")
-        self._cmd = self._resolve_cmd()
-        if not self._cmd:
-            logger.warning(
-                "Neither mmdc nor npx found in PATH — Mermaid blocks will be "
-                "rendered as plain code. Install with: pip install madblog[mermaid]"
-            )
+        self._cmd = resolve_mermaid_cmd()
 
         # Write a shared mermaid config file for mmdc.
         self._config_file = self.cache.tmpdir / "mermaid-config.json"
         self._config_file.write_text(json.dumps(_MERMAID_CONFIG))
-
-    @staticmethod
-    def _resolve_cmd() -> Optional[list]:
-        """Return the base command to invoke mmdc, or None if unavailable."""
-        if shutil.which("mmdc"):
-            return ["mmdc"]
-        if shutil.which("npx"):
-            logger.info(
-                "mmdc not found in PATH — will use npx to run "
-                "@mermaid-js/mermaid-cli. First render may be slow while "
-                "dependencies are fetched."
-            )
-            return ["npx", "-y", "@mermaid-js/mermaid-cli"]
-        return None
 
     def _render_svg(self, source: str, theme_key: str) -> str:
         """Render Mermaid source to SVG string for a given theme."""

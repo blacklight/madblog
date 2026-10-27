@@ -12,7 +12,6 @@ import logging
 import os
 import re
 import json
-import shutil
 import subprocess
 import tempfile
 import threading
@@ -29,6 +28,7 @@ from madblog.constants import (
     REGEX_TOC_MARKER,
 )
 from madblog.markdown import parse_metadata_header, render_html, resolve_relative_urls
+from madblog.markdown._processors.mermaid import resolve_mermaid_cmd
 from madblog.monitor import ChangeType
 from madblog.sync import StartupSyncMixin
 from madblog.tags import extract_hashtags
@@ -378,14 +378,10 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
     @staticmethod
     def _render_mermaid_png(mermaid_source: str) -> bytes | None:
         """Render Mermaid source to PNG bytes via mmdc (or npx)."""
-        mmdc = shutil.which("mmdc")
-        npx = shutil.which("npx")
-
-        if not mmdc and not npx:
-            logger.warning("Neither mmdc nor npx found; cannot render Mermaid to PNG")
+        cmd = resolve_mermaid_cmd()
+        if not cmd:
             return None
 
-        cmd = [mmdc] if mmdc else [npx, "-y", "@mermaid-js/mermaid-cli"]
         mmd_path = png_path = None
 
         try:
