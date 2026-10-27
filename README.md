@@ -60,6 +60,7 @@
     - [Folder metadata with `index.md`](#folder-metadata-with-indexmd)
     - [Hidden and empty folders](#hidden-and-empty-folders)
     - [External feeds as folders](#external-feeds-as-folders)
+    - [Overwriting HTML-templates or Stylesheets](#overwriting-html-templates-or-stylesheets)
 - [Author Replies](#author-replies)
   - [Directory layout](#directory-layout)
   - [Reply metadata](#reply-metadata)
@@ -962,6 +963,28 @@ external_feeds:
 ```
 
 Or via environment variable: `MADBLOG_EXTERNAL_FEEDS_AS_FOLDERS=1`
+
+#### Overwriting HTML-templates or Stylesheets
+
+Most of the static files can be overwritten. You need to copy the whole folder (e.g. `madblog/static/css`) and change the files you want to change. Put that folder in your `$MADBLOG_DIR` folder, next to `markdown` and `img`, e.g. like this:
+```
+data
+├── css
+│   ├── about.css
+│   ├── blog.css
+│   ├── code.css
+│   ├── common.css
+│   ├── home.css
+│   └── reactions.css
+├── img
+│   ├── favicon.ico
+│   └── icon.png
+└── markdown
+    ├── ABOUT.md
+    └── hello-world.md
+```
+Note that this folder replaces the original one, so you need to maintain all files. If you want to get updates to the files in the upstream repo, you have to keep track of that yourself and copy the changes.
+
 
 ## Author Replies
 
