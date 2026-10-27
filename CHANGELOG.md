@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- The CI/CD pipeline now tags Docker images on Quay with the release
+  version (e.g. `v1.3.10` and `1.3.10`) in addition to `latest`.
+
 ### Fixed
 
 - `/feed.rss` and `/rss` no longer return a 500 error when the blog has

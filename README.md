@@ -226,6 +226,10 @@ docker pull quay.io/blacklight/madblog
 docker tag quay.io/blacklight/madblog madblog
 ```
 
+Tagged releases are also published on Quay — pull
+`quay.io/blacklight/madblog:<version>` (e.g. `quay.io/blacklight/madblog:1.3.10`)
+to pin a specific version instead of `latest`.
+
 ##### Build from source
 
 ```shell

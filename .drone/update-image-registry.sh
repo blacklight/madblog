@@ -10,11 +10,25 @@ export IMAGE_NAME="$REGISTRY_ENDPOINT/$REGISTRY_REPO"
 # Log in to the registry
 docker login "$REGISTRY_ENDPOINT" -u "$DOCKER_USER" -p "$DOCKER_PASS"
 
+# On tag events, push both `latest` and the release tag
+# (e.g. `v0.2.8`, plus `0.2.8` without the `v` prefix)
+TAGS="latest"
+if [ -n "$DRONE_TAG" ]; then
+  TAGS="$TAGS $DRONE_TAG"
+  VERSION="${DRONE_TAG#v}"
+  [ "$VERSION" != "$DRONE_TAG" ] && TAGS="$TAGS $VERSION"
+fi
+
 # Build the Docker image using the minimal Dockerfile
+BUILD_ARGS=""
+for tag in $TAGS; do
+  BUILD_ARGS="$BUILD_ARGS -t $IMAGE_NAME:$tag"
+done
+
 docker build \
   -f docker/minimal.Dockerfile \
-  -t "$IMAGE_NAME:latest" \
+  $BUILD_ARGS \
   .
 
-# Push the image
-docker push "$IMAGE_NAME:latest"
+# Push all the image tags
+docker push "$IMAGE_NAME" --all-tags
