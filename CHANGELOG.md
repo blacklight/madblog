@@ -4,6 +4,12 @@
 
 ### Added
 
+- New `image_alt` metadata field for the article banner image alt text.
+  When set, it is used as the `alt` attribute of the banner and rendered
+  as a visible caption under the image. Standalone body images with a
+  non-empty alt text (`.` excluded) are also wrapped in a `<figure>`
+  element with the alt text displayed in a `<figcaption>`.
+
 - Markdown files now support YAML front matter for metadata — a
   `---`-delimited block at the top of the file with `key: value` pairs
   (e.g. `title: My post`). It is now the documented way to declare

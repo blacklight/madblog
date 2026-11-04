@@ -17,7 +17,7 @@ from typing import IO, Callable
 from flask import Flask, has_app_context, render_template
 
 from madblog.config import config
-from madblog.markdown import render_html, resolve_relative_urls
+from madblog.markdown import meaningful_alt, render_html, resolve_relative_urls
 from madblog.templates import TemplateUtils
 from madblog.reactions import (
     build_thread_tree,
@@ -904,6 +904,7 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
                 uri=metadata.get("uri"),
                 url=reply_url,
                 image=metadata.get("image"),
+                image_alt=meaningful_alt(metadata.get("image_alt")),
                 description=metadata.get("description"),
                 published_datetime=metadata.get("published"),
                 published=metadata["published"].strftime("%b %d, %Y"),

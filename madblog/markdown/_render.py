@@ -12,6 +12,7 @@ from madblog.config import config
 from ._processors import (
     MarkdownActivityPubMentions,
     MarkdownAutolink,
+    MarkdownImageCaptions,
     MarkdownTags,
     MarkdownTaskList,
     MarkdownTocMarkers,
@@ -109,6 +110,7 @@ def _build_extensions() -> List[Union[str, Extension]]:
         MarkdownAutolink(),
         MarkdownTaskList(),
         MarkdownTocMarkers(),
+        MarkdownImageCaptions(),
     ]
 
     if config.enable_latex:

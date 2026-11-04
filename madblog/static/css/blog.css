@@ -129,6 +129,31 @@ a:hover {
   width: 80%;
 }
 
+.main-image-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 80%;
+  margin: 0;
+}
+
+.main-image-figure img {
+  width: 100%;
+}
+
+.image-caption {
+  font-size: 0.8em;
+  color: var(--color-fg-tertiary);
+  margin-top: 0.5em;
+  text-align: center;
+}
+
+article .content figure.image-figure {
+  margin: 1em auto;
+  width: fit-content;
+  max-width: 100%;
+}
+
 /* Replies */
 .reply-backlink {
   font-size: 0.85em;

@@ -20,6 +20,7 @@ from madblog.reactions import (
 )
 
 from ._metadata import normalize_metadata, split_front_matter
+from ._processors import meaningful_alt
 from ._render import render_html, resolve_relative_urls
 
 logger = getLogger(__name__)
@@ -341,6 +342,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 url=page_url,
                 external_url=metadata.get("external_url"),
                 image=metadata.get("image"),
+                image_alt=meaningful_alt(metadata.get("image_alt")),
                 description=metadata.get("description"),
                 published_datetime=metadata.get("published"),
                 published=metadata["published"].strftime("%b %d, %Y"),

@@ -27,6 +27,7 @@
   - [Running Madblog from a uWSGI wrapper](#running-madblog-from-a-uwsgi-wrapper)
   - [Running Madblog in Docker](#running-madblog-in-docker)
 - [Markdown files](#markdown-files)
+  - [Image alt text and captions](#image-alt-text-and-captions)
 - [Configuration](#configuration)
   - [Server settings](#server-settings)
   - [Site metadata](#site-metadata)
@@ -347,6 +348,7 @@ _front matter_ block at the very top of the file, delimited by `---` lines:
 title: Title of the article
 description: Short description of the content
 image: /img/some-header-image.png
+image_alt: Description of the header image
 author: Author Name <https://author.me>
 author_photo: https://author.me/avatar.png
 language: en-US
@@ -363,6 +365,7 @@ Supported metadata:
 | `title` | String | Inferred either from the first heading or the filename |
 | `description` | String | Inferred from the second heading, if present |
 | `image` | String | — |
+| `image_alt` | String | — |
 | `author` | String | Inherited from the configured `author` |
 | `author_photo` | String | Inherited from the configured `author_photo` |
 | `language` | String | Inherited from the configured `language` or `en-US` |
@@ -401,6 +404,23 @@ alongside or instead of front matter:
 
 ```markdown
 [//]: # (key: value)
+```
+
+### Image alt text and captions
+
+`image_alt` sets the alt text of the article banner image. When provided,
+it is also rendered as a visible caption under the image.
+
+The same applies to images in the body: a standalone `![alt text](url)`
+image is wrapped in a `<figure>` element and its alt text is displayed
+below it in a `<figcaption>`. Inline images are left untouched. An empty
+alt text or an alt text of `.` marks the image as decorative — no caption
+is rendered:
+
+```markdown
+![A screenshot of the settings page](settings.png)
+
+![](decorative-divider.png)  <!-- no caption -->
 ```
 
 Tags declared in the metadata header are shown in the article header as links and
