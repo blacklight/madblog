@@ -13,6 +13,7 @@ from pathlib import Path
 from flask import Flask, Response, has_request_context, make_response, request
 from pubby import ActivityPubHandler
 from pubby._model import AP_CONTEXT
+from pubby.collections import ordered_collection_index, ordered_collection_page
 from pubby.storage.adapters.file import FileActivityPubStorage
 from pubby.server.adapters.flask import bind_activitypub
 from pubby.server.adapters.flask_mastodon import bind_mastodon_api
@@ -20,12 +21,18 @@ from pubby.server.adapters.flask_mastodon import bind_mastodon_api
 from ..config import config
 from ..moderation import (
     ModerationCache,
+    is_actor_permitted,
     is_allowed,
     is_blocked,
     validate_moderation_config,
 )
 from ..monitor import ContentMonitor
-from ._integration import ActivityPubIntegration
+from ._integration import (
+    INTERACTION_COLLECTIONS,
+    COLLECTION_PAGE_SIZE,
+    ActivityPubIntegration,
+    is_public_interaction,
+)
 from ._notifications import (
     SmtpConfig,
     build_activitypub_email_notifier,
@@ -234,6 +241,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
         app: Flask = self  # type: ignore
         bind_activitypub(app, self.activitypub_handler)
+        self._register_ap_collection_routes()
 
         # Content negotiation for /ap/actor: serve the home page when
         # the client prefers HTML (e.g. a browser following the actor link).
@@ -275,12 +283,33 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             software_name="madblog",
             software_version=__version__,
         )
+        link = (config.link or "").rstrip("/")
+        article_targets = lambda slug: {  # noqa: E731
+            f"{ap_base_url}/article/{slug}",
+            f"{link}/article/{slug}",
+        }
+
+        def _local_reply_urls(article_slug: str) -> list[str]:
+            urls = []
+            for reply in self._get_article_replies(article_slug):
+                reply_to = reply.get("reply_to") or ""
+                if reply_to and reply_to not in article_targets(article_slug):
+                    # A reply file filed under this directory that
+                    # explicitly targets a different (remote) object.
+                    continue
+                urls.append(f"{ap_base_url}{reply['permalink']}")
+            return urls
+
         self._ap_integration = ActivityPubIntegration(
             handler=self.activitypub_handler,
             pages_dir=str(self.pages_dir),
             base_url=ap_base_url,
             content_base_url=config.link,  # Images served at actual blog URL
             replies_dir=getattr(self, "replies_dir", None),
+            is_permitted=self._blocklist_cache.is_permitted,
+            local_replies_provider=(
+                _local_reply_urls if getattr(self, "replies_dir", None) else None
+            ),
         )
         self.content_monitor.register(self._ap_integration.on_content_change)
 
@@ -562,6 +591,142 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
         return response
 
+    # -----------------------------------------------------------------
+    # Interaction collection endpoints
+    # -----------------------------------------------------------------
+
+    def _register_ap_collection_routes(self) -> None:
+        """
+        Register the ``replies``/``likes``/``shares``/``quotes``
+        collection endpoints for article and author-reply objects —
+        these back the collection references advertised on the served
+        AP documents.
+        """
+        app: Flask = self  # type: ignore
+        for coll in INTERACTION_COLLECTIONS:
+            app.add_url_rule(
+                f"/article/<article>/{coll}",
+                f"ap_article_{coll}",
+                view_func=lambda article, c=coll: self._ap_article_collection(
+                    "", article, c
+                ),
+                methods=["GET"],
+            )
+            app.add_url_rule(
+                f"/article/<path:path>/<article>/{coll}",
+                f"ap_article_nested_{coll}",
+                view_func=lambda path, article, c=coll: self._ap_article_collection(
+                    path, article, c
+                ),
+                methods=["GET"],
+            )
+            app.add_url_rule(
+                f"/reply/<slug>/{coll}",
+                f"ap_reply_toplevel_{coll}",
+                view_func=lambda slug, c=coll: self._ap_reply_collection(
+                    None, slug, c
+                ),
+                methods=["GET"],
+            )
+            app.add_url_rule(
+                f"/reply/<path:article_slug>/<reply_slug>/{coll}",
+                f"ap_reply_{coll}",
+                view_func=lambda article_slug, reply_slug, c=coll: self._ap_reply_collection(
+                    article_slug, reply_slug, c
+                ),
+                methods=["GET"],
+            )
+
+    def _ap_article_collection(self, path: str, article: str, coll: str):
+        """Resolve an article path to its object URL and serve its collection."""
+        slug = os.path.join(path, article) if path else article
+        md_path = os.path.join(str(self.pages_dir), slug + ".md")
+        if not os.path.isfile(md_path):
+            return "Not found", 404
+        return self._ap_collection_response(
+            self._ap_integration.file_to_url(md_path), coll, article_slug=slug
+        )
+
+    def _ap_reply_collection(
+        self, article_slug: str | None, reply_slug: str, coll: str
+    ):
+        """Resolve an author-reply path to its object URL and serve its collection."""
+        replies_dir = getattr(self, "replies_dir", None)
+        if not replies_dir:
+            return "Not found", 404
+        rel = (
+            os.path.join(article_slug, reply_slug) if article_slug else reply_slug
+        )
+        md_path = os.path.join(str(replies_dir), rel + ".md")
+        if not os.path.isfile(md_path):
+            return "Not found", 404
+        return self._ap_collection_response(
+            self._ap_integration.reply_file_to_url(md_path), coll
+        )
+
+    def _ap_collection_response(
+        self, object_url: str, coll: str, article_slug: str | None = None
+    ):
+        """
+        Serve a paged ``OrderedCollection`` of an object's ActivityPub
+        interactions, backing the references advertised on the object's
+        AP document.
+
+        Without ``?page`` an index document is returned; ``?page=N``
+        serves the ``OrderedCollectionPage``. ``article_slug`` enables
+        merging the author's own replies into ``replies``.
+        """
+        # ``file_to_url`` may carry a ``?v=`` collision suffix — strip it
+        # before nesting the collection path under the object URL.
+        coll_url = f"{object_url.split('?', 1)[0]}/{coll}"
+
+        # On a split AP/blog domain setup the collection lives under the
+        # AP-domain object URL — redirect blog-domain requests to it.
+        ap_link = (config.activitypub_link or "").rstrip("/")
+        blog_link = (config.link or "").rstrip("/")
+        if ap_link and ap_link != blog_link:
+            ap_host = urlparse(ap_link).hostname
+            if request.host.split(":")[0] != ap_host:
+                from flask import redirect
+
+                target = coll_url
+                if request.args.get("page"):
+                    target += f"?page={request.args['page']}"
+                return redirect(target, code=302)
+
+        try:
+            page = int(request.args.get("page", "0"))
+        except ValueError:
+            return "Invalid page", 400
+
+        integration = self._ap_integration
+        items = integration.collection_items(
+            object_url,
+            coll,
+            local_reply_urls=(
+                integration.local_reply_urls(article_slug) if article_slug else ()
+            ),
+        )
+        if page < 1:
+            doc = ordered_collection_index(
+                coll_url, len(items), COLLECTION_PAGE_SIZE
+            )
+        else:
+            doc = ordered_collection_page(
+                coll_url,
+                page,
+                len(items),
+                items[
+                    (page - 1) * COLLECTION_PAGE_SIZE : page * COLLECTION_PAGE_SIZE
+                ],
+                COLLECTION_PAGE_SIZE,
+            )
+
+        response = make_response(json.dumps(doc, ensure_ascii=False))
+        response.mimetype = "application/activity+json"
+        response.headers["Cache-Control"] = "public, max-age=0, must-revalidate"
+        return response
+
     def _install_activitypub_moderation(self):
         """
         Install moderation hooks for ActivityPub:
@@ -721,62 +886,20 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         except Exception:
             logger.warning("Failed to publish actor profile update", exc_info=True)
 
-    @staticmethod
-    def _is_public_interaction(interaction) -> bool:
-        """
-        Check whether an AP interaction is publicly addressed.
-
-        Returns ``True`` when the stored raw object contains the
-        ActivityStreams Public collection
-        (``https://www.w3.org/ns/activitystreams#Public``) or one of its
-        common aliases in ``to`` or ``cc``.  Interactions without
-        embedded ``raw_object`` metadata are assumed public (safe
-        default for older data).
-        """
-        raw = getattr(interaction, "metadata", None) or {}
-        raw_obj = raw.get("raw_object")
-        if not isinstance(raw_obj, dict):
-            return True  # no metadata to check — assume public
-
-        public_ids = {
-            "https://www.w3.org/ns/activitystreams#Public",
-            "Public",
-            "as:Public",
-        }
-        to = raw_obj.get("to", [])
-        cc = raw_obj.get("cc", [])
-        if isinstance(to, str):
-            to = [to]
-        if isinstance(cc, str):
-            cc = [cc]
-        return bool(public_ids.intersection(to + cc))
-
     def _filter_ap_interactions(self, interactions: list) -> list:
         """
         Apply visibility and blocklist/allowlist filtering to AP interactions.
         """
+        integration = getattr(self, "_ap_integration", None)
+        if integration is not None:
+            return integration.filter_interactions(interactions)
 
-        # Drop private / non-public interactions first
-        interactions = [i for i in interactions if self._is_public_interaction(i)]
-
-        mod_cache = getattr(self, "_blocklist_cache", None)
-        if mod_cache:
-            return [
-                i for i in interactions if mod_cache.is_permitted(i.source_actor_id)
-            ]
-        if config.blocked_actors:
-            return [
-                i
-                for i in interactions
-                if not is_blocked(i.source_actor_id, config.blocked_actors)
-            ]
-        if config.allowed_actors:
-            return [
-                i
-                for i in interactions
-                if is_allowed(i.source_actor_id, config.allowed_actors)
-            ]
-        return list(interactions)
+        # Fallback when the AP integration isn't initialised — mirror
+        # its public-address + actor-permission rules.
+        interactions = [i for i in interactions if is_public_interaction(i)]
+        return [
+            i for i in interactions if is_actor_permitted(i.source_actor_id)
+        ]
 
     def _get_ap_interactions(
         self, md_file: str, extra_target_urls: list[str] | None = None

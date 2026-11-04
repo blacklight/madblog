@@ -284,10 +284,21 @@ external dependency `pubby` is installed.
   - Handles content negotiation:
     - If the client prefers `application/activity+json`, `BlogApp.get_page()` can
       return an ActivityPub object representation of the page.
+  - Registers paged `OrderedCollection` endpoints for object
+    interaction collections
+    (`/article/<slug>/{replies,likes,shares,quotes}` and the `/reply/…`
+    counterparts), serving the stored interactions that back the
+    collection references on object documents.
 
 - `madblog/activitypub/_integration.py` (`ActivityPubIntegration`)
   - Bridges filesystem content changes to ActivityPub publishing.
   - Tracks published objects and deleted URLs in `<state_dir>/activitypub/`.
+  - Populates the `replies`/`likes`/`shares`/`quotes` collection
+    references on built objects (`interaction_collections`/
+    `collection_items`), backed by `storage.get_interactions` filtered
+    by `is_public_interaction` + the configured `is_permitted`
+    predicate. The app supplies the local author-reply URLs merged into
+    `replies` via `local_replies_provider`.
 
 - `madblog/activitypub/_mixin.py` (`ActivityPubMixin`)
   - Validates/generates the ActivityPub RSA private key file at

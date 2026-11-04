@@ -2,7 +2,7 @@ feedgen2
 feedparser
 flask
 markdown
-pubby>=0.2.16
+pubby>=0.6.11
 pygments
 pyyaml
 requests

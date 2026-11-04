@@ -82,6 +82,7 @@
   - [Usage](#usage-1)
 - [ActivityPub federation](#activitypub-federation)
   - [Using a different domain for your ActivityPub handle](#using-a-different-domain-for-your-activitypub-handle)
+  - [Interaction collections](#interaction-collections)
   - [Mentions](#mentions)
   - [Configuration options](#configuration-options)
   - [Mastodon verification](#mastodon-verification)
@@ -1470,6 +1471,29 @@ If you can’t/won’t proxy, you can also implement WebFinger in your main site
 respond to `GET /.well-known/webfinger?resource=acct:blog@example.com` with a
 JSON document that links to the actor URL hosted on `blog.example.com` (the
 `rel="self"` link is the important one).
+
+### Interaction collections
+
+Every federated object (articles and author replies) advertises its
+`replies`, `likes`, `shares` and `quotes` collections on its ActivityPub
+document — the mechanism remote servers such as Mastodon use to discover
+the interactions a post received elsewhere.
+
+Each collection is dereferenceable as a paged `OrderedCollection`:
+
+| Endpoint | Contents |
+|----------|----------|
+| `GET /article/<slug>/replies` | Remote reply object URLs, followed by the author's own replies |
+| `GET /article/<slug>/likes` | Minimal embedded `Like` activities (`id`/`actor`/`object`) |
+| `GET /article/<slug>/shares` | Minimal embedded `Announce` activities |
+| `GET /article/<slug>/quotes` | Remote quote-post object URLs |
+| `GET /reply/…/<collection>` | Same, for author-reply objects |
+
+Without `?page` an index document (`totalItems` + `first`/`last` links)
+is returned; `?page=N` serves an `OrderedCollectionPage` (100 items per
+page). Only publicly-addressed interactions from non-blocked actors are
+exposed — the same rules that gate the interactions rendered on the
+page.
 
 ### Mentions
 

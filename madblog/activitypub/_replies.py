@@ -339,6 +339,11 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         obj.media_type = "text/html"
         obj.language = metadata.get("language", config.language)
 
+        # Advertise the reply's own interaction collections — replies
+        # can themselves receive replies/likes/boosts/quotes.
+        for key, ref in self.interaction_collections(url).items():
+            setattr(obj, key, ref)
+
         return obj, activity_type
 
     # -----------------------------------------------------------------

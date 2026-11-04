@@ -17,12 +17,14 @@ import tempfile
 import threading
 import mimetypes
 
+from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pubby import ActivityPubHandler, Object
+from pubby import ActivityPubHandler, InteractionType, Object
 
 from madblog.config import config
+from madblog.moderation import is_actor_permitted
 from madblog.constants import (
     REGEX_MERMAID_BLOCK,
     REGEX_TOC_MARKER,
@@ -40,6 +42,84 @@ logger = logging.getLogger(__name__)
 
 _MAX_CONCURRENT_PUBLISHES = 4
 
+#: Interaction collections served on object documents and under
+#: ``<object_url>/<collection>``.
+INTERACTION_COLLECTIONS = ("replies", "likes", "shares", "quotes")
+
+#: ``orderedItems`` per served collection page.
+COLLECTION_PAGE_SIZE = 100
+
+
+def is_public_interaction(interaction) -> bool:
+    """
+    Check whether an AP interaction is publicly addressed.
+
+    Returns ``True`` when the stored raw object contains the
+    ActivityStreams Public collection
+    (``https://www.w3.org/ns/activitystreams#Public``) or one of its
+    common aliases in ``to`` or ``cc``.  Interactions without embedded
+    ``raw_object`` metadata are assumed public (safe default for older
+    data).
+    """
+    raw = getattr(interaction, "metadata", None) or {}
+    raw_obj = raw.get("raw_object")
+    if not isinstance(raw_obj, dict):
+        return True  # no metadata to check — assume public
+
+    public_ids = {
+        "https://www.w3.org/ns/activitystreams#Public",
+        "Public",
+        "as:Public",
+    }
+    to = raw_obj.get("to", [])
+    cc = raw_obj.get("cc", [])
+    if isinstance(to, str):
+        to = [to]
+    if isinstance(cc, str):
+        cc = [cc]
+    return bool(public_ids.intersection(to + cc))
+
+
+def _interaction_ts(interaction) -> tuple:
+    """
+    Stable ordering key for collection items — the interaction's
+    timestamp (``created_at`` first, ``published`` as fallback), then a
+    deterministic tie-breaker.
+    """
+    ts = interaction.created_at or interaction.published
+    if ts is not None and getattr(ts, "tzinfo", True) is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return (
+        ts or datetime.min.replace(tzinfo=timezone.utc),
+        interaction.object_id or interaction.activity_id or interaction.source_actor_id,
+    )
+
+
+def _collection_index_ref(collection_id: str, total_items: int) -> dict:
+    """Reference embedded on the object — mirrors the served index doc."""
+    last_page = (
+        max(1, -(-total_items // COLLECTION_PAGE_SIZE)) if total_items else 1
+    )
+    return {
+        "id": collection_id,
+        "type": "OrderedCollection",
+        "totalItems": total_items,
+        "first": f"{collection_id}?page=1",
+        "last": f"{collection_id}?page={last_page}",
+    }
+
+
+def _embedded_activity(interaction, activity_type: str, object_url: str) -> dict:
+    """Minimal ``Like``/``Announce`` activity for a collection item."""
+    activity = {
+        "type": activity_type,
+        "actor": interaction.source_actor_id,
+        "object": object_url,
+    }
+    if interaction.activity_id:
+        activity = {"id": interaction.activity_id, **activity}
+    return activity
+
 
 class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
     """
@@ -48,6 +128,13 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
     :param handler: The pubby ``ActivityPubHandler``.
     :param pages_dir: Absolute path to the markdown pages directory.
     :param base_url: Public base URL (e.g. ``https://example.com``).
+    :param is_permitted: Optional actor-permission predicate used to
+        filter interactions exposed through served collections and the
+        rendered page (defaults to
+        :func:`madblog.moderation.is_actor_permitted`).
+    :param local_replies_provider: Optional callable mapping an article
+        slug to the AP URLs of the author's own replies to it — those
+        are merged into the served ``replies`` collection.
     """
 
     def __init__(
@@ -58,6 +145,8 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         *,
         content_base_url: str | None = None,
         replies_dir: str | Path | None = None,
+        is_permitted: Callable[[str], bool] | None = None,
+        local_replies_provider: Callable[[str], Iterable[str]] | None = None,
     ):
         super().__init__()
 
@@ -65,6 +154,8 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         self.pages_dir = str(Path(pages_dir).resolve())
         self.base_url = base_url.rstrip("/")
         self.replies_dir = str(Path(replies_dir).resolve()) if replies_dir else None
+        self._is_permitted = is_permitted or is_actor_permitted
+        self._local_replies_provider = local_replies_provider
 
         # URL where images/assets are actually served (may differ from AP base_url)
         self.content_base_url = (content_base_url or base_url).rstrip("/")
@@ -688,7 +779,122 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         # Language: per-post metadata overrides global config
         obj.language = metadata.get("language", config.language)
 
+        # Advertise the object's interaction collections so remote
+        # servers can discover its replies/likes/boosts/quotes — without
+        # these references the interactions stay invisible to the
+        # fediverse even though they are rendered on the page.
+        slug = os.path.relpath(filepath, self.pages_dir).rsplit(".", 1)[0]
+        for key, ref in self.interaction_collections(
+            url, local_reply_urls=self.local_reply_urls(slug)
+        ).items():
+            setattr(obj, key, ref)
+
         return obj, activity_type
+
+    # -----------------------------------------------------------------
+    # Interaction collections (replies / likes / shares / quotes)
+    # -----------------------------------------------------------------
+
+    def filter_interactions(self, interactions: Iterable) -> list:
+        """
+        Apply the visibility and blocklist/allowlist filtering to a set
+        of stored interactions — the same rules that gate the rendered
+        interactions on the public page.
+        """
+        out = [i for i in interactions if is_public_interaction(i)]
+        return [i for i in out if self._is_permitted(i.source_actor_id)]
+
+    def local_reply_urls(self, article_slug: str) -> list[str]:
+        """
+        AP URLs of the author's own replies under
+        ``replies/<article_slug>/`` — provided by the app through
+        ``local_replies_provider`` (empty when it is not configured).
+        """
+        if not self._local_replies_provider:
+            return []
+        return list(self._local_replies_provider(article_slug))
+
+    def _interaction_buckets(self, object_url: str) -> dict:
+        """Bucket an object's filtered interactions by collection name."""
+        buckets: dict = {name: [] for name in INTERACTION_COLLECTIONS}
+        interactions = self.handler.storage.get_interactions(
+            target_resource=object_url
+        )
+        for i in self.filter_interactions(interactions):
+            if i.interaction_type == InteractionType.REPLY and i.object_id:
+                buckets["replies"].append(i)
+            elif i.interaction_type == InteractionType.LIKE:
+                buckets["likes"].append(i)
+            elif i.interaction_type == InteractionType.BOOST:
+                buckets["shares"].append(i)
+            elif i.interaction_type == InteractionType.QUOTE and i.object_id:
+                buckets["quotes"].append(i)
+        return buckets
+
+    def collection_items(
+        self,
+        object_url: str,
+        collection: str,
+        *,
+        local_reply_urls: Iterable[str] = (),
+    ) -> list:
+        """
+        Return the ``orderedItems`` payload of one of an object's
+        interaction collections.
+
+        ``replies`` and ``quotes`` list remote object URLs (plus the
+        author's own reply URLs for ``replies``); ``likes`` and
+        ``shares`` embed minimal ``Like``/``Announce`` activities so
+        consumers get usable data even though remote activity URIs are
+        usually not dereferenceable.
+        """
+        if collection not in INTERACTION_COLLECTIONS:
+            raise ValueError(f"Unknown interaction collection: {collection}")
+
+        buckets = self._interaction_buckets(object_url)
+        if collection == "replies":
+            replies = sorted(buckets["replies"], key=_interaction_ts)
+            items = [i.object_id for i in replies]
+            seen = set(items)
+            items += [u for u in local_reply_urls if u not in seen]
+            return items
+
+        if collection == "quotes":
+            return [
+                i.object_id
+                for i in sorted(buckets["quotes"], key=_interaction_ts, reverse=True)
+            ]
+
+        activity_type = "Like" if collection == "likes" else "Announce"
+        return [
+            _embedded_activity(i, activity_type, object_url)
+            for i in sorted(buckets[collection], key=_interaction_ts, reverse=True)
+        ]
+
+    def interaction_collections(
+        self, object_url: str, *, local_reply_urls: Iterable[str] = ()
+    ) -> dict:
+        """
+        Return the ``replies``/``likes``/``shares``/``quotes`` collection
+        references to expose on an object's AP document, keyed by field
+        name. Each reference is a dereferenceable ``OrderedCollection``
+        index (``id``/``totalItems``/``first``/``last``) served by the
+        ``/article/…/<collection>`` endpoints.
+        """
+        # ``file_to_url`` may carry a ``?v=`` collision suffix — strip it
+        # before nesting collection paths under the object URL.
+        base_url = object_url.split("?", 1)[0]
+        return {
+            name: _collection_index_ref(
+                f"{base_url}/{name}",
+                len(
+                    self.collection_items(
+                        object_url, name, local_reply_urls=local_reply_urls
+                    )
+                ),
+            )
+            for name in INTERACTION_COLLECTIONS
+        }
 
     # -----------------------------------------------------------------
     # Like activity ID tracking for articles (file_urls with #like suffix)

@@ -4,6 +4,14 @@
 
 ### Added
 
+- Federated objects (articles and author replies) now advertise their
+  `replies`, `likes`, `shares` and `quotes` collections on the served
+  ActivityPub document, and each collection is dereferenceable as a
+  paged `OrderedCollection` under `<object_url>/<collection>`
+  (`?page=N` for `OrderedCollectionPage`s). Remote servers can now
+  discover the interactions a post received — previously they were only
+  rendered on the HTML page. Requires pubby >= 0.6.11.
+
 - The CI/CD pipeline now tags Docker images on Quay with the release
   version (e.g. `v1.3.10` and `1.3.10`) in addition to `latest`.
 

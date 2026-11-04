@@ -2816,11 +2816,11 @@ class StandaloneLikeContentNegotiationTest(unittest.TestCase):
 
 
 class IsPublicInteractionTest(unittest.TestCase):
-    """Test _is_public_interaction filters private mentions."""
+    """Test is_public_interaction filters private mentions."""
 
     @skip_if_no_pubby
     def test_public_interaction_returns_true(self):
-        from madblog.activitypub._mixin import ActivityPubMixin
+        from madblog.activitypub._integration import is_public_interaction
         from pubby._model import Interaction, InteractionType
 
         interaction = Interaction(
@@ -2834,11 +2834,11 @@ class IsPublicInteractionTest(unittest.TestCase):
                 }
             },
         )
-        self.assertTrue(ActivityPubMixin._is_public_interaction(interaction))
+        self.assertTrue(is_public_interaction(interaction))
 
     @skip_if_no_pubby
     def test_unlisted_interaction_returns_true(self):
-        from madblog.activitypub._mixin import ActivityPubMixin
+        from madblog.activitypub._integration import is_public_interaction
         from pubby._model import Interaction, InteractionType
 
         interaction = Interaction(
@@ -2852,11 +2852,11 @@ class IsPublicInteractionTest(unittest.TestCase):
                 }
             },
         )
-        self.assertTrue(ActivityPubMixin._is_public_interaction(interaction))
+        self.assertTrue(is_public_interaction(interaction))
 
     @skip_if_no_pubby
     def test_private_mention_returns_false(self):
-        from madblog.activitypub._mixin import ActivityPubMixin
+        from madblog.activitypub._integration import is_public_interaction
         from pubby._model import Interaction, InteractionType
 
         interaction = Interaction(
@@ -2870,11 +2870,11 @@ class IsPublicInteractionTest(unittest.TestCase):
                 }
             },
         )
-        self.assertFalse(ActivityPubMixin._is_public_interaction(interaction))
+        self.assertFalse(is_public_interaction(interaction))
 
     @skip_if_no_pubby
     def test_private_reply_returns_false(self):
-        from madblog.activitypub._mixin import ActivityPubMixin
+        from madblog.activitypub._integration import is_public_interaction
         from pubby._model import Interaction, InteractionType
 
         interaction = Interaction(
@@ -2888,11 +2888,11 @@ class IsPublicInteractionTest(unittest.TestCase):
                 }
             },
         )
-        self.assertFalse(ActivityPubMixin._is_public_interaction(interaction))
+        self.assertFalse(is_public_interaction(interaction))
 
     @skip_if_no_pubby
     def test_no_metadata_assumed_public(self):
-        from madblog.activitypub._mixin import ActivityPubMixin
+        from madblog.activitypub._integration import is_public_interaction
         from pubby._model import Interaction, InteractionType
 
         interaction = Interaction(
@@ -2901,11 +2901,11 @@ class IsPublicInteractionTest(unittest.TestCase):
             interaction_type=InteractionType.REPLY,
             metadata={},
         )
-        self.assertTrue(ActivityPubMixin._is_public_interaction(interaction))
+        self.assertTrue(is_public_interaction(interaction))
 
     @skip_if_no_pubby
     def test_as_public_alias_recognized(self):
-        from madblog.activitypub._mixin import ActivityPubMixin
+        from madblog.activitypub._integration import is_public_interaction
         from pubby._model import Interaction, InteractionType
 
         interaction = Interaction(
@@ -2919,7 +2919,7 @@ class IsPublicInteractionTest(unittest.TestCase):
                 }
             },
         )
-        self.assertTrue(ActivityPubMixin._is_public_interaction(interaction))
+        self.assertTrue(is_public_interaction(interaction))
 
 
 class FollowAutoAcceptTest(unittest.TestCase):
@@ -3014,3 +3014,226 @@ class FollowAutoAcceptTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InteractionCollectionsTest(unittest.TestCase):
+    """Tests for the replies/likes/shares/quotes collections served on objects."""
+
+    @skip_if_no_pubby
+    def setUp(self):
+        from madblog.config import config
+
+        self.config = config
+        self._orig = {
+            k: getattr(config, k)
+            for k in (
+                "content_dir",
+                "link",
+                "enable_activitypub",
+                "activitypub_link",
+                "activitypub_domain",
+                "activitypub_private_key_path",
+                "author",
+                "state_dir",
+            )
+        }
+        self._tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(self._tmpdir.cleanup)
+
+        root = Path(self._tmpdir.name)
+        markdown_dir = root / "markdown"
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+        (markdown_dir / "test-post.md").write_text(
+            "\n".join(
+                [
+                    "[//]: # (title: Test Post)",
+                    "[//]: # (published: 2026-01-01T00:00:00+00:00)",
+                    "",
+                    "# Test Post",
+                    "",
+                    "Hello world.",
+                ]
+            )
+        )
+
+        config.content_dir = str(root)
+        config.link = "https://example.com"
+        config.state_dir = str(root / "state")
+        config.enable_activitypub = True
+        config.activitypub_link = None
+        config.activitypub_domain = None
+        config.activitypub_private_key_path = None
+        config.author = "Test Author"
+
+        from madblog.app import BlogApp
+
+        self.app = BlogApp(__name__)
+        self.client = self.app.test_client()
+        self.article_url = self.app._ap_integration.file_to_url(
+            str(self.app.pages_dir / "test-post.md")
+        )
+
+    def tearDown(self):
+        if hasattr(self.app, "_ap_startup_thread"):
+            self.app._ap_startup_thread.join(timeout=5)
+        for k, v in self._orig.items():
+            setattr(self.config, k, v)
+
+    def _store(self, **kwargs):
+        from pubby import Interaction
+
+        self.app.activitypub_storage.store_interaction(Interaction(**kwargs))
+
+    def _store_interactions(self):
+        from pubby import InteractionType
+
+        self._store(
+            source_actor_id="https://remote.social/u/a",
+            target_resource=self.article_url,
+            interaction_type=InteractionType.REPLY,
+            object_id="https://remote.social/u/a/statuses/1",
+        )
+        self._store(
+            source_actor_id="https://remote.social/u/b",
+            target_resource=self.article_url,
+            interaction_type=InteractionType.LIKE,
+            activity_id="https://remote.social/u/b/likes/1",
+        )
+        self._store(
+            source_actor_id="https://remote.social/u/c",
+            target_resource=self.article_url,
+            interaction_type=InteractionType.BOOST,
+            activity_id="https://remote.social/u/c/boosts/1",
+        )
+        self._store(
+            source_actor_id="https://remote.social/u/d",
+            target_resource=self.article_url,
+            interaction_type=InteractionType.QUOTE,
+            object_id="https://remote.social/u/d/statuses/9",
+        )
+
+    def test_build_object_advertises_collections(self):
+        self._store_interactions()
+        integration = self.app._ap_integration
+        md_file = str(self.app.pages_dir / "test-post.md")
+        obj, _ = integration.build_object(
+            md_file, self.article_url, "https://example.com/ap/actor"
+        )
+        doc = obj.to_dict()
+
+        expected = {
+            "replies": 1,
+            "likes": 1,
+            "shares": 1,
+            "quotes": 1,
+        }
+        for name, total in expected.items():
+            ref = doc.get(name)
+            self.assertIsNotNone(ref, name)
+            self.assertEqual(ref["id"], f"{self.article_url}/{name}")
+            self.assertEqual(ref["type"], "OrderedCollection")
+            self.assertEqual(ref["totalItems"], total)
+            self.assertEqual(ref["first"], f"{self.article_url}/{name}?page=1")
+
+    def test_collection_items_shapes(self):
+        self._store_interactions()
+        integration = self.app._ap_integration
+
+        replies = integration.collection_items(self.article_url, "replies")
+        self.assertEqual(replies, ["https://remote.social/u/a/statuses/1"])
+
+        likes = integration.collection_items(self.article_url, "likes")
+        self.assertEqual(
+            likes,
+            [
+                {
+                    "id": "https://remote.social/u/b/likes/1",
+                    "type": "Like",
+                    "actor": "https://remote.social/u/b",
+                    "object": self.article_url,
+                }
+            ],
+        )
+
+        shares = integration.collection_items(self.article_url, "shares")
+        self.assertEqual(
+            shares,
+            [
+                {
+                    "id": "https://remote.social/u/c/boosts/1",
+                    "type": "Announce",
+                    "actor": "https://remote.social/u/c",
+                    "object": self.article_url,
+                }
+            ],
+        )
+
+        quotes = integration.collection_items(self.article_url, "quotes")
+        self.assertEqual(quotes, ["https://remote.social/u/d/statuses/9"])
+
+    def test_collection_items_merge_local_replies(self):
+        self._store_interactions()
+        integration = self.app._ap_integration
+        local = ["https://example.com/reply/test-post/my-reply"]
+        replies = integration.collection_items(
+            self.article_url, "replies", local_reply_urls=local
+        )
+        self.assertEqual(
+            replies,
+            [
+                "https://remote.social/u/a/statuses/1",
+                "https://example.com/reply/test-post/my-reply",
+            ],
+        )
+
+    def test_non_public_interactions_are_filtered(self):
+        from pubby import InteractionType
+
+        self._store_interactions()
+        # A like addressed only to the blog actor — not public.
+        self._store(
+            source_actor_id="https://remote.social/u/sneaky",
+            target_resource=self.article_url,
+            interaction_type=InteractionType.LIKE,
+            activity_id="https://remote.social/u/sneaky/likes/1",
+            metadata={
+                "raw_object": {
+                    "to": ["https://example.com/ap/actor"],
+                    "cc": [],
+                }
+            },
+        )
+        integration = self.app._ap_integration
+        likes = integration.collection_items(self.article_url, "likes")
+        self.assertEqual(len(likes), 1)
+        self.assertEqual(likes[0]["actor"], "https://remote.social/u/b")
+
+    def test_collection_index_and_page_endpoints(self):
+        self._store_interactions()
+
+        resp = self.client.get("/article/test-post/replies")
+        self.assertEqual(resp.status_code, 200)
+        doc = resp.get_json()
+        self.assertEqual(doc["type"], "OrderedCollection")
+        self.assertEqual(doc["id"], f"{self.article_url}/replies")
+        self.assertEqual(doc["totalItems"], 1)
+
+        resp = self.client.get("/article/test-post/replies?page=1")
+        self.assertEqual(resp.status_code, 200)
+        page = resp.get_json()
+        self.assertEqual(page["type"], "OrderedCollectionPage")
+        self.assertEqual(page["partOf"], f"{self.article_url}/replies")
+        self.assertEqual(page["orderedItems"], ["https://remote.social/u/a/statuses/1"])
+
+        resp = self.client.get("/article/test-post/likes?page=1")
+        page = resp.get_json()
+        self.assertEqual(page["orderedItems"][0]["type"], "Like")
+
+    def test_collection_endpoint_404s(self):
+        self.assertEqual(
+            self.client.get("/article/does-not-exist/replies").status_code, 404
+        )
+        self.assertEqual(
+            self.client.get("/article/test-post/replies?page=abc").status_code,
+            400,
+        )

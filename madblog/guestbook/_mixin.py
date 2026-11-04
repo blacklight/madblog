@@ -17,7 +17,7 @@ from markupsafe import Markup
 from pubby import ActivityPubHandler
 from webmentions import WebmentionDirection, WebmentionsHandler
 
-from madblog.activitypub import ActivityPubMixin
+from madblog.activitypub._integration import is_public_interaction
 from madblog.config import config
 from madblog.moderation import is_allowed, is_blocked, is_actor_permitted
 
@@ -226,7 +226,7 @@ class GuestbookMixin(ABC):
         guestbook_interactions = []
         for interaction in interactions:
             # Skip private / non-public interactions
-            if not ActivityPubMixin._is_public_interaction(interaction):
+            if not is_public_interaction(interaction):
                 continue
 
             interaction_type = getattr(interaction, "interaction_type", None)
