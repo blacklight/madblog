@@ -1104,6 +1104,9 @@ def followers_route():
     if not config.enable_activitypub:
         return Response("ActivityPub is not enabled", status=404, mimetype="text/plain")
 
+    if config.hide_followers:
+        return Response("Not found", status=404, mimetype="text/plain")
+
     # Compute mtime from followers directory
     mtime = get_followers_mtime_for_app(app)
 

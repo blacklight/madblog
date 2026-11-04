@@ -137,7 +137,9 @@
                     {% if activitypub_handle and config.activitypub_profile_url %}
                     <a class="activitypub-handle" href="{{ config.activitypub_profile_url }}"><span class="handle">{{ activitypub_handle }}</span></a>
                     {% endif %}
+                    {% if not config.hide_followers %}
                     <a href="/followers">&#128101; Followers <span class="nav-count">({{ followers_count }})</span></a>
+                    {% endif %}
                     {% endif %}
                     <a href="/blog">&#128221; Blog</a>
                     {% if has_about_page %}

@@ -1215,6 +1215,7 @@ class FollowersRouteTest(unittest.TestCase):
         self.app = app
         self.config = config
         self._orig_enable_ap = config.enable_activitypub
+        self._orig_hide_followers = config.hide_followers
 
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
@@ -1250,6 +1251,7 @@ class FollowersRouteTest(unittest.TestCase):
     def tearDown(self):
         if hasattr(self, "config"):
             self.config.enable_activitypub = self._orig_enable_ap
+            self.config.hide_followers = self._orig_hide_followers
 
     @skip_if_no_pubby
     def test_followers_html_page_returns_200(self):
@@ -1281,6 +1283,21 @@ class FollowersRouteTest(unittest.TestCase):
         self.config.enable_activitypub = False
         resp = self.client.get("/followers")
         self.assertEqual(resp.status_code, 404)
+
+    @skip_if_no_pubby
+    def test_followers_route_404_when_hidden(self):
+        """Test /followers returns 404 when hide_followers is enabled."""
+        self.config.hide_followers = True
+        resp = self.client.get("/followers")
+        self.assertEqual(resp.status_code, 404)
+
+    @skip_if_no_pubby
+    def test_home_page_hides_followers_link_when_hidden(self):
+        """Test the home page hides the followers link when hide_followers is enabled."""
+        self.config.hide_followers = True
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn(b'href="/followers"', resp.data)
 
 
 class ActivityPubPublishTest(unittest.TestCase):

@@ -1525,6 +1525,7 @@ Great article by @alice@mastodon.social about federation!
 | `activitypub_quote_control` | `MADBLOG_ACTIVITYPUB_QUOTE_CONTROL` | `public` | Quote policy for ActivityPub posts. Mastodon will refuse quote-boosts unless set to `public`. |
 | `activitypub_auto_approve_quotes` | `MADBLOG_ACTIVITYPUB_AUTO_APPROVE_QUOTES` | `true` | Automatically send QuoteAuthorization when a remote actor quotes your posts. Without this, Mastodon keeps quotes in "pending" state. |
 | `activitypub_email_notifications` | `MADBLOG_ACTIVITYPUB_EMAIL_NOTIFICATIONS` | `true` | Send email notifications for ActivityPub interactions (requires SMTP configuration and `author_email`). |
+| `hide_followers` | `MADBLOG_HIDE_FOLLOWERS` | `false` | Hide the followers list: `/followers` returns 404 and the Followers link is removed from the navigation menu. |
 
 ### Mastodon verification
 

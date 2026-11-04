@@ -72,6 +72,7 @@ class Config:
     activitypub_email_notifications: bool = True
     activitypub_quote_control: str = "public"
     activitypub_auto_approve_quotes: bool = True
+    hide_followers: bool = False
 
     # Guestbook
     enable_guestbook: bool = True
@@ -314,6 +315,8 @@ def _init_config_from_file(  # pylint: disable=too-many-branches,too-many-statem
         config.activitypub_auto_approve_quotes = bool(
             cfg["activitypub_auto_approve_quotes"]
         )
+    if cfg.get("hide_followers") is not None:
+        config.hide_followers = bool(cfg["hide_followers"])
     config.categories = cfg.get("categories", [])
 
     # Guestbook
@@ -482,6 +485,9 @@ def _init_config_from_env():  # pylint: disable=too-many-branches,too-many-state
         config.activitypub_auto_approve_quotes = (
             os.environ["MADBLOG_ACTIVITYPUB_AUTO_APPROVE_QUOTES"] == "1"
         )
+    if os.getenv("MADBLOG_HIDE_FOLLOWERS"):
+        config.hide_followers = os.environ["MADBLOG_HIDE_FOLLOWERS"] == "1"
+
     # Guestbook
     if os.getenv("MADBLOG_ENABLE_GUESTBOOK"):
         config.enable_guestbook = os.environ["MADBLOG_ENABLE_GUESTBOOK"] == "1"

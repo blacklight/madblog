@@ -274,6 +274,11 @@ link: https://myblog.example.com
 # (optional, default: true)
 # activitypub_auto_approve_quotes: true
 
+# If true, hide the list of followers: the /followers page returns 404
+# and the Followers link is removed from the navigation menu
+# (optional, default: false)
+# hide_followers: false
+
 #### (Optional) Moderation ####
 
 # A list of blocked actors whose Webmentions and ActivityPub interactions

@@ -4,6 +4,10 @@
 
 ### Added
 
+- New `hide_followers` configuration option (env:
+  `MADBLOG_HIDE_FOLLOWERS`). When enabled, the `/followers` page returns
+  404 and the Followers link is removed from the navigation menu.
+
 - Federated objects (articles and author replies) now advertise their
   `replies`, `likes`, `shares` and `quotes` collections on the served
   ActivityPub document, and each collection is dereferenceable as a
