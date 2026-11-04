@@ -14,27 +14,40 @@
   paged `OrderedCollection` under `<object_url>/<collection>`
   (`?page=N` for `OrderedCollectionPage`s). Remote servers can now
   discover the interactions a post received — previously they were only
-  rendered on the HTML page. Requires pubby >= 0.6.11.
+  rendered on the HTML page. Requires pubby >= 0.6.11. The dispatch
+  also runs inside the generic article/reply catch-all views, which
+  otherwise shadow the dedicated collection routes on apps that carry
+  `routes.py`'s catch-all rules.
+
+### Fixed
+
+- The "Neither mmdc nor npx found in PATH" warning is now emitted only
+  once per process instead of on every page render or ActivityPub
+  Mermaid-to-PNG conversion. The `mmdc`/`npx` lookup is shared and
+  memoized via `resolve_mermaid_cmd()`.
+
+## 1.3.12
+
+### Fixed
 
 - The CI/CD pipeline now tags Docker images on Quay with the release
   version (e.g. `v1.3.10` and `1.3.10`) in addition to `latest`.
-
-### Fixed
 
 - `/feed.rss` and `/rss` no longer return a 500 error when the blog has
   no `description` configured. RSS requires a non-empty channel
   description, so the feed now falls back to a placeholder derived from
   the blog title.
+
+## 1.3.11
+
+### Fixed
+
 - Inbound `Follow` activities are auto-accepted again when
   `activitypub_manually_approves_followers` is enabled. Pubby >= 0.3.9
   parks such follows as pending `FollowRequest`s unless a
   `follow_policy` is provided, but madblog has no approval flow — the
   config flag stays advertise-only (`manuallyApprovesFollowers` in the
   actor document) as before.
-- The "Neither mmdc nor npx found in PATH" warning is now emitted only
-  once per process instead of on every page render or ActivityPub
-  Mermaid-to-PNG conversion. The `mmdc`/`npx` lookup is shared and
-  memoized via `resolve_mermaid_cmd()`.
 
 ## 1.3.10
 
