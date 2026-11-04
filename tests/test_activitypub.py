@@ -3254,3 +3254,37 @@ class InteractionCollectionsTest(unittest.TestCase):
             self.client.get("/article/test-post/replies?page=abc").status_code,
             400,
         )
+
+    def test_catch_all_view_dispatch(self):
+        """
+        On the production app the ``/article/<path:path>/<article>``
+        catch-all from ``routes.py`` shadows the dedicated collection
+        routes, so ``get_page_or_collection`` must dispatch trailing
+        collection names itself — while still preferring real nested
+        pages named like a collection.
+        """
+        self._store_interactions()
+        with self.app.test_request_context("/article/test-post/replies"):
+            resp = self.app.make_response(
+                self.app.get_page_or_collection("test-post/replies")
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json()["type"], "OrderedCollection")
+
+        # A real nested page named `replies` still wins over the collection.
+        sub_dir = Path(self.app.pages_dir) / "sub"
+        sub_dir.mkdir(exist_ok=True)
+        (sub_dir / "replies.md").write_text("# Real page\n")
+        with self.app.test_request_context("/article/sub/replies"):
+            resp = self.app.make_response(
+                self.app.get_page_or_collection("sub/replies")
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Real page", resp.data)
+
+        # A missing article still 404s through the normal page path.
+        with self.app.test_request_context("/article/nowhere/replies"):
+            resp = self.app.make_response(
+                self.app.get_page_or_collection("nowhere/replies")
+            )
+        self.assertEqual(resp.status_code, 404)

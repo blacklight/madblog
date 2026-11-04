@@ -664,6 +664,45 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             self._ap_integration.reply_file_to_url(md_path), coll
         )
 
+    def get_page_or_collection(self, path: str):
+        """
+        ``get_page`` that serves an interaction collection when the path
+        ends in a collection name.
+
+        On apps that carry the generic ``/article/<path:path>/<article>``
+        catch-all from ``routes.py``, that rule shadows the dedicated
+        ``/article/<article>/<collection>`` routes, so the dispatch has
+        to happen at the view level: the trailing segment is resolved as
+        a real nested page first, and otherwise as the interaction
+        collection of the parent article.
+        """
+        page, sep, coll = path.rpartition("/")
+        if sep and coll in INTERACTION_COLLECTIONS:
+            nested = os.path.join(str(self.pages_dir), path + ".md")
+            integration = getattr(self, "_ap_integration", None)
+            if integration is not None and not os.path.isfile(nested):
+                return self._ap_article_collection("", page, coll)
+        return self.get_page(path)
+
+    def get_reply_or_collection(self, article_slug: str, reply_slug: str):
+        """
+        ``get_reply`` counterpart of :meth:`get_page_or_collection` —
+        serves a top-level reply's interaction collection when the
+        catch-all ``/reply/<path:article_slug>/<reply_slug>`` route
+        claims ``/reply/<slug>/<collection>``.
+        """
+        integration = getattr(self, "_ap_integration", None)
+        if reply_slug in INTERACTION_COLLECTIONS and integration is not None:
+            replies_dir = getattr(self, "replies_dir", None)
+            nested = (
+                os.path.join(str(replies_dir), article_slug, reply_slug + ".md")
+                if replies_dir
+                else None
+            )
+            if not nested or not os.path.isfile(nested):
+                return self._ap_reply_collection(None, article_slug, reply_slug)
+        return self.get_reply(article_slug, reply_slug)
+
     def _ap_collection_response(
         self, object_url: str, coll: str, article_slug: str | None = None
     ):

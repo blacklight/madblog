@@ -260,7 +260,10 @@ def manifest_route():
 
 @app.route("/article/<path:path>/<article>", methods=["GET"])
 def article_with_path_route(path: str, article: str):
-    return app.get_page(os.path.join(path, article))
+    # The catch-all shadows the dedicated ``/<collection>`` routes on
+    # this app, so the view dispatches to the interaction collection
+    # when the trailing segment is a collection name.
+    return app.get_page_or_collection(os.path.join(path, article))
 
 
 @app.route("/article/<path:path>/<article>.md", methods=["GET"])
@@ -290,7 +293,8 @@ def raw_toplevel_reply_route(slug: str):
 
 @app.route("/reply/<path:article_slug>/<reply_slug>", methods=["GET"])
 def reply_route(article_slug: str, reply_slug: str):
-    return app.get_reply(article_slug, reply_slug)
+    # Same shadowing as articles — see ``article_with_path_route``.
+    return app.get_reply_or_collection(article_slug, reply_slug)
 
 
 @app.route("/reply/<path:article_slug>/<reply_slug>.md", methods=["GET"])

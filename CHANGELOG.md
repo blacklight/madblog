@@ -10,6 +10,11 @@
   metadata on articles, replies, likes and `index.md`/`ABOUT.md` files;
   the legacy `[//]: # (key: value)` comment syntax is still supported.
 
+### Fixed
+
+- Fixed routes for federated objects interaction collections - prevent
+  `routes.py`'s catch-all rules from serving the HTML document.
+
 ## 1.3.13
 
 ### Added
