@@ -19,6 +19,7 @@ from madblog.reactions import (
     count_reactions,
 )
 
+from ._metadata import normalize_metadata, split_front_matter
 from ._render import render_html, resolve_relative_urls
 
 logger = getLogger(__name__)
@@ -44,7 +45,10 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
     @staticmethod
     def _parse_metadata_from_markdown(handle: IO, page: str) -> dict:
         metadata: dict = {"uri": "/article/" + page[:-3]}
-        for line in handle:
+        front_matter, lines = split_front_matter(list(handle))
+        metadata.update(normalize_metadata(front_matter))
+
+        for line in lines:
             if not line.strip() or re.match(r"(^---\s*$)|(^#\s+.*)", line):
                 continue
 
@@ -52,19 +56,21 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
             if not m:
                 continue
 
-            if m.group(1) == "published":
-                parsed_dt = datetime.datetime.fromisoformat(m.group(2))
-                if parsed_dt.tzinfo is None:
-                    parsed_dt = parsed_dt.replace(tzinfo=datetime.timezone.utc)
-                metadata[m.group(1)] = parsed_dt
-            else:
-                metadata[m.group(1)] = m.group(2)
+            metadata[m.group(1)] = m.group(2)
+
+        if isinstance(metadata.get("published"), str):
+            parsed_dt = datetime.datetime.fromisoformat(metadata["published"])
+            if parsed_dt.tzinfo is None:
+                parsed_dt = parsed_dt.replace(tzinfo=datetime.timezone.utc)
+            metadata["published"] = parsed_dt
 
         return metadata
 
     @staticmethod
     def _infer_title_and_url_from_markdown(handle: IO) -> Tuple[str, str]:
-        for line in handle:
+        _, lines = split_front_matter(list(handle))
+
+        for line in lines:
             # Skip blank lines, YAML front-matter delimiters, and
             # metadata comment lines so that a heading appearing after
             # them can still be detected.
@@ -361,8 +367,9 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
         """
         content = ""
         processed_title = False
+        _, lines = split_front_matter(list(handle))
 
-        for line in handle:
+        for line in lines:
             if line.startswith("# "):
                 if not processed_title:
                     processed_title = True

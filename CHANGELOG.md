@@ -4,6 +4,16 @@
 
 ### Added
 
+- Markdown files now support YAML front matter for metadata — a
+  `---`-delimited block at the top of the file with `key: value` pairs
+  (e.g. `title: My post`). It is now the documented way to declare
+  metadata on articles, replies, likes and `index.md`/`ABOUT.md` files;
+  the legacy `[//]: # (key: value)` comment syntax is still supported.
+
+## 1.3.13
+
+### Added
+
 - New `hide_followers` configuration option (env:
   `MADBLOG_HIDE_FOLLOWERS`). When enabled, the `/followers` page returns
   404 and the Followers link is removed from the navigation menu.

@@ -75,7 +75,7 @@ link: https://myblog.example.com
 
 # The language of the blog (optional, default: "en-US")
 # NOTE: The language can also be overridden on a per-article basis by
-# specifying e.g. `[//]: # (language: en-US)` in the Markdown file
+# specifying e.g. `language: en-US` in the Markdown front matter
 # language: en-US
 
 # Default author name to be used when no author is specified (optional)
@@ -318,7 +318,8 @@ link: https://myblog.example.com
 # Default visibility for new posts (optional, default: "public")
 # Supported values: "public", "unlisted", "followers", "private"
 # This affects how posts are federated via ActivityPub.
-# Can also be overridden per-article with `[//]: # (visibility: unlisted)`
+# Can also be overridden per-article with `visibility: unlisted` in the
+# Markdown front matter
 # default_visibility: public
 
 #### (Optional) Default Index Page ####

@@ -159,8 +159,8 @@ Feed routes use `feedgen.FeedGenerator` to produce RSS 2.0 and Atom 1.0 feeds:
 
 - `madblog/markdown/_mixin.py` (`MarkdownMixin`)
   - Resolves and validates Markdown file paths under `pages_dir`.
-  - Extracts metadata from “comment headers” of the form:
-    ` [//]: # (key: value)`
+  - Extracts metadata from the YAML front matter block (`---`-delimited)
+    or from legacy “comment headers” of the form ` [//]: # (key: value)`
   - Infers the page title and optional external URL from the first `# Title`
     header.
   - Handles published date inference from filesystem metadata when missing.
@@ -447,10 +447,11 @@ Replies are excluded from the home page listing by an explicit guard in
 
 ### Metadata and `reply-to` derivation
 
-Each reply file uses the same `[//]: # (key: value)` metadata format as
-articles. The `reply-to` key specifies the URL of the reaction being
-replied to (a Webmention source, an AP interaction `object_id`, or
-another reply's permalink).
+Each reply file uses the same metadata format as articles (YAML front
+matter, or the legacy `[//]: # (key: value)` comment headers). The
+`reply-to` key specifies the URL of the reaction being replied to (a
+Webmention source, an AP interaction `object_id`, or another reply's
+permalink).
 
 When `reply-to` is omitted, `ActivityPubRepliesMixin._parse_reply_metadata()`
 derives it from the directory structure:

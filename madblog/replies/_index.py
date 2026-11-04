@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from madblog.constants import REGEX_MARKDOWN_METADATA
+from madblog.markdown import normalize_metadata, split_front_matter
 from madblog.monitor import ChangeType
 from madblog.reactions import _fediverse_url_aliases
 
@@ -175,8 +176,11 @@ class ReplyMetadataIndex:
 
         try:
             with open(filepath, "r", encoding="utf-8") as f:
+                front_matter, lines = split_front_matter(f.readlines())
+                metadata.update(normalize_metadata(front_matter))
+
                 in_metadata = True
-                for line in f:
+                for line in lines:
                     stripped = line.strip()
 
                     # Skip empty lines and YAML delimiters in metadata block

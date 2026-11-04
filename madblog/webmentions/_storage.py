@@ -297,7 +297,7 @@ class FileWebmentionsStorage(StartupSyncMixin, WebmentionsStorage):
                         or mention.created_at
                     )
 
-            # Write as Markdown with YAML frontmatter
+            # Write as Markdown with metadata comments
             content = self._format_webmention_markdown(mention)
 
             # Atomic write

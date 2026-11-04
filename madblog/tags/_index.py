@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Tuple
 
 from madblog.config import config
 from madblog.constants import REGEX_HASHTAG, REGEX_MARKDOWN_METADATA
-from madblog.markdown import parse_metadata_header
+from madblog.markdown import parse_metadata_header, split_front_matter
 
 from ._parsers import extract_hashtags, normalize_tag, parse_metadata_tags
 
@@ -108,7 +108,8 @@ def _read_body(filepath: str) -> str:
     skipped_title = False
     try:
         with open(filepath, "r", encoding="utf-8") as fh:
-            for line in fh:
+            _, remaining = split_front_matter(fh.readlines())
+            for line in remaining:
                 if not past_header:
                     if not line.strip() or re.match(r"(^---\s*$)", line):
                         continue

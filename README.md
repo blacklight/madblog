@@ -339,11 +339,21 @@ Set `activitypub_private_key_path: /etc/madblog/ap_key.pem` in your
 
 ## Markdown files
 
-Metadata for articles is stored directly in the Markdown files, as comments in
-the format:
+Metadata for articles is stored directly in the Markdown files, as a YAML
+_front matter_ block at the very top of the file, delimited by `---` lines:
 
 ```markdown
-[//]: # (key: value)
+---
+title: Title of the article
+description: Short description of the content
+image: /img/some-header-image.png
+author: Author Name <https://author.me>
+author_photo: https://author.me/avatar.png
+language: en-US
+published: 2022-01-01
+---
+
+...your article goes here...
 ```
 
 Supported metadata:
@@ -359,43 +369,38 @@ Supported metadata:
 | `published` | Date | Inferred from the creation time of the file |
 | `tags` | List of strings | — |
 
-
-Example Markdown header:
-
-```markdown
-[//]: # (title: Title of the article)
-[//]: # (description: Short description of the content)
-[//]: # (image: /img/some-header-image.png)
-[//]: # (author: Author Name <https://author.me>)
-[//]: # (author_photo: https://author.me/avatar.png)
-[//]: # (language: en-US)
-[//]: # (published: 2022-01-01)
-
-...your article goes here...
-```
-
 Or, if you want to pass an email rather than a URL for the author:
 
 ```markdown
-[//]: # (author: Author Name <mailto:email@author.me>)
+---
+author: Author Name <mailto:email@author.me>
+---
 ```
 
-Optional:
+You can also tag your articles — either with a YAML list or with a
+comma-separated string:
 
 ```markdown
-[//]: # (title: Title of the article)
-[//]: # (description: Short description of the content)
-[//]: # (image: /img/some-header-image.png)
-[//]: # (author: Author Name <https://author.me>)
-[//]: # (author_photo: https://author.me/avatar.png)
-[//]: # (language: en-US)
-[//]: # (published: 2022-01-01)
+---
+tags: [python, webdev, tutorial]
+---
 ```
 
-You can also tag your articles:
+```markdown
+---
+tags: "#python, #webdev, #tutorial"
+---
+```
+
+**Note:** values are parsed as YAML. Strings containing special characters
+(such as a leading `#`) need to be quoted, while unquoted dates, lists and
+other YAML types are converted to their plain-text representation.
+
+The legacy comment syntax is still supported as well, and can be used
+alongside or instead of front matter:
 
 ```markdown
-[//]: # (tags: #python, #webdev, #tutorial)
+[//]: # (key: value)
 ```
 
 Tags declared in the metadata header are shown in the article header as links and
@@ -689,18 +694,20 @@ automatically appear in the navigation menu.
 **Example `ABOUT.md`:**
 
 ```markdown
-[//]: # (title: About Me)
-[//]: # (name: Jane Doe)
-[//]: # (given-name: Jane)
-[//]: # (family-name: Doe)
-[//]: # (url: https://janedoe.com)
-[//]: # (photo: /img/avatar.png)
-[//]: # (email: jane@example.com)
-[//]: # (job-title: Software Engineer)
-[//]: # (org: ACME Corp|https://acme.com, Open Source|https://github.com)
-[//]: # (note: Developer, blogger, and open source enthusiast.)
-[//]: # (key: /key.txt|D90FBA7F76362774)
-[//]: # (links: Mastodon|https://mastodon.social/@jane, GitHub|https://github.com/jane)
+---
+title: About Me
+name: Jane Doe
+given-name: Jane
+family-name: Doe
+url: https://janedoe.com
+photo: /img/avatar.png
+email: jane@example.com
+job-title: Software Engineer
+org: ACME Corp|https://acme.com, Open Source|https://github.com
+note: Developer, blogger, and open source enthusiast.
+key: /key.txt|D90FBA7F76362774
+links: Mastodon|https://mastodon.social/@jane, GitHub|https://github.com/jane
+---
 
 # About Me
 
@@ -757,7 +764,9 @@ export MADBLOG_DEFAULT_VISIBILITY=public
 Override visibility for individual posts using metadata:
 
 ```markdown
-[//]: # (visibility: unlisted)
+---
+visibility: unlisted
+---
 
 # My Unlisted Post
 
@@ -915,9 +924,11 @@ Place an `index.md` file in a folder to customize it:
   the default listing. Example:
 
 ```markdown
-[//]: # (title: About Me)
-[//]: # (description: Short bio)
-[//]: # (image: /img/docs-banner.png)
+---
+title: About Me
+description: Short bio
+image: /img/docs-banner.png
+---
 
 # About Me
 
@@ -935,9 +946,11 @@ and article at `/~about/`.
   it keeps the default listing.
 
 ```markdown
-[//]: # (title: Documentation)
-[//]: # (description: Guides and references)
-[//]: # (image: /img/docs-banner.png)
+---
+title: Documentation
+description: Guides and references
+image: /img/docs-banner.png
+---
 
 # Welcome to Documentation
 
@@ -1014,10 +1027,12 @@ Replies live under `<content_dir>/replies/`, organized by article slug:
 
 ### Reply metadata
 
-Reply files use the same `[//]: #` metadata format as articles:
+Reply files use the same metadata format as articles:
 
 ```markdown
-[//]: # (reply-to: https://mastodon.social/users/alice/statuses/123)
+---
+reply-to: https://mastodon.social/users/alice/statuses/123
+---
 
 Thanks for the kind words, Alice!
 ```
@@ -1127,8 +1142,10 @@ Create a Markdown file (either under `replies/` or as a regular article) with
 the `like-of` metadata pointing to the URL you want to like:
 
 ```markdown
-[//]: # (like-of: https://mastodon.social/@alice/123)
-[//]: # (published: 2025-01-15)
+---
+like-of: https://mastodon.social/@alice/123
+published: 2025-01-15
+---
 
 # Liked
 ```

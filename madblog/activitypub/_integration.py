@@ -29,7 +29,12 @@ from madblog.constants import (
     REGEX_MERMAID_BLOCK,
     REGEX_TOC_MARKER,
 )
-from madblog.markdown import parse_metadata_header, render_html, resolve_relative_urls
+from madblog.markdown import (
+    parse_metadata_header,
+    render_html,
+    resolve_relative_urls,
+    split_front_matter,
+)
 from madblog.markdown._processors.mermaid import resolve_mermaid_cmd
 from madblog.monitor import ChangeType
 from madblog.sync import StartupSyncMixin
@@ -379,6 +384,7 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         except OSError:
             return ""
 
+        _, lines = split_front_matter(lines)
         cleaned: list[str] = []
         for line in lines:
             if (
