@@ -16,6 +16,15 @@
   metadata on articles, replies, likes and `index.md`/`ABOUT.md` files;
   the legacy `[//]: # (key: value)` comment syntax is still supported.
 
+### Changed
+
+- Inline images are no longer replaced by link placeholders in the
+  federated `content` — the `<img>` element is kept in place and the
+  image is still also delivered as an `attachment`, so
+  inline-capable instances (e.g. Yonder) render the image where it was
+  written while other implementations keep showing it as an
+  attachment.
+
 ### Fixed
 
 - Fixed routes for federated objects interaction collections - prevent

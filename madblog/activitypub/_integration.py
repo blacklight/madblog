@@ -637,8 +637,10 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
                 att["mediaType"] = mt
 
             attachments.append(att)
-            label = alt or f"image {img_counter}"
-            return f'<p>[<a href="{src}">{label}</a>]</p>'
+            # Keep the <img> in content: clients that render inline
+            # images (Yonder) show it in place, everyone else falls
+            # back to the attachment above.
+            return tag
 
         html = self._INLINE_IMG_RE.sub(_replace_inline_img, html)
 

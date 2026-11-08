@@ -847,6 +847,11 @@ class ActivityPubContentChangeTest(unittest.TestCase):
         obj = handler.publish_object.call_args[0][0]
         self.assertTrue(obj.attachment)
         self.assertTrue(any(a.get("url") == img_url for a in obj.attachment))
+        # The <img> stays in content too — inline-capable clients
+        # (Yonder) render it in place; the attachment is the fallback.
+        self.assertIn("<img", obj.content)
+        self.assertIn(img_url, obj.content)
+        self.assertNotIn("[<a href=", obj.content)
 
     @skip_if_no_pubby
     def test_generated_image_attachments_use_content_base_url(self):
