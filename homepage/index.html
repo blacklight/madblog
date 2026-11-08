@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Madblog — a self-hosted, federated blog in a folder of Markdown files</title>
+  <meta name="description" content="Madblog is a self-hosted blogging platform and Web framework that runs straight from a directory of Markdown files. No database, no lock-in — with ActivityPub federation and Webmentions built in.">
+
+  <meta property="og:title" content="Madblog">
+  <meta property="og:description" content="A self-hosted, ActivityPub-federated blog that runs from a folder of Markdown files. No database, no lock-in.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/desktop-home.png">
+
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f8f8f8">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#202020">
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236d5ef0'/%3E%3Cpath d='M20 14h16c6.6 0 12 5.4 12 12v24H32c-6.6 0-12-5.4-12-12V14z' fill='%23fff'/%3E%3Cpath d='M32 26h16v24H32z' fill='%23c9c1ff'/%3E%3C/svg%3E">
+
+  <style>
+    /* ---------- Theme tokens ---------- */
+    :root {
+      --bg: #f8f8f8;
+      --bg-trans: rgba(248, 248, 248, 0.82);
+      --surface: #ffffff;
+      --surface-2: #efeff2;
+      --text: #1c1c22;
+      --muted: #5d5d6b;
+      --border: #e2e2e8;
+      --accent: #6d5ef0;
+      --accent-strong: #5748d6;
+      --accent-ink: #ffffff;
+      --accent-soft: rgba(109, 94, 240, 0.13);
+      --code-bg: #17141f;
+      --code-text: #ddd6f7;
+      --code-border: #352d4d;
+      --shadow-lg: 0 24px 60px -18px rgba(28, 28, 34, 0.28);
+      --shadow-sm: 0 8px 24px -10px rgba(28, 28, 34, 0.22);
+      --radius: 14px;
+      color-scheme: light;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #202020;
+        --bg-trans: rgba(32, 32, 32, 0.82);
+        --surface: #2a2a2e;
+        --surface-2: #232327;
+        --text: #ececf1;
+        --muted: #a2a2b0;
+        --border: #3d3d44;
+        --accent: #9d8fff;
+        --accent-strong: #b7abff;
+        --accent-ink: #1d1440;
+        --accent-soft: rgba(157, 143, 255, 0.15);
+        --code-bg: #14111c;
+        --code-text: #ddd6f7;
+        --code-border: #3a3252;
+        --shadow-lg: 0 24px 60px -18px rgba(0, 0, 0, 0.65);
+        --shadow-sm: 0 8px 24px -10px rgba(0, 0, 0, 0.55);
+        color-scheme: dark;
+      }
+    }
+
+    /* ---------- Base ---------- */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+                   "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    img { max-width: 100%; display: block; }
+    a { color: inherit; }
+
+    .container {
+      width: min(1120px, 100% - 3rem);
+      margin-inline: auto;
+    }
+
+    /* ---------- Header ---------- */
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: var(--bg-trans);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .site-header .container {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      min-height: 4rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 800;
+      font-size: 1.15rem;
+      letter-spacing: -0.01em;
+      text-decoration: none;
+      margin-right: auto;
+    }
+
+    .brand svg { width: 30px; height: 30px; flex: none; }
+
+    .nav {
+      display: flex;
+      gap: 1.4rem;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+
+    .nav a { text-decoration: none; }
+    .nav a:hover { color: var(--text); }
+
+    .header-actions { display: flex; gap: 0.6rem; }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.55rem 1.15rem;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-weight: 650;
+      font-size: 0.95rem;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease,
+                  background 0.15s ease, border-color 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .btn--primary {
+      background: var(--accent);
+      color: var(--accent-ink);
+      box-shadow: var(--shadow-sm);
+    }
+    .btn--primary:hover { background: var(--accent-strong); transform: translateY(-1px); }
+
+    .btn--ghost {
+      background: transparent;
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .btn--ghost:hover { border-color: var(--muted); transform: translateY(-1px); }
+
+    .btn svg { width: 1em; height: 1em; }
+
+    /* ---------- Hero ---------- */
+    .hero {
+      padding: 5.5rem 0 4rem;
+      text-align: center;
+      background:
+        radial-gradient(52rem 22rem at 50% -8rem, var(--accent-soft), transparent 70%);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.3rem 0.9rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface);
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .badge .dot {
+      width: 0.5rem; height: 0.5rem;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .hero h1 {
+      margin: 1.4rem auto 1rem;
+      max-width: 20ch;
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+      font-weight: 850;
+    }
+
+    .hero .lede {
+      margin: 0 auto 2.2rem;
+      max-width: 58ch;
+      font-size: 1.15rem;
+      color: var(--muted);
+    }
+
+    .hero .cta {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+    }
+
+    .hero .meta {
+      margin-top: 1.4rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .hero-figure {
+      margin: 3.5rem auto 0;
+      max-width: 980px;
+    }
+
+    /* Browser frame around screenshots */
+    .browser {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--surface);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .browser__bar {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      padding: 0.65rem 0.9rem;
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .browser__dots { display: flex; gap: 0.4rem; }
+    .browser__dots span {
+      width: 0.65rem; height: 0.65rem;
+      border-radius: 50%;
+      background: var(--border);
+    }
+
+    .browser__url {
+      flex: 1;
+      padding: 0.2rem 0.8rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .browser img {
+      width: 100%;
+      height: auto;
+    }
+
+    /* ---------- Sections ---------- */
+    section { padding: 5rem 0; }
+
+    .band { background: var(--surface-2); border-block: 1px solid var(--border); }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+      gap: clamp(2rem, 5vw, 4.5rem);
+      align-items: center;
+    }
+
+    .split--rev .split__media { order: -1; }
+
+    .eyebrow {
+      display: inline-block;
+      margin-bottom: 0.9rem;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent-strong);
+    }
+
+    .split h2, .center h2 {
+      margin: 0 0 1rem;
+      font-size: clamp(1.7rem, 3.5vw, 2.4rem);
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+
+    .split p, .center p { color: var(--muted); margin: 0 0 1.4rem; }
+
+    .features { list-style: none; margin: 0; padding: 0; }
+    .features li {
+      position: relative;
+      padding-left: 2rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .features li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.22em;
+      width: 1.25rem;
+      height: 1.25rem;
+      border-radius: 50%;
+      background: var(--accent-soft) center / 0.72rem no-repeat
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M13.2 4.3 6.5 11 2.8 7.3' fill='none' stroke='%235748d6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      border: 1px solid var(--accent);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .features li::before {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M13.2 4.3 6.5 11 2.8 7.3' fill='none' stroke='%23b7abff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      }
+    }
+
+    .features strong { font-weight: 700; }
+    .features code {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.88em;
+      background: var(--accent-soft);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.05em 0.4em;
+    }
+
+    .shot {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .shot img { width: 100%; height: auto; }
+
+    /* Tall phone screenshots */
+    .device {
+      max-width: 340px;
+      margin-inline: auto;
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      overflow: hidden;
+      background: var(--surface);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .device img { width: 100%; height: auto; }
+
+    /* Desktop screenshot at readable size, with the phone peeking
+       from its corner — not two thumbnails side by side. */
+    .shots { display: grid; gap: 1rem; align-items: start; }
+    .shots--duo { position: relative; display: block; }
+    .shots--duo .shot { width: 100%; }
+    .shots--duo .device {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 35%;
+      max-width: 13rem;
+      margin: 0;
+    }
+
+    /* On small viewports only the mobile screenshots stay visible —
+       desktop screenshots and frames drop out entirely. */
+    .only-desktop { display: block; }
+    .only-mobile { display: none; }
+    @media (max-width: 767px) {
+      .only-desktop { display: none !important; }
+      .only-mobile { display: block; }
+      .shots--duo .device {
+        position: static;
+        width: auto;
+        max-width: 21rem;
+        margin-inline: auto;
+      }
+      .hero-figure .device { max-width: 340px; }
+    }
+
+    /* ---------- "More" grid ---------- */
+    .center { text-align: center; max-width: 46rem; margin-inline: auto; }
+
+    .grid {
+      margin-top: 3rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 1rem;
+      text-align: left;
+    }
+
+    .card {
+      padding: 1.4rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .card:hover { transform: translateY(-3px); box-shadow: var(--shadow-sm); }
+
+    .card .icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.4rem;
+      height: 2.4rem;
+      border-radius: 10px;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent);
+      font-size: 1.15rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .card h3 { margin: 0 0 0.35rem; font-size: 1.02rem; }
+    .card p { margin: 0; font-size: 0.9rem; color: var(--muted); }
+
+    /* ---------- Comparison ---------- */
+    .compare {
+      margin-top: 2.5rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .compare table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      min-width: 56rem;
+    }
+
+    .compare th,
+    .compare td {
+      padding: 0.85rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    .compare tr:last-child td { border-bottom: 0; }
+    .compare thead th {
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .compare thead th:first-child { color: var(--accent-strong); }
+    .compare td { color: var(--muted); }
+    .compare td:first-child {
+      color: var(--text);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* ---------- Self-host ---------- */
+    .install {
+      margin-top: 2.6rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem;
+      text-align: left;
+    }
+
+    .install figure {
+      margin: 0;
+      border: 1px solid var(--code-border);
+      border-radius: var(--radius);
+      background: var(--code-bg);
+      overflow: hidden;
+    }
+
+    .install figcaption {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.75rem 1.1rem;
+      color: var(--accent);
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--code-border);
+    }
+
+    .install pre {
+      margin: 0;
+      padding: 1.1rem 1.2rem;
+      overflow-x: auto;
+      color: var(--code-text);
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+                  "Liberation Mono", monospace;
+      font-size: 0.82rem;
+      line-height: 1.7;
+    }
+
+    .install .comment { color: #7c7394; }
+
+    /* ---------- Footer ---------- */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 3.5rem 0 2.5rem;
+      background: var(--surface-2);
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 1fr;
+      gap: 2.5rem;
+    }
+
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 800;
+    }
+    .footer-brand svg { width: 26px; height: 26px; }
+    footer p { color: var(--muted); font-size: 0.9rem; margin: 0.8rem 0 0; }
+
+    footer h4 {
+      margin: 0 0 0.8rem;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    footer ul { list-style: none; margin: 0; padding: 0; }
+    footer li { margin-bottom: 0.5rem; font-size: 0.92rem; }
+    footer a { color: var(--text); text-decoration: none; }
+    footer a:hover { color: var(--accent-strong); }
+
+    .license {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.82rem;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+    }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 880px) {
+      .nav { display: none; }
+      .split { grid-template-columns: 1fr; }
+      .split--rev .split__media { order: 0; }
+      .split__media { order: -1; }
+      .install { grid-template-columns: 1fr; }
+      .footer-grid { grid-template-columns: 1fr; gap: 1.8rem; }
+      section { padding: 3.5rem 0; }
+      .hero { padding-top: 4rem; }
+    }
+
+    @media (max-width: 560px) {
+      .header-actions .btn span.label { display: none; }
+      .header-actions .btn { padding: 0.55rem 0.8rem; }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ===== Header ===== -->
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="#top" aria-label="Madblog home">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <rect width="64" height="64" rx="14" fill="#6d5ef0"/>
+          <path d="M20 14h16c6.6 0 12 5.4 12 12v24H32c-6.6 0-12-5.4-12-12V14z" fill="#fff"/>
+          <path d="M32 26h16v24H32z" fill="#c9c1ff"/>
+        </svg>
+        Madblog
+      </a>
+
+      <nav class="nav" aria-label="Sections">
+        <a href="#features">Features</a>
+        <a href="#federation">Federation</a>
+        <a href="#rendering">Rendering</a>
+        <a href="#compare">Compare</a>
+        <a href="#self-host">Self-host</a>
+      </nav>
+
+      <div class="header-actions">
+        <a class="btn btn--ghost" href="https://github.com/blacklight/madblog" rel="noopener">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          <span class="label">GitHub</span>
+        </a>
+        <a class="btn btn--primary" href="https://git.fabiomanganiello.com/madblog" rel="noopener">
+          <span class="label">Source code</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- ===== Hero ===== -->
+    <section class="hero">
+      <div class="container">
+        <span class="badge"><span class="dot"></span> Self-hosted · ActivityPub · AGPL-3.0</span>
+        <h1>Your blog is a folder of Markdown files</h1>
+        <p class="lede">
+          Madblog is a self-hosted blogging platform and Web framework that runs
+          straight from a directory of <code>.md</code> files. No database, no
+          lock-in — and the open Web's protocols wired in by default.
+        </p>
+        <div class="cta">
+          <a class="btn btn--primary" href="#self-host">Get started</a>
+          <a class="btn btn--ghost" href="https://git.fabiomanganiello.com/madblog" rel="noopener">Source code</a>
+          <a class="btn btn--ghost" href="https://github.com/blacklight/madblog" rel="noopener">GitHub mirror</a>
+        </div>
+        <p class="meta">Free and open source · Python &amp; Flask · Docker or pip</p>
+
+        <figure class="hero-figure">
+          <div class="browser only-desktop">
+            <div class="browser__bar" aria-hidden="true">
+              <span class="browser__dots"><span></span><span></span><span></span></span>
+              <span class="browser__url">https://blog.example.com</span>
+            </div>
+            <picture>
+              <source media="(prefers-color-scheme: dark)"
+                      srcset="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/desktop-home.png">
+              <img src="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/light-desktop-home.png"
+                   width="2880" height="1800" fetchpriority="high" decoding="async"
+                   alt="The Madblog home page on desktop: a header with navigation, a grid of article cards with cover images, and aggregated external feed entries">
+            </picture>
+          </div>
+          <div class="device only-mobile">
+            <picture>
+              <source media="(prefers-color-scheme: dark)"
+                      srcset="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/mobile-home.png">
+              <img src="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/light-mobile-home.png"
+                   width="780" height="1688" fetchpriority="high" decoding="async"
+                   alt="The Madblog home page on mobile: article cards in a single column with a compact header">
+            </picture>
+          </div>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ===== Markdown & no database ===== -->
+    <section id="features">
+      <div class="container split">
+        <div>
+          <span class="eyebrow">Markdown, not a CMS</span>
+          <h2>Your content is text. Text is forever.</h2>
+          <p>
+            Point Madblog at a folder of Markdown files — an Obsidian vault, a
+            Nextcloud Notes folder, a git clone, a directory synced over
+            SyncThing — and it becomes a blog. There is no database to back
+            up, no export to request, no format to migrate away from.
+          </p>
+          <ul class="features">
+            <li><strong>No database required</strong> — just a folder with your Markdown files. Editing a post is as simple as editing a file on your server</li>
+            <li><strong>YAML front matter</strong> for titles, descriptions, dates, authors and tags — metadata lives in the file, not in a CMS database</li>
+            <li><strong>Folders are categories</strong> — nested directories become navigable sections, each with its own index page and feeds</li>
+            <li><strong>View modes for every taste</strong> — card grid, compact list or a full WordPress-style scrolling view</li>
+          </ul>
+        </div>
+        <div class="split__media">
+          <div class="shots shots--duo">
+            <div class="shot only-desktop">
+              <picture>
+                <source media="(prefers-color-scheme: dark)"
+                        srcset="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/desktop-article.png">
+                <img src="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/light-desktop-article.png"
+                     width="2880" height="1800" loading="lazy" decoding="async"
+                     alt="An article page on desktop: rendered Markdown with headings, lists, images and a threaded comments section at the bottom">
+              </picture>
+            </div>
+            <div class="device">
+              <picture>
+                <source media="(prefers-color-scheme: dark)"
+                        srcset="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/mobile-article.png">
+                <img src="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/light-mobile-article.png"
+                     width="780" height="1688" loading="lazy" decoding="async"
+                     alt="An article page on mobile: the same rendered post in a single column with reactions and replies below">
+              </picture>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Federation ===== -->
+    <section id="federation" class="band">
+      <div class="container split split--rev">
+        <div>
+          <span class="eyebrow">Federation &amp; the open web</span>
+          <h2>Your blog joins the conversation</h2>
+          <p>
+            This isn't a static site generator that merely <em>looks</em>
+            indie. Madblog speaks the protocols that make the web social — so
+            comments land on your site, not on someone else's platform.
+          </p>
+          <ul class="features">
+            <li><strong>ActivityPub federation</strong> — your blog gets an actor like <code>@blog@example.com</code>. Mastodon users can follow it, reply to it and boost it</li>
+            <li><strong>Mastodon-compatible API</strong> — a sensible implementation of the Mastodon client API comes built in</li>
+            <li><strong>Webmentions in both directions</strong> — get notified when blogs link your posts, and ping the sources you link to</li>
+            <li><strong>Author replies &amp; reactions</strong> — respond to mentions as plain Markdown files under <code>replies/</code>, threaded inline on the post</li>
+          </ul>
+        </div>
+        <div class="split__media">
+          <div class="shots shots--duo">
+            <div class="shot only-desktop">
+              <picture>
+                <source media="(prefers-color-scheme: dark)"
+                        srcset="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/desktop-guestbook.png">
+                <img src="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/light-desktop-guestbook.png"
+                     width="2880" height="1800" loading="lazy" decoding="async"
+                     alt="The guestbook page on desktop: a registry of mentions and interactions collected from across the web, rendered as threaded replies">
+              </picture>
+            </div>
+            <div class="device">
+              <picture>
+                <source media="(prefers-color-scheme: dark)"
+                        srcset="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/mobile-guestbook.png">
+                <img src="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/light-mobile-guestbook.png"
+                     width="780" height="1688" loading="lazy" decoding="async"
+                     alt="The guestbook page on mobile: mentions from other sites in a single column">
+              </picture>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Rendering ===== -->
+    <section id="rendering">
+      <div class="container split">
+        <div>
+          <span class="eyebrow">Rendering &amp; syndication</span>
+          <h2>Serious output from plain text</h2>
+          <p>
+            Madblog renders your Markdown on the server — no JavaScript
+            framework, no build step. Technical posts, diagrams and feeds all
+            come out of the same file.
+          </p>
+          <ul class="features">
+            <li><strong>LaTeX equations</strong> rendered to images with caching — inline and display math just work</li>
+            <li><strong>Mermaid diagrams</strong> compiled to inline SVG via <code>mermaid-cli</code> or <code>npx</code></li>
+            <li><strong>RSS 2.0 &amp; Atom feeds</strong> for the blog, every folder, tag and the guestbook</li>
+            <li><strong>Rich link previews</strong> via OpenGraph, plus a PWA manifest for installable blogs</li>
+          </ul>
+        </div>
+        <div class="split__media">
+          <div class="shots shots--duo">
+            <div class="shot only-desktop">
+              <picture>
+                <source media="(prefers-color-scheme: dark)"
+                        srcset="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/desktop-article-math.png">
+                <img src="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/light-desktop-article-math.png"
+                     width="2880" height="1800" loading="lazy" decoding="async"
+                     alt="A technical article on desktop showing rendered LaTeX equations and a Mermaid diagram inline with the text">
+              </picture>
+            </div>
+            <div class="device">
+              <picture>
+                <source media="(prefers-color-scheme: dark)"
+                        srcset="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/mobile-article-math.png">
+                <img src="https://s3.fabiomanganiello.com/fabio/screenshots/madblog/light-mobile-article-math.png"
+                     width="780" height="1688" loading="lazy" decoding="async"
+                     alt="The same technical article on mobile with equations and diagram reflowed to the narrow column">
+              </picture>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== More ===== -->
+    <section class="band">
+      <div class="container">
+        <div class="center">
+          <span class="eyebrow">And there's more</span>
+          <h2>A small codebase with surprising depth</h2>
+          <p>
+            Everything below is a config flag away — the unglamorous pieces are
+            already where they should be.
+          </p>
+        </div>
+
+        <div class="grid">
+          <div class="card">
+            <span class="icon" aria-hidden="true">📖</span>
+            <h3>Guestbook mode</h3>
+            <p>
+              A dedicated page aggregates public mentions from Webmentions and
+              ActivityPub into a single guest registry for your site.
+            </p>
+          </div>
+          <div class="card">
+            <span class="icon" aria-hidden="true">📡</span>
+            <h3>Aggregator mode</h3>
+            <p>
+              Render external RSS or Atom feeds directly in your blog — great
+              for affiliated blogs or a self-hosted news reader.
+            </p>
+          </div>
+          <div class="card">
+            <span class="icon" aria-hidden="true">🛡️</span>
+            <h3>Flexible moderation</h3>
+            <p>
+              Blocklist or allowlist mode with rules on domains, usernames and
+              URLs — regular expressions supported.
+            </p>
+          </div>
+          <div class="card">
+            <span class="icon" aria-hidden="true">👁️</span>
+            <h3>Visibility controls</h3>
+            <p>
+              Per-post visibility — public, unlisted or replies-only — so you
+              decide what federates and what stays home.
+            </p>
+          </div>
+          <div class="card">
+            <span class="icon" aria-hidden="true">🏷️</span>
+            <h3>Tags &amp; categories</h3>
+            <p>
+              Hashtags in front matter or inline in the body build a tag index;
+              filesystem folders give you hierarchical sections.
+            </p>
+          </div>
+          <div class="card">
+            <span class="icon" aria-hidden="true">✉️</span>
+            <h3>Email notifications</h3>
+            <p>
+              Optional SMTP notifications when new Webmentions or ActivityPub
+              interactions arrive on your posts.
+            </p>
+          </div>
+          <div class="card">
+            <span class="icon" aria-hidden="true">📱</span>
+            <h3>Installable PWA</h3>
+            <p>
+              A web app manifest and service worker turn any Madblog site
+              into an installable app with offline support.
+            </p>
+          </div>
+          <div class="card">
+            <span class="icon" aria-hidden="true">⚙️</span>
+            <h3>Env-var configuration</h3>
+            <p>
+              Every option in <code>config.yaml</code> is also a
+              <code>MADBLOG_*</code> environment variable — twelve-factor
+              friendly.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Compare ===== -->
+    <section id="compare">
+      <div class="container">
+        <div class="center">
+          <span class="eyebrow">How it compares</span>
+          <h2>Federated blogging, minus the machinery</h2>
+          <p>
+            Madblog trades accounts, databases and plugin ecosystems for plain
+            files and sensible defaults — here's how it stacks up against the
+            other self-hosted options in the space.
+          </p>
+        </div>
+
+        <div class="compare">
+          <table>
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th>Madblog</th>
+                <th>WriteFreely</th>
+                <th>Plume</th>
+                <th>WordPress</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>📝 Content storage</td>
+                <td>Markdown files on disk — no database</td>
+                <td>Database (SQLite/MySQL) via web editor</td>
+                <td>Database (Postgres/SQLite) via web editor</td>
+                <td>Database (MySQL) via block editor</td>
+              </tr>
+              <tr>
+                <td>🧰 Publishing flow</td>
+                <td>Edit files directly — Obsidian, Nextcloud, git, SyncThing</td>
+                <td>Browser editor with autosave</td>
+                <td>Browser editor + media gallery</td>
+                <td>Browser editor + media library</td>
+              </tr>
+              <tr>
+                <td>⚙️ Runtime</td>
+                <td>Python/Flask — pip or sub-100 MB Docker</td>
+                <td>Go single binary</td>
+                <td>Rust + Diesel (effectively unmaintained)</td>
+                <td>PHP + MySQL</td>
+              </tr>
+              <tr>
+                <td>👥 Multi-author</td>
+                <td>Single blog, single author</td>
+                <td>Multi-user, multiple blogs per account</td>
+                <td>Multi-user, collaborative blogs</td>
+                <td>Full roles, teams, multisite</td>
+              </tr>
+              <tr>
+                <td>📣 ActivityPub</td>
+                <td>Articles, follows, and bidirectional mentions, replies, likes/shares/quotes — plus a Mastodon-compatible API</td>
+                <td>Posts and blogs federate; it can receive likes/boosts; replies not rendered yet</td>
+                <td>Articles, comments, likes and reshares federate</td>
+                <td>Via official plugin — publishing and interactions</td>
+              </tr>
+              <tr>
+                <td>🔗 Webmentions</td>
+                <td>Bidirectional, built in</td>
+                <td>—</td>
+                <td>—</td>
+                <td>Via plugin</td>
+              </tr>
+              <tr>
+                <td>💬 On-page discussions</td>
+                <td>Threaded reactions combining Webmentions, AP interactions and Markdown author replies</td>
+                <td>None on-page — planned as separate Remark.as add-on</td>
+                <td>Native comments, federated</td>
+                <td>Native comments + plugins</td>
+              </tr>
+              <tr>
+                <td>🧮 Rich content</td>
+                <td>LaTeX equations, syntax highlighting and Mermaid diagrams, rendered server-side</td>
+                <td>Markdown basics</td>
+                <td>Markdown extensions + syntax highlighting</td>
+                <td>Via plugins/theme</td>
+              </tr>
+              <tr>
+                <td>🗂️ Organization</td>
+                <td>Folders as sections, tags, per-folder feeds, tag index</td>
+                <td>Hashtags only</td>
+                <td>Tags + built-in full-text search</td>
+                <td>Categories, tags, menus, search</td>
+              </tr>
+              <tr>
+                <td>🛡️ Moderation</td>
+                <td>Blocklist/allowlist rules on domains, users, URLs — regex supported</td>
+                <td>Basic instance admin</td>
+                <td>Instance admin</td>
+                <td>Plugin-dependent</td>
+              </tr>
+              <tr>
+                <td>📡 Extras</td>
+                <td>Guestbook mode, RSS/Atom aggregator, visibility levels, PWA, email notifications</td>
+                <td>RSS, SEO, i18n — minimal by design</td>
+                <td>Media gallery, full-text search, templates</td>
+                <td>Everything — at the cost of complexity</td>
+              </tr>
+              <tr>
+                <td>📦 Status</td>
+                <td>Actively maintained</td>
+                <td>Actively maintained</td>
+                <td>Sparsely maintained</td>
+                <td>Very active core; federation via plugins</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Self-host ===== -->
+    <section id="self-host" class="band">
+      <div class="container">
+        <div class="center">
+          <span class="eyebrow">Self-host</span>
+          <h2>Your own corner of the web in minutes</h2>
+          <p>
+            A single <code>pip install</code> or a sub-100&nbsp;MB Docker image
+            brings up the whole blog — rendering, feeds, federation and all.
+          </p>
+        </div>
+
+        <div class="install">
+          <figure>
+            <figcaption>🐍 &nbsp;pip</figcaption>
+            <pre><code><span class="comment"># Everything but LaTeX &amp; Mermaid</span>
+pip install madblog
+
+<span class="comment"># Point it at your Markdown folder</span>
+madblog /path/to/your/content
+
+<span class="comment"># Or serve it under gunicorn</span>
+MADBLOG_CONFIG=/etc/madblog/config.yaml \
+  gunicorn --preload -w 8 -b 127.0.0.1:8000 \
+  madblog.uwsgi /path/to/your/content</code></pre>
+          </figure>
+
+          <figure>
+            <figcaption>🐳 &nbsp;Docker</figcaption>
+            <pre><code><span class="comment"># Minimal image (&lt;100 MB) from Quay</span>
+docker pull quay.io/blacklight/madblog
+
+docker run --rm -it -p 8000:8000 \
+  -v /path/to/config.yaml:/etc/madblog/config.yaml \
+  -v /path/to/content:/data \
+  quay.io/blacklight/madblog
+
+<span class="comment"># Then open http://localhost:8000</span></code></pre>
+          </figure>
+        </div>
+
+        <div class="center" style="margin-top: 3rem">
+          <p>
+            Madblog is free software, released under the
+            <a href="https://git.fabiomanganiello.com/madblog/src/branch/main/LICENSE.txt" rel="noopener"><strong>AGPL-3.0 license</strong></a>.
+            Hack on it, run it, federate it.
+          </p>
+          <div class="cta" style="display: flex; justify-content: center; gap: 0.8rem; flex-wrap: wrap;">
+            <a class="btn btn--primary" href="https://git.fabiomanganiello.com/madblog" rel="noopener">Get the code</a>
+            <a class="btn btn--ghost" href="https://github.com/blacklight/madblog" rel="noopener">Star it on GitHub</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== Footer ===== -->
+  <footer>
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <rect width="64" height="64" rx="14" fill="#6d5ef0"/>
+              <path d="M20 14h16c6.6 0 12 5.4 12 12v24H32c-6.6 0-12-5.4-12-12V14z" fill="#fff"/>
+              <path d="M32 26h16v24H32z" fill="#c9c1ff"/>
+            </svg>
+            Madblog
+          </div>
+          <p>
+            A minimal but capable blog and Web framework that runs directly
+            from a Markdown folder — with ActivityPub and Webmentions support.
+          </p>
+        </div>
+
+        <div>
+          <h4>Source</h4>
+          <ul>
+            <li><a href="https://git.fabiomanganiello.com/madblog" rel="noopener">Main repository</a></li>
+            <li><a href="https://github.com/blacklight/madblog" rel="noopener">GitHub mirror</a></li>
+            <li><a href="https://git.fabiomanganiello.com/madblog/src/branch/main/docs" rel="noopener">Documentation</a></li>
+            <li><a href="https://pypi.org/project/madblog/" rel="noopener">PyPI package</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4>Ecosystem</h4>
+          <ul>
+            <li><a href="https://quay.io/repository/blacklight/madblog" rel="noopener">Container image on quay.io</a></li>
+            <li><a href="https://blog.platypush.tech" rel="noopener">Platypush blog</a></li>
+            <li><a href="https://blog.fabiomanganiello.com" rel="noopener">Author's blog</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="license">
+        <span>Madblog is free software under the
+          <a href="https://git.fabiomanganiello.com/madblog/src/branch/main/LICENSE.txt" rel="noopener">AGPL-3.0 license</a>.</span>
+        <span>Rendered on the server. No SPA, no build step.</span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

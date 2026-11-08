@@ -4,6 +4,10 @@
 
 ### Added
 
+- New `homepage/` directory with a standalone landing page
+  (`index.html`) showcasing Madblog's features, with light/dark themed
+  screenshots and a responsive layout.
+
 - New `image_alt` metadata field for the article banner image alt text.
   When set, it is used as the `alt` attribute of the banner and rendered
   as a visible caption under the image. Standalone body images with a
