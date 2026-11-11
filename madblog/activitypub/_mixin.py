@@ -223,7 +223,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                     config.activitypub_manually_approves_followers
                 ),
                 "attachment": actor_attachment,
-                "url": f'{config.link.rstrip("/")}/@{config.activitypub_username}',
+                "url": f'{ap_base_url}/@{config.activitypub_username}',
             },
             private_key_path=key_path,
             webfinger_domain=config.activitypub_domain,

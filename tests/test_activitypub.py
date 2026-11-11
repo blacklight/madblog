@@ -340,8 +340,10 @@ class ActivityPubEnabledTest(unittest.TestCase):
         actor = resp.get_json()
         self.assertEqual(actor["id"], "https://ap.example.org/ap/actor")
 
-        # Website/profile URL remains based on config.link
-        self.assertEqual(actor["url"], "https://example.com/@blog")
+        # Profile URL stays on the AP domain so that all URIs in the actor
+        # document share the same host (required by strict implementations
+        # like GoToSocial).
+        self.assertEqual(actor["url"], "https://ap.example.org/@blog")
 
     @skip_if_no_pubby
     def test_outbox(self):

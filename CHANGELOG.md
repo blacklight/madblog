@@ -34,6 +34,12 @@
 - Fixed routes for federated objects interaction collections - prevent
   `routes.py`'s catch-all rules from serving the HTML document.
 
+- Fixed the ActivityPub actor `url` pointing to the web domain when
+  `activitypub_link` differs from `link` (domain split setup). The URL
+  now uses the ActivityPub domain so that all URIs in the actor
+  document share the same host, as required by strict implementations
+  like GoToSocial.
+
 ## 1.3.13
 
 ### Added
