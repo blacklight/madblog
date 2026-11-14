@@ -714,7 +714,7 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
             background threads; the request-serving path must use the
             default (``False``) so it never blocks.
         :return: Tuple of ``(Object, activity_type)`` or ``(None, None)`` if
-            the post should not be federated (draft visibility).
+            the post should not be federated (draft or local visibility).
         """
         public_url = public_url or url
         metadata = self._parse_metadata(filepath)
@@ -753,8 +753,10 @@ class ActivityPubIntegration(ActivityPubRepliesMixin, StartupSyncMixin):
         visibility = resolve_visibility(metadata)
         addressing = self._build_addressing(visibility, mention_cc)
         if addressing is None:
-            # Draft visibility - do not federate
-            logger.info("Skipping federation for draft: %s", url)
+            # Draft or local visibility - do not federate
+            logger.info(
+                "Skipping federation for %s post: %s", visibility.value, url
+            )
             return None, None
 
         to_field, cc_field = addressing

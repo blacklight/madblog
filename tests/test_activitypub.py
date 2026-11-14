@@ -1565,6 +1565,90 @@ class ActivityPubPublishTest(unittest.TestCase):
         self.assertEqual(mention_tags[0]["href"], "https://unreachable.example/@dave")
 
     @skip_if_no_pubby
+    def test_build_addressing_local_returns_none(self):
+        """_build_addressing returns None for local visibility (no federation)."""
+        from madblog.visibility import Visibility
+
+        integration, _, _, _ = self._make_integration()
+
+        self.assertIsNone(integration._build_addressing(Visibility.LOCAL, []))
+        self.assertIsNone(integration._build_addressing(Visibility.DRAFT, []))
+
+    @skip_if_no_pubby
+    def test_build_object_local_visibility_not_federated(self):
+        """build_object returns (None, None) for local visibility articles."""
+        integration, _, _, pages_dir = self._make_integration()
+
+        local_file = pages_dir / "local-post.md"
+        local_file.write_text(
+            "[//]: # (title: Local Post)\n"
+            "[//]: # (visibility: local)\n\n"
+            "# Local Post\n\nOnly on this server.\n"
+        )
+
+        url = integration.file_to_url(str(local_file))
+        actor_url = f"{integration.base_url}{integration.handler.actor_path}"
+
+        obj, activity_type = integration.build_object(
+            str(local_file), url, actor_url, allow_network=False
+        )
+
+        self.assertIsNone(obj)
+        self.assertIsNone(activity_type)
+
+    @skip_if_no_pubby
+    def test_build_reply_object_local_visibility_not_federated(self):
+        """build_reply_object returns (None, None) for local visibility replies."""
+        from pubby import ActivityPubHandler
+        from madblog.activitypub import ActivityPubIntegration
+        from madblog.config import config
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pages_dir = Path(tmpdir) / "pages"
+            pages_dir.mkdir()
+            replies_dir = Path(tmpdir) / "replies"
+            replies_dir.mkdir()
+            state_dir = Path(tmpdir) / "state"
+            state_dir.mkdir()
+
+            reply_file = replies_dir / "local-reply.md"
+            reply_file.write_text(
+                "[//]: # (visibility: local)\n"
+                "[//]: # (published: 2025-07-01)\n\n"
+                "# Local Reply\n"
+                "Only visible on this server.\n"
+            )
+
+            handler = MagicMock(spec=ActivityPubHandler)
+            handler.actor_path = "/ap/actor"
+            handler.followers_url = "https://example.com/ap/followers"
+            handler.storage = MagicMock()
+            handler.storage.get_interaction_by_object_id.return_value = None
+
+            orig_state_dir = config.state_dir
+            config.state_dir = str(state_dir)
+
+            try:
+                integration = ActivityPubIntegration(
+                    handler=handler,
+                    pages_dir=str(pages_dir),
+                    base_url="https://example.com",
+                    replies_dir=str(replies_dir),
+                )
+
+                url = integration.reply_file_to_url(str(reply_file))
+                actor_url = "https://example.com/ap/actor"
+
+                obj, activity_type = integration.build_reply_object(
+                    str(reply_file), url, actor_url, allow_network=False
+                )
+
+                self.assertIsNone(obj)
+                self.assertIsNone(activity_type)
+            finally:
+                config.state_dir = orig_state_dir
+
+    @skip_if_no_pubby
     def test_handle_publish_populates_mention_cache(self):
         """_handle_publish (background) resolves mentions and populates cache."""
         integration, handler, _, pages_dir = self._make_integration()

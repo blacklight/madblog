@@ -11,6 +11,7 @@ class TestVisibilityEnum:
     def test_visibility_values(self):
         """All visibility levels have correct string values."""
         assert Visibility.PUBLIC.value == "public"
+        assert Visibility.LOCAL.value == "local"
         assert Visibility.UNLISTED.value == "unlisted"
         assert Visibility.FOLLOWERS.value == "followers"
         assert Visibility.DIRECT.value == "direct"
@@ -19,6 +20,7 @@ class TestVisibilityEnum:
     def test_from_str_valid(self):
         """from_str parses valid visibility strings."""
         assert Visibility.from_str("public") == Visibility.PUBLIC
+        assert Visibility.from_str("local") == Visibility.LOCAL
         assert Visibility.from_str("unlisted") == Visibility.UNLISTED
         assert Visibility.from_str("followers") == Visibility.FOLLOWERS
         assert Visibility.from_str("direct") == Visibility.DIRECT
@@ -27,6 +29,7 @@ class TestVisibilityEnum:
     def test_from_str_case_insensitive(self):
         """from_str is case-insensitive."""
         assert Visibility.from_str("PUBLIC") == Visibility.PUBLIC
+        assert Visibility.from_str("Local") == Visibility.LOCAL
         assert Visibility.from_str("Unlisted") == Visibility.UNLISTED
         assert Visibility.from_str("FOLLOWERS") == Visibility.FOLLOWERS
         assert Visibility.from_str("Direct") == Visibility.DIRECT
@@ -63,6 +66,9 @@ class TestResolveVisibility:
 
         metadata = {"visibility": "direct"}
         assert resolve_visibility(metadata) == Visibility.DIRECT
+
+        metadata = {"visibility": "local"}
+        assert resolve_visibility(metadata) == Visibility.LOCAL
 
         metadata = {"visibility": "draft"}
         assert resolve_visibility(metadata) == Visibility.DRAFT

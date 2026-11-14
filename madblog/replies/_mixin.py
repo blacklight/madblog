@@ -82,7 +82,8 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
         content) are excluded.
 
         Replies with visibility ``followers``, ``direct``, or ``draft`` are
-        excluded from the reactions display.
+        excluded from the reactions display. ``local`` replies are included
+        (they render locally but are not federated).
         """
 
         replies_subdir = (
@@ -139,6 +140,7 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
                     "title": metadata.get("title", reply_slug),
                     "reply_to": metadata.get("reply-to", ""),
                     "published": metadata.get("published"),
+                    "resolved_visibility": visibility,
                     "content_html": render_html(
                         resolve_relative_urls(content, config.link, permalink, "/reply")
                     ),
@@ -196,7 +198,8 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
 
         Returns a list of parsed post dicts including:
         - Root-level replies without ``reply-to`` or ``like-of`` metadata
-          (backward compatibility: these default to unlisted visibility)
+          (backward compatibility: these default to unlisted visibility),
+          plus root replies with explicit ``visibility: local``
         - Articles from pages_dir with explicit ``visibility: unlisted``
 
         Each dict contains: slug, title, published, content_html, permalink,
@@ -273,9 +276,10 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
                     if not body_lines:
                         continue
 
-                    # Check visibility - unlisted replies default to UNLISTED
+                    # Check visibility - unlisted replies default to UNLISTED;
+                    # local replies are treated like unlisted ones
                     visibility = resolve_visibility(metadata, is_unlisted_reply=True)
-                    if visibility != Visibility.UNLISTED:
+                    if visibility not in (Visibility.UNLISTED, Visibility.LOCAL):
                         continue
 
                     posts.append(
@@ -297,11 +301,12 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
 
     def get_ap_replies(self) -> list:
         """
-        Get root-level AP replies with ``public`` or ``unlisted`` visibility.
+        Get root-level AP replies with ``public``, ``local`` or ``unlisted``
+        visibility.
 
         These are reply files in ``replies/`` that have ``reply-to`` metadata
-        (i.e. they are federated replies to external posts) but are not
-        anchored to any blog article page.
+        (i.e. replies to external posts) but are not anchored to any blog
+        article page.
 
         Standalone likes (``like-of`` present, no body content) are excluded.
 
@@ -384,9 +389,13 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
                 if not body_lines:
                     continue
 
-                # Check visibility - only include public or unlisted
+                # Check visibility - only include public, local or unlisted
                 visibility = resolve_visibility(metadata)
-                if visibility not in (Visibility.PUBLIC, Visibility.UNLISTED):
+                if visibility not in (
+                    Visibility.PUBLIC,
+                    Visibility.LOCAL,
+                    Visibility.UNLISTED,
+                ):
                     continue
 
                 post = self._build_unlisted_post_dict(

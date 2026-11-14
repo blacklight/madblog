@@ -69,6 +69,20 @@ class TestBlogIndexVisibilityFiltering:
         assert pages[0][1]["path"] == "public-article.md"
         assert pages[0][1]["resolved_visibility"] == Visibility.PUBLIC
 
+    def test_local_articles_appear_in_index(self, temp_blog_dir, blog_app):
+        """Local articles should appear in the index (rendered locally)."""
+        create_article(temp_blog_dir, "public-article.md", visibility="public")
+        create_article(temp_blog_dir, "local-article.md", visibility="local")
+
+        with blog_app.test_request_context("/"):
+            pages = blog_app.get_pages()
+
+        assert len(pages) == 2
+        paths = {p[1]["path"] for p in pages}
+        assert paths == {"public-article.md", "local-article.md"}
+        local_page = next(p for p in pages if p[1]["path"] == "local-article.md")
+        assert local_page[1]["resolved_visibility"] == Visibility.LOCAL
+
     def test_unlisted_articles_excluded_from_index(self, temp_blog_dir, blog_app):
         """Unlisted articles should be excluded from the index."""
         create_article(temp_blog_dir, "public-article.md", visibility="public")

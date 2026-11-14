@@ -316,8 +316,10 @@ link: https://myblog.example.com
 #### (Optional) Post Visibility ####
 
 # Default visibility for new posts (optional, default: "public")
-# Supported values: "public", "unlisted", "followers", "private"
-# This affects how posts are federated via ActivityPub.
+# Supported values: "public", "local", "unlisted", "followers", "direct", "draft"
+# This affects how posts are federated via ActivityPub. "local" posts are
+# rendered normally on the site (index, feeds, reactions) but never
+# federated.
 # Can also be overridden per-article with `visibility: unlisted` in the
 # Markdown front matter
 # default_visibility: public

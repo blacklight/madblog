@@ -316,6 +316,7 @@ class ReplyMetadataIndex:
         - No like_of
         - has_content = True
         - visibility = "unlisted" (explicit or default for root replies)
+          or "local" (treated like unlisted, but not federated)
 
         :return: List of slugs (filename stems without .md).
         """
@@ -331,7 +332,7 @@ class ReplyMetadataIndex:
                 # For root-level replies without reply-to/like-of,
                 # default visibility is UNLISTED
                 vis = (entry.visibility or "unlisted").lower()
-                if vis != "unlisted":
+                if vis not in ("unlisted", "local"):
                     continue
                 # Slug is the filename stem
                 slug = rel_path.rsplit(".", 1)[0]
@@ -345,7 +346,7 @@ class ReplyMetadataIndex:
         Matches files with:
         - reply_to is set
         - has_content = True
-        - visibility in ("public", "unlisted")
+        - visibility in ("public", "local", "unlisted")
 
         :return: List of slugs (filename stems without .md).
         """
@@ -359,7 +360,7 @@ class ReplyMetadataIndex:
                 if not entry.has_content:
                     continue
                 vis = (entry.visibility or "public").lower()
-                if vis not in ("public", "unlisted"):
+                if vis not in ("public", "local", "unlisted"):
                     continue
                 slug = rel_path.rsplit(".", 1)[0]
                 slugs.append(slug)

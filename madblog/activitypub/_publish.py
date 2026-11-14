@@ -178,12 +178,12 @@ class ActivityPubPublishMixin:  # pylint: disable=too-few-public-methods
         :param visibility: The resolved visibility level.
         :param mention_cc: List of mentioned actor URLs to include in CC.
         :return: Tuple of ``(to, cc)`` lists, or ``None`` if the post
-            should not be federated (draft visibility).
+            should not be federated (draft or local visibility).
         """
         AS_PUBLIC = "https://www.w3.org/ns/activitystreams#Public"
         followers_url = self.handler.followers_url
 
-        if visibility == Visibility.DRAFT:
+        if visibility in (Visibility.DRAFT, Visibility.LOCAL):
             return None  # Do not federate
         if visibility == Visibility.UNLISTED:
             return [followers_url], [AS_PUBLIC] + mention_cc

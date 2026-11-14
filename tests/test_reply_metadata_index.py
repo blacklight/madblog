@@ -429,6 +429,23 @@ class TestReplyMetadataIndexQueryMethods:
 
         assert sorted(slugs) == ["default-unlisted", "unlisted-post"]
 
+    def test_get_unlisted_slugs_includes_local(self, temp_dirs, index):
+        """get_unlisted_slugs includes root replies with local visibility."""
+        replies_dir, _ = temp_dirs
+
+        (replies_dir / "local-post.md").write_text(
+            "[//]: # (visibility: local)\n\nLocal content."
+        )
+        # Draft should still be excluded
+        (replies_dir / "draft-post.md").write_text(
+            "[//]: # (visibility: draft)\n\nDraft content."
+        )
+
+        index.load()
+        slugs = index.get_unlisted_slugs()
+
+        assert slugs == ["local-post"]
+
     def test_get_ap_reply_slugs(self, temp_dirs, index):
         """get_ap_reply_slugs returns root-level AP replies."""
         replies_dir, _ = temp_dirs
@@ -469,6 +486,42 @@ class TestReplyMetadataIndexQueryMethods:
         slugs = index.get_ap_reply_slugs()
 
         assert sorted(slugs) == ["default-reply", "public-reply", "unlisted-reply"]
+
+    def test_get_ap_reply_slugs_includes_local(self, temp_dirs, index):
+        """get_ap_reply_slugs includes AP replies with local visibility."""
+        replies_dir, _ = temp_dirs
+
+        (replies_dir / "local-reply.md").write_text(
+            "[//]: # (reply-to: https://example.com/post/1)\n"
+            "[//]: # (visibility: local)\n\n"
+            "Local reply."
+        )
+        # Draft should still be excluded
+        (replies_dir / "draft-reply.md").write_text(
+            "[//]: # (reply-to: https://example.com/post/2)\n"
+            "[//]: # (visibility: draft)\n\n"
+            "Draft reply."
+        )
+
+        index.load()
+        slugs = index.get_ap_reply_slugs()
+
+        assert slugs == ["local-reply"]
+
+    def test_get_article_reply_slugs_includes_local(self, temp_dirs, index):
+        """get_article_reply_slugs includes replies with local visibility."""
+        replies_dir, _ = temp_dirs
+
+        article_dir = replies_dir / "my-article"
+        article_dir.mkdir()
+        (article_dir / "local.md").write_text(
+            "[//]: # (visibility: local)\n\nLocal reply."
+        )
+
+        index.load()
+        slugs = index.get_article_reply_slugs("my-article")
+
+        assert slugs == ["local"]
 
     def test_get_article_reply_slugs(self, temp_dirs, index):
         """get_article_reply_slugs returns replies for a specific article."""

@@ -564,9 +564,9 @@ lookups for reply files without requiring full directory scans on each request.
     incrementally updates the affected entry and persists.
 - **Query methods:**
   - `get_unlisted_slugs()`: root-level files with no `reply_to`/`like_of`,
-    `has_content=True`, `visibility=unlisted`.
+    `has_content=True`, `visibility` in `unlisted`/`local`.
   - `get_ap_reply_slugs()`: root-level files with `reply_to` set,
-    `has_content=True`, `visibility` in `public`/`unlisted`.
+    `has_content=True`, `visibility` in `public`/`local`/`unlisted`.
   - `get_article_reply_slugs(article_slug)`: replies under a specific article.
   - `get_likes_for_target(url)`: reverse lookup for author likes.
 

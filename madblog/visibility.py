@@ -15,6 +15,8 @@ class Visibility(str, Enum):
     Visibility levels for posts.
 
     - PUBLIC: Visible on blog index, federated publicly.
+    - LOCAL: Rendered locally like ``public`` (articles) or ``unlisted``
+      (replies), but never federated via ActivityPub or Webmentions.
     - UNLISTED: Not on index, listed on /unlisted, federated as unlisted.
     - FOLLOWERS: Not listed anywhere, federated to followers only.
     - DIRECT: Not listed anywhere, federated to mentioned actors only.
@@ -22,6 +24,7 @@ class Visibility(str, Enum):
     """
 
     PUBLIC = "public"
+    LOCAL = "local"
     UNLISTED = "unlisted"
     FOLLOWERS = "followers"
     DIRECT = "direct"

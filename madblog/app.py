@@ -756,12 +756,13 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             skip_html_head=skip_html_head,
         )
 
-        # Filter by visibility: only show public posts in the index
+        # Filter by visibility: show public and local posts in the index
         if filter_by_visibility:
             local_pages = [
                 p
                 for p in local_pages
-                if p.get("resolved_visibility") == Visibility.PUBLIC
+                if p.get("resolved_visibility")
+                in (Visibility.PUBLIC, Visibility.LOCAL)
             ]
 
         remote_pages = []

@@ -4,6 +4,14 @@
 
 ### Added
 
+- New `local` post visibility level (`visibility: local` in metadata or
+  `default_visibility: local`). Local articles are rendered everywhere
+  `public` ones are (blog index, RSS/Atom feeds, reactions) and local
+  replies are treated like `unlisted` ones (`/unlisted` page, reactions),
+  but nothing is federated: no ActivityPub `Create`/`Update` activities
+  are published, local replies are excluded from the AP replies
+  collections, and no outgoing Webmentions are sent.
+
 - New `homepage/` directory with a standalone landing page
   (`index.html`) showcasing Madblog's features, with light/dark themed
   screenshots and a responsive layout.

@@ -123,6 +123,23 @@ class TestUnlistedPageVisibility:
 
         assert len(posts) == 0
 
+    def test_local_article_excluded_from_unlisted_page(self, temp_blog_dir, blog_app):
+        """Articles with visibility: local appear on the index, not /unlisted."""
+        create_article(temp_blog_dir, "local-article.md", visibility="local")
+
+        posts = blog_app.get_unlisted_posts()
+
+        assert all(p["slug"] != "local-article" for p in posts)
+
+    def test_local_reply_appears_on_unlisted_page(self, temp_blog_dir, blog_app):
+        """Root replies with visibility: local are treated like unlisted."""
+        replies_dir = os.path.join(temp_blog_dir, "replies")
+        create_reply(replies_dir, "local-reply.md", visibility="local")
+
+        posts = blog_app.get_unlisted_posts()
+
+        assert any(p["slug"] == "local-reply" for p in posts)
+
     def test_unlisted_reply_appears_on_unlisted_page(self, temp_blog_dir, blog_app):
         """Root replies without reply-to appear on /unlisted page."""
         replies_dir = os.path.join(temp_blog_dir, "replies")
@@ -284,6 +301,22 @@ class TestGetApReplies:
 
         assert len(posts) == 1
         assert posts[0]["slug"] == "unlisted-ap-reply"
+
+    def test_ap_reply_with_local_visibility(self, temp_blog_dir, blog_app):
+        """AP replies with local visibility are included (rendered locally)."""
+        replies_dir = os.path.join(temp_blog_dir, "replies")
+        create_reply(
+            replies_dir,
+            "local-ap-reply.md",
+            reply_to="https://remote.social/statuses/555",
+            visibility="local",
+        )
+
+        with blog_app.test_request_context("/unlisted"):
+            posts = blog_app.get_ap_replies()
+
+        assert len(posts) == 1
+        assert posts[0]["slug"] == "local-ap-reply"
 
     def test_ap_reply_with_draft_visibility_excluded(self, temp_blog_dir, blog_app):
         """AP replies with draft visibility are excluded."""

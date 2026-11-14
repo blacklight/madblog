@@ -277,7 +277,7 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         Build an AP Note object for an author reply.
 
         :return: Tuple of ``(Object, activity_type)`` or ``(None, None)`` if
-            the post should not be federated (draft visibility).
+            the post should not be federated (draft or local visibility).
         """
         public_url = public_url or url
         metadata = self._parse_reply_metadata(filepath)
@@ -310,7 +310,9 @@ class ActivityPubRepliesMixin(ActivityPubPublishMixin):
         visibility = resolve_visibility(metadata, is_unlisted_reply=is_unlisted_reply)
         addressing = self._build_addressing(visibility, mention_cc)
         if addressing is None:
-            logger.info("Skipping federation for draft reply: %s", url)
+            logger.info(
+                "Skipping federation for %s reply: %s", visibility.value, url
+            )
             return None, None
 
         to_field, cc_field = addressing

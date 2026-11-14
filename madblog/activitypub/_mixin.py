@@ -27,6 +27,7 @@ from ..moderation import (
     validate_moderation_config,
 )
 from ..monitor import ContentMonitor
+from ..visibility import Visibility
 from ._integration import (
     INTERACTION_COLLECTIONS,
     COLLECTION_PAGE_SIZE,
@@ -223,7 +224,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
                     config.activitypub_manually_approves_followers
                 ),
                 "attachment": actor_attachment,
-                "url": f'{ap_base_url}/@{config.activitypub_username}',
+                "url": f"{ap_base_url}/@{config.activitypub_username}",
             },
             private_key_path=key_path,
             webfinger_domain=config.activitypub_domain,
@@ -292,6 +293,11 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         def _local_reply_urls(article_slug: str) -> list[str]:
             urls = []
             for reply in self._get_article_replies(article_slug):
+                if reply.get("resolved_visibility") == Visibility.LOCAL:
+                    # Local replies are not federated, so they must not
+                    # appear in the AP replies collection.
+                    continue
+
                 reply_to = reply.get("reply_to") or ""
                 if reply_to and reply_to not in article_targets(article_slug):
                     # A reply file filed under this directory that
@@ -418,7 +424,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
 
         obj, _ = build_fn(ap_url, public_url)
         if obj is None:
-            # Draft visibility - fall through to HTML response
+            # Draft or local visibility - fall through to HTML response
             return None
         doc = obj.to_dict()
         doc["@context"] = AP_CONTEXT
@@ -623,9 +629,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             app.add_url_rule(
                 f"/reply/<slug>/{coll}",
                 f"ap_reply_toplevel_{coll}",
-                view_func=lambda slug, c=coll: self._ap_reply_collection(
-                    None, slug, c
-                ),
+                view_func=lambda slug, c=coll: self._ap_reply_collection(None, slug, c),
                 methods=["GET"],
             )
             app.add_url_rule(
@@ -654,9 +658,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         replies_dir = getattr(self, "replies_dir", None)
         if not replies_dir:
             return "Not found", 404
-        rel = (
-            os.path.join(article_slug, reply_slug) if article_slug else reply_slug
-        )
+        rel = os.path.join(article_slug, reply_slug) if article_slug else reply_slug
         md_path = os.path.join(str(replies_dir), rel + ".md")
         if not os.path.isfile(md_path):
             return "Not found", 404
@@ -747,17 +749,13 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
             ),
         )
         if page < 1:
-            doc = ordered_collection_index(
-                coll_url, len(items), COLLECTION_PAGE_SIZE
-            )
+            doc = ordered_collection_index(coll_url, len(items), COLLECTION_PAGE_SIZE)
         else:
             doc = ordered_collection_page(
                 coll_url,
                 page,
                 len(items),
-                items[
-                    (page - 1) * COLLECTION_PAGE_SIZE : page * COLLECTION_PAGE_SIZE
-                ],
+                items[(page - 1) * COLLECTION_PAGE_SIZE : page * COLLECTION_PAGE_SIZE],
                 COLLECTION_PAGE_SIZE,
             )
 
@@ -936,9 +934,7 @@ class ActivityPubMixin(ABC):  # pylint: disable=too-few-public-methods
         # Fallback when the AP integration isn't initialised — mirror
         # its public-address + actor-permission rules.
         interactions = [i for i in interactions if is_public_interaction(i)]
-        return [
-            i for i in interactions if is_actor_permitted(i.source_actor_id)
-        ]
+        return [i for i in interactions if is_actor_permitted(i.source_actor_id)]
 
     def _get_ap_interactions(
         self, md_file: str, extra_target_urls: list[str] | None = None

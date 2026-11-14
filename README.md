@@ -770,7 +770,7 @@ Set the default visibility for all posts:
 
 ```yaml
 # config.yaml
-default_visibility: public  # or: unlisted, followers, direct, draft
+default_visibility: public  # or: local, unlisted, followers, direct, draft
 ```
 
 Or via environment variable:
@@ -798,12 +798,18 @@ This post won't appear in the index but can be accessed directly.
 | Visibility<br>Level | Blog<br>Index | `/unlisted`<br>Page | Reactions<br>List | ActivityPub<br>Targets |
 |:------|:----------:|:----------------:|:---------:|-------------|
 | `public` | ✅ | ❌ | ✅ | `to: [Public]`<br>`cc: [followers]` |
+| `local` | ✅ | ❌ | ✅ | Not federated |
 | `unlisted` | ❌ | ✅ | ✅ | `to: [followers]`<br>`cc: [Public]` |
 | `followers` | ❌ | ❌ | ❌ | `to: [followers]`<br>`cc: []` |
 | `direct` | ❌ | ❌ | ❌ | `to: [mentions]`<br>`cc: []` |
 | `draft` | ❌ | ❌ | ❌ | Not federated | ✅ |
 
 - **public**: Appears in the blog index and RSS/Atom feeds. Federated publicly.
+- **local**: Articles appear in the blog index, RSS/Atom feeds and reactions
+  like `public`, but are never federated via ActivityPub and don't trigger
+  outgoing Webmentions. Replies with `local` visibility are treated like
+  `unlisted` ones: they appear on the `/unlisted` page and in reactions, but
+  are not federated either.
 - **unlisted**: Not in index/feeds, but listed on `/unlisted`. Federated to followers with Public in CC.
 - **followers**: Only visible via direct URL. Federated to followers only.
 - **direct**: Only visible via direct URL. Federated only to mentioned actors.
@@ -832,6 +838,8 @@ because:
 | `public`/`unlisted`/`followers` → `direct` | **Yes** | Original audience already received the post |
 | `direct` → `public`/`unlisted`/`followers` | **Yes** | New broader audience never received the post |
 | `direct` (to user A) → `direct` (to user B) | **Yes** | Different recipients |
+| `local` → `public`/`unlisted`/`followers` | **Yes** | New audience never received the post |
+| `public`/`unlisted`/`followers` → `local` | No | No federation either way, but remote copies are not retracted |
 | `public` ↔ `unlisted` | No | Same audience, only timeline visibility differs |
 
 To change visibility on an already-published post:
