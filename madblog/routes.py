@@ -196,9 +196,22 @@ def favicon_route():
     return img_route("favicon.ico")
 
 
+def _content_asset_dir(name: str, fallback: str) -> str:
+    """
+    Return ``<content_dir>/<name>`` when it exists, else ``fallback``.
+
+    Resolved per-request so asset directories created after startup are
+    picked up without a restart.
+    """
+    asset_dir = os.path.join(config.content_dir, name)
+    return asset_dir if os.path.isdir(asset_dir) else fallback
+
+
 @app.route("/js/<file>", methods=["GET"])
 def js_route(file: str):
-    return send_from_directory(app.js_dir, file, config.default_js_dir)
+    return send_from_directory(
+        _content_asset_dir("js", app.js_dir), file, config.default_js_dir
+    )
 
 
 @app.route("/pwabuilder-sw.js", methods=["GET"])
@@ -215,7 +228,9 @@ def pwa_builder_register_route():
 
 @app.route("/css/<style>", methods=["GET"])
 def css_route(style: str):
-    return send_from_directory(app.css_dir, style, config.default_css_dir)
+    return send_from_directory(
+        _content_asset_dir("css", app.css_dir), style, config.default_css_dir
+    )
 
 
 @app.route("/fonts/<file>", methods=["GET"])

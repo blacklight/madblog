@@ -1,2 +1,5 @@
+{% for src in custom_js_files | default([]) %}
+<script src="{{ src }}"></script>
+{% endfor %}
 </body>
 </html>

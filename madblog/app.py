@@ -99,6 +99,7 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             self.template_folder = os.path.abspath(templates_dir)
 
         self._register_template_filters()
+        self._register_custom_assets_context_processors()
         self._register_about_context_processors()
         self._register_ap_context_processors()
         self._register_replies_context_processors()
@@ -158,6 +159,46 @@ class BlogApp(  # pylint: disable=too-many-ancestors
             if not parsed.netloc:
                 return None
             return url
+
+    def _custom_asset_urls(self) -> dict:
+        """
+        Return ``{"css": [...], "js": [...]}`` URL lists for user-provided
+        assets in ``<content_dir>/{css,js}``.
+
+        Files whose names match a package-provided default are excluded:
+        they already override the built-in asset served at the same URL.
+        """
+        result = {"css": [], "js": []}
+        for dir_name, extension, default_dir in (
+            ("css", ".css", config.default_css_dir),
+            ("js", ".js", config.default_js_dir),
+        ):
+            asset_dir = Path(config.content_dir).expanduser() / dir_name
+            if not asset_dir.is_dir():
+                continue
+
+            default_names = {
+                p.name for p in Path(default_dir).iterdir() if p.is_file()
+            }
+            result[dir_name] = sorted(
+                f"/{dir_name}/{quote(p.name)}"
+                for p in asset_dir.iterdir()
+                if p.is_file()
+                and p.suffix.lower() == extension
+                and p.name not in default_names
+            )
+        return result
+
+    def _register_custom_assets_context_processors(self):
+        """Expose custom CSS/JS asset URLs to all templates."""
+
+        @self.context_processor
+        def inject_custom_assets():
+            assets = self._custom_asset_urls()
+            return {
+                "custom_css_files": assets["css"],
+                "custom_js_files": assets["js"],
+            }
 
     def _register_replies_context_processors(self):
         """Register context processors for replies-related template variables."""

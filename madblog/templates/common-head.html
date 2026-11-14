@@ -97,6 +97,9 @@
             <link rel="stylesheet" type="text/css" href="{{ style }}">
         {% endfor %}
     {% endif %}
+    {% for href in custom_css_files | default([]) %}
+        <link rel="stylesheet" type="text/css" href="{{ href }}">
+    {% endfor %}
     <title>{{ title }}</title>
 </head>
 <body>

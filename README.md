@@ -61,6 +61,7 @@
     - [Folder metadata with `index.md`](#folder-metadata-with-indexmd)
     - [Hidden and empty folders](#hidden-and-empty-folders)
     - [External feeds as folders](#external-feeds-as-folders)
+    - [Custom CSS and JavaScript](#custom-css-and-javascript)
     - [Overwriting HTML-templates or Stylesheets](#overwriting-html-templates-or-stylesheets)
 - [Author Replies](#author-replies)
   - [Directory layout](#directory-layout)
@@ -1006,9 +1007,44 @@ external_feeds:
 
 Or via environment variable: `MADBLOG_EXTERNAL_FEEDS_AS_FOLDERS=1`
 
+#### Custom CSS and JavaScript
+
+You can inject your own stylesheets and scripts without touching the
+built-in ones. Drop `.css` files into a `css` directory and `.js` files
+into a `js` directory under your content directory (`$MADBLOG_DIR`,
+next to `markdown` and `img`):
+
+```
+data
+├── css
+│   ├── custom.css
+│   └── theme.css
+├── img
+│   ├── favicon.ico
+│   └── icon.png
+├── js
+│   ├── custom.js
+│   └── analytics.js
+└── markdown
+    ├── ABOUT.md
+    └── hello-world.md
+```
+
+Every `.css` file is added as a `<link rel="stylesheet">` **after** the
+built-in stylesheets on all rendered pages, so your rules win the cascade
+without needing `!important`. Every `.js` file is loaded with a
+`<script>` tag just before `</body>`, after the DOM is ready. Files are
+picked up automatically — no restart needed.
+
+Because the content directory is a regular mounted volume in Docker,
+this also works out of the box in containerized deployments.
+
 #### Overwriting HTML-templates or Stylesheets
 
-Most of the static files can be overwritten. You need to copy the whole folder (e.g. `madblog/static/css`) and change the files you want to change. Put that folder in your `$MADBLOG_DIR` folder, next to `markdown` and `img`, e.g. like this:
+It is also possible to fully replace the built-in static files. You need
+to copy the whole folder (e.g. `madblog/static/css`) into your
+`$MADBLOG_DIR` folder, next to `markdown` and `img`, and change the files
+you want to change, e.g. like this:
 ```
 data
 ├── css
@@ -1025,6 +1061,11 @@ data
     ├── ABOUT.md
     └── hello-world.md
 ```
+Files in `css/` and `js/` whose names match a built-in file (e.g.
+`common.css`, `article.js`) act as overrides: they are served in place of
+the built-in version wherever it is referenced, and are not injected a
+second time as custom assets.
+
 Note that this folder replaces the original one, so you need to maintain all files. If you want to get updates to the files in the upstream repo, you have to keep track of that yourself and copy the changes.
 
 

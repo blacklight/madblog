@@ -4,6 +4,12 @@
 
 ### Added
 
+- Custom CSS/JS injection: `.css` files under `<content_dir>/css` and
+  `.js` files under `<content_dir>/js` are automatically added to every
+  rendered page — stylesheets after the built-in ones (so they win the
+  cascade) and scripts before `</body>`. Files matching built-in names
+  keep acting as overrides.
+
 - New `local` post visibility level (`visibility: local` in metadata or
   `default_visibility: local`). Local articles are rendered everywhere
   `public` ones are (blog index, RSS/Atom feeds, reactions) and local

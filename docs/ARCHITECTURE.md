@@ -104,7 +104,11 @@ Configuration controls:
   - Establishes content directory layout:
     - Markdown pages: `<content_dir>/markdown` (fallback: `<content_dir>`)
     - Assets: `<content_dir>/{img,css,js,fonts,templates}` with fallback to
-      package-provided defaults.
+      package-provided defaults. Files under `<content_dir>/css` and
+      `<content_dir>/js` that do not shadow a built-in are auto-injected
+      into every rendered page (`<link>` after the built-in stylesheets,
+      `<script>` before `</body>`) via the `custom_css_files` /
+      `custom_js_files` template context.
   - Initializes feature subsystems:
     - Webmentions (`_init_webmentions`) which creates `ContentMonitor`.
     - ActivityPub (`_init_activitypub`) which binds pubby routes and registers
