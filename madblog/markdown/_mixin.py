@@ -343,6 +343,7 @@ class MarkdownMixin(ABC):  # pylint: disable=too-few-public-methods
                 external_url=metadata.get("external_url"),
                 image=metadata.get("image"),
                 image_alt=meaningful_alt(metadata.get("image_alt")),
+                image_caption=meaningful_alt(metadata.get("image_caption")),
                 description=metadata.get("description"),
                 published_datetime=metadata.get("published"),
                 published=metadata["published"].strftime("%b %d, %Y"),

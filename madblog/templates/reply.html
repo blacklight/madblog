@@ -60,10 +60,13 @@
 
     {% if image %}
     <div class="main-image-container">
-      {% if image_alt %}
+      {% set banner_alt = image_alt or image_caption %}
+      {% if banner_alt %}
       <figure class="image-figure main-image-figure">
-        <img class="u-featured main-image" src="{{ image }}" alt="{{ image_alt }}">
-        <figcaption class="image-caption">{{ image_alt }}</figcaption>
+        <img class="u-featured main-image" src="{{ image }}" alt="{{ banner_alt }}">
+        {% if image_caption %}
+        <figcaption class="image-caption">{{ image_caption }}</figcaption>
+        {% endif %}
       </figure>
       {% else %}
       <img class="u-featured main-image" src="{{ image }}" alt=".">

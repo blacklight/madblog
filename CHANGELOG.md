@@ -36,6 +36,12 @@
 
 ### Changed
 
+- Banner image alt text and caption are now separate metadata fields:
+  `image_alt` only sets the `<img alt>` attribute, while the new
+  `image_caption` field renders the visible `<figcaption>` (and is reused
+  as the alt text when `image_alt` is not set). Previously `image_alt`
+  was used for both.
+
 - Inline images are no longer replaced by link placeholders in the
   federated `content` — the `<img>` element is kept in place and the
   image is still also delivered as an `attachment`, so

@@ -90,6 +90,39 @@ class ImageAltRouteTest(unittest.TestCase):
             encoding="utf-8",
         )
 
+        (markdown_dir / "with-caption.md").write_text(
+            "\n".join(
+                [
+                    "---",
+                    "title: Post With Caption",
+                    "image: /img/banner.png",
+                    "image_alt: A nice banner",
+                    "image_caption: Banner caption text",
+                    "---",
+                    "",
+                    "Body.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        (markdown_dir / "caption-only.md").write_text(
+            "\n".join(
+                [
+                    "---",
+                    "title: Post With Caption Only",
+                    "image: /img/banner.png",
+                    "image_caption: Banner caption text",
+                    "---",
+                    "",
+                    "Body.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
         (markdown_dir / "no-alt.md").write_text(
             "\n".join(
                 [
@@ -137,14 +170,32 @@ class ImageAltRouteTest(unittest.TestCase):
         self.config.link = self._orig_link
         self.config.title = self._orig_title
 
-    def test_banner_alt_and_caption_rendered(self):
+    def test_banner_alt_without_caption(self):
         with self.app.test_client() as client:
             resp = client.get("/article/with-alt")
             self.assertEqual(resp.status_code, 200)
             html = resp.get_data(as_text=True)
             self.assertIn('alt="A nice banner"', html)
+            self.assertNotIn("<figcaption", html)
+
+    def test_banner_alt_and_caption_rendered(self):
+        with self.app.test_client() as client:
+            resp = client.get("/article/with-caption")
+            self.assertEqual(resp.status_code, 200)
+            html = resp.get_data(as_text=True)
+            self.assertIn('alt="A nice banner"', html)
             self.assertIn("<figcaption", html)
-            self.assertIn("A nice banner", html)
+            self.assertIn("Banner caption text", html)
+            self.assertNotIn(">A nice banner</figcaption>", html)
+
+    def test_banner_caption_only_reused_as_alt(self):
+        with self.app.test_client() as client:
+            resp = client.get("/article/caption-only")
+            self.assertEqual(resp.status_code, 200)
+            html = resp.get_data(as_text=True)
+            self.assertIn('alt="Banner caption text"', html)
+            self.assertIn("<figcaption", html)
+            self.assertIn("Banner caption text", html)
 
     def test_banner_without_alt_is_decorative(self):
         with self.app.test_client() as client:

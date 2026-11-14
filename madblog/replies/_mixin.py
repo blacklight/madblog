@@ -914,6 +914,7 @@ class RepliesMixin(ABC):  # pylint: disable=too-few-public-methods
                 url=reply_url,
                 image=metadata.get("image"),
                 image_alt=meaningful_alt(metadata.get("image_alt")),
+                image_caption=meaningful_alt(metadata.get("image_caption")),
                 description=metadata.get("description"),
                 published_datetime=metadata.get("published"),
                 published=metadata["published"].strftime("%b %d, %Y"),

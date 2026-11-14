@@ -349,7 +349,8 @@ _front matter_ block at the very top of the file, delimited by `---` lines:
 title: Title of the article
 description: Short description of the content
 image: /img/some-header-image.png
-image_alt: Description of the header image
+image_alt: Description of the header image for screen readers
+image_caption: Optional visible caption under the header image
 author: Author Name <https://author.me>
 author_photo: https://author.me/avatar.png
 language: en-US
@@ -367,6 +368,7 @@ Supported metadata:
 | `description` | String | Inferred from the second heading, if present |
 | `image` | String | — |
 | `image_alt` | String | — |
+| `image_caption` | String | — |
 | `author` | String | Inherited from the configured `author` |
 | `author_photo` | String | Inherited from the configured `author_photo` |
 | `language` | String | Inherited from the configured `language` or `en-US` |
@@ -409,8 +411,12 @@ alongside or instead of front matter:
 
 ### Image alt text and captions
 
-`image_alt` sets the alt text of the article banner image. When provided,
-it is also rendered as a visible caption under the image.
+`image_alt` sets the alt text of the article banner image — it describes
+the image for screen readers and is never displayed visually.
+`image_caption` sets a visible caption rendered in a `<figcaption>` under
+the banner image. If `image_caption` is set but `image_alt` is not, the
+caption text is also used as the `<img alt>`; if only `image_alt` is set,
+no caption is rendered.
 
 The same applies to images in the body: a standalone `![alt text](url)`
 image is wrapped in a `<figure>` element and its alt text is displayed
