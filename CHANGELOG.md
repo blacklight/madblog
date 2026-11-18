@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Third-party JavaScript for the PWA service worker is now vendored locally
+  under `madblog/static/js/vendor/` (Workbox 5.1.2 modules and
+  `@pwabuilder/pwaupdate`) instead of being loaded from
+  `cdn.jsdelivr.net` / `storage.googleapis.com` at runtime.
+
 ## 1.5.0
 
 ### Added

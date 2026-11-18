@@ -3,7 +3,11 @@
 const CACHE = "pwabuilder-offline";
 const QUEUE_NAME = "bgSyncQueue";
 
-importScripts('https://storage.googleapis.com/workbox-cdn/releases/5.1.2/workbox-sw.js');
+importScripts('/js/vendor/workbox/workbox-sw.js');
+
+workbox.setConfig({
+  modulePathPrefix: '/js/vendor/workbox/'
+});
 
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {

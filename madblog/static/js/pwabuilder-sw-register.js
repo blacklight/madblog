@@ -8,7 +8,7 @@
  tell the user when there is an update available and let the user know when your PWA is ready to use offline.
 */
 
-import 'https://cdn.jsdelivr.net/npm/@pwabuilder/pwaupdate';
+import '/js/vendor/pwa-update.js';
 
 const el = document.createElement('pwa-update');
 document.body.appendChild(el);

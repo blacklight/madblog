@@ -207,7 +207,7 @@ def _content_asset_dir(name: str, fallback: str) -> str:
     return asset_dir if os.path.isdir(asset_dir) else fallback
 
 
-@app.route("/js/<file>", methods=["GET"])
+@app.route("/js/<path:file>", methods=["GET"])
 def js_route(file: str):
     return send_from_directory(
         _content_asset_dir("js", app.js_dir), file, config.default_js_dir

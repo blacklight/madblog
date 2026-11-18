@@ -697,14 +697,18 @@ app-like experience on supported devices.
     icon sizes and standalone display mode.
 
 - **Service Worker** (`madblog/static/js/pwabuilder-sw.js`)
-  - Uses [Workbox](https://developer.chrome.com/docs/workbox/) for caching.
+  - Uses [Workbox](https://developer.chrome.com/docs/workbox/) 5.1.2, vendored
+    under `madblog/static/js/vendor/workbox/` and loaded via
+    `workbox.setConfig({modulePathPrefix: '/js/vendor/workbox/'})`.
   - Implements a **stale-while-revalidate** strategy: cached assets are served
     immediately while fetching fresh versions in the background.
   - Background sync plugin retries failed requests for up to 24 hours.
 
 - **Registration** (`madblog/static/js/pwabuilder-sw-register.js`)
-  - Registers the service worker and adds a `<pwa-update>` component to notify
-    users when a new version is available.
+  - Registers the service worker and adds a `<pwa-update>` component
+    (`@pwabuilder/pwaupdate`, vendored at
+    `madblog/static/js/vendor/pwa-update.js`) to notify users when a new
+    version is available.
 
 ### Timeline notifications
 
