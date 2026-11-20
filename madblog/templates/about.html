@@ -31,7 +31,17 @@
         <div class="organizations">
           {% for org in hcard.orgs %}
             {% if org.url %}
-            <a class="p-org" href="{{ org.url }}" target="_blank">{{ org.name }}</a>
+            <a class="p-org" href="{{ org.url }}" target="_blank">
+              {% if org.domain %}
+              <img class="link-favicon"
+                   src="https://icons.duckduckgo.com/ip3/{{ org.domain }}.ico"
+                   rel="noopener noreferrer"
+                   alt=""
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">
+              <span class="link-icon-fallback" style="display:none">🔗</span>
+              {% endif %}
+              {{ org.name }}
+            </a>
             {% else %}
             <span class="p-org">{{ org.name }}</span>
             {% endif %}

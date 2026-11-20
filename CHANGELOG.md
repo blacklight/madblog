@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+
+- The About page now renders favicons for organizations listed in the
+  `org` metadata when their URL is a valid HTTP(S) URL, matching how
+  `links` entries are displayed.
+
 ### Changed
 
 - Third-party JavaScript for the PWA service worker is now vendored locally

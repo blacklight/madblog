@@ -94,6 +94,22 @@
   color: var(--color-fg-primary);
 }
 
+.author-card .organizations a.p-org {
+  display: inline-flex;
+  align-items: center;
+}
+
+.author-card .organizations .link-favicon {
+  width: 16px;
+  height: 16px;
+  margin-right: 0.25em;
+  flex-shrink: 0;
+}
+
+.author-card .organizations .link-icon-fallback {
+  margin-right: 0.25em;
+}
+
 .author-card .org-separator {
   color: var(--color-fg-tertiary);
 }

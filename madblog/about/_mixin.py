@@ -77,9 +77,16 @@ def _parse_org_list(org_str: str) -> list[dict]:
 
         if "|" in item:
             parts = item.split("|", 1)
-            orgs.append({"name": parts[0].strip(), "url": parts[1].strip()})
+            url = parts[1].strip()
+            orgs.append(
+                {
+                    "name": parts[0].strip(),
+                    "url": url,
+                    "domain": _extract_http_domain(url),
+                }
+            )
         else:
-            orgs.append({"name": item, "url": None})
+            orgs.append({"name": item, "url": None, "domain": None})
 
     return orgs
 
@@ -108,6 +115,17 @@ def _extract_domain(url: str) -> str:
         return parsed.netloc or url
     except Exception:
         return url
+
+
+def _extract_http_domain(url: str) -> Optional[str]:
+    """Extract the domain from a valid HTTP(S) URL, else None."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None
+    if parsed.scheme in ("http", "https") and parsed.netloc:
+        return parsed.netloc
+    return None
 
 
 def _parse_links_list(links_str: str) -> list[dict]:

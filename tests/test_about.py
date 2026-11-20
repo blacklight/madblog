@@ -25,16 +25,25 @@ class TestHCardHelpers(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["name"], "ACME")
         self.assertEqual(result[0]["url"], "https://example.com")
+        self.assertEqual(result[0]["domain"], "example.com")
         self.assertEqual(result[1]["name"], "Platypush")
         self.assertEqual(result[1]["url"], "https://platypush.tech")
+        self.assertEqual(result[1]["domain"], "platypush.tech")
+
+    def test_parse_org_list_with_invalid_url(self):
+        result = _parse_org_list("Org|not-a-url, Other|ftp://example.com")
+        self.assertIsNone(result[0]["domain"])
+        self.assertIsNone(result[1]["domain"])
 
     def test_parse_org_list_without_urls(self):
         result = _parse_org_list("ACME Corp, Widgets Inc")
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["name"], "ACME Corp")
         self.assertIsNone(result[0]["url"])
+        self.assertIsNone(result[0]["domain"])
         self.assertEqual(result[1]["name"], "Widgets Inc")
         self.assertIsNone(result[1]["url"])
+        self.assertIsNone(result[1]["domain"])
 
     def test_parse_org_list_empty(self):
         self.assertEqual(_parse_org_list(""), [])
@@ -198,6 +207,27 @@ Hello, I'm Jane.
         finally:
             config.hide_email = original_hide_email
             config.author_email = original_author_email
+
+    def test_about_page_renders_org_favicon_for_http_urls(self):
+        from madblog.app import app
+
+        about_file = os.path.join(self.pages_dir, "ABOUT.md")
+        with open(about_file, "w") as f:
+            f.write(
+                """[//]: # (title: About)
+[//]: # (name: Jane Doe)
+[//]: # (org: ACME|https://example.com, Bad|not-a-url)
+
+# About Me
+"""
+            )
+
+        app.pages_dir = self.pages_dir
+        with app.test_client() as client:
+            response = client.get("/about")
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b"icons.duckduckgo.com/ip3/example.com.ico", response.data)
+            self.assertEqual(response.data.count(b"link-favicon"), 1)
 
     def test_nav_shows_about_link_when_file_exists(self):
         from madblog.app import app
